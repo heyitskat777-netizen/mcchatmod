@@ -3,3 +3,4 @@
 **/run/
 **/runClientGameTest/
 *.log
+**/__pycache__/

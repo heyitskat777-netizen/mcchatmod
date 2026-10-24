@@ -1,0 +1,113 @@
+import groovy.json.JsonOutput
+
+// Applied scripts do not inherit the plugins{} compilation classpath. Resolve
+// the pinned Loom public task types through the installed plugin's classloader.
+def loomClasses = project.plugins.getPlugin('net.fabricmc.fabric-loom-remap').class.classLoader
+def remapJarType = loomClasses.loadClass('net.fabricmc.loom.task.RemapJarTask')
+def productionClientType = loomClasses.loadClass('net.fabricmc.loom.task.prod.ClientProductionRunTask')
+
+// A test-only mod: no production classes or bundled runtime dependencies.
+def harnessJar = tasks.register('clientSmokeHarnessJar', Jar) {
+    from sourceSets.gametest.output
+    archiveClassifier = 'smoke-harness-dev'
+    destinationDirectory = layout.buildDirectory.dir('client-smoke/harness')
+}
+def remappedHarness = tasks.register('remapClientSmokeHarness', remapJarType) {
+    dependsOn harnessJar
+    inputFile = harnessJar.flatMap { it.archiveFile }
+    archiveClassifier = 'smoke-harness'
+    destinationDirectory = layout.buildDirectory.dir('client-smoke/harness')
+    classpath.from sourceSets.gametest.compileClasspath
+    sourceNamespace = 'named'
+    targetNamespace = 'intermediary'
+    addNestedDependencies = false
+    nestedJars.setFrom([])
+}
+
+configurations.create('clientSmokeRuntimeMods') {
+    canBeConsumed = false
+    // Fabric API's distribution JAR already nests its modules. Never inject the
+    // core projects or external SQLite driver: the shipped journal must supply them.
+    transitive = false
+}
+dependencies.add('clientSmokeRuntimeMods', "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}")
+// Test APIs are intentionally absent from Fabric API's production distribution.
+// Load the matching test modules explicitly; never add journal runtime libraries here.
+['fabric-client-gametest-api-v1', 'fabric-gametest-api-v1'].each { module ->
+    dependencies.add('clientSmokeRuntimeMods', fabricApi.module(module, project.fabric_api_version))
+}
+
+def smokeProperty = { String name -> providers.gradleProperty('journalSmoke' + name) }
+def smokeJvmArgs = {
+    ['Phase', 'Mode', 'RunId', 'Result', 'Profile'].collect { name ->
+        def value = smokeProperty(name).orNull
+        if (!value) throw new GradleException("Missing -PjournalSmoke${name}; use scripts/client_smoke.py")
+        "-Dlotc.journal.smoke.${name[0].toLowerCase() + name.substring(1)}=${value}"
+    }
+}
+def verifySmokeProfile = {
+    def profile = file(smokeProperty('Profile').get()).toPath().toAbsolutePath().normalize()
+    def allowed = layout.buildDirectory.dir('client-smoke/profiles').get().asFile.toPath().toAbsolutePath().normalize()
+    if (!profile.startsWith(allowed) || profile == allowed)
+        throw new GradleException('Client smoke profiles must be isolated below fabric/build/client-smoke/profiles')
+    def result = file(smokeProperty('Result').get()).toPath().toAbsolutePath().normalize()
+    def evidence = layout.buildDirectory.dir('client-smoke/evidence').get().asFile.toPath().toAbsolutePath().normalize()
+    if (!result.startsWith(evidence)) throw new GradleException('Client smoke results must be below fabric/build/client-smoke/evidence')
+}
+
+// Optional properties leave the ordinary developer run unchanged. The runner
+// supplies the same isolated profile to both fresh Minecraft processes.
+if (smokeProperty('Phase').isPresent()) {
+    loom.runs.named('clientGameTest') {
+        runDir project.relativePath(file(smokeProperty('Profile').get()))
+        vmArgs smokeJvmArgs()
+    }
+    tasks.named('runClientGameTest') { doFirst { verifySmokeProfile() } }
+}
+
+def configureProductionSmoke = { task, boolean includeJournal ->
+    task.group = 'verification'
+    task.dependsOn remappedHarness
+    task.useXVFB = false // one display, explicitly prepared and checked by the runner
+    task.mods.setFrom(remappedHarness.flatMap { it.archiveFile }, configurations.clientSmokeRuntimeMods)
+    if (includeJournal) {
+        task.dependsOn tasks.named('verifyPackagedMod')
+        task.mods.from(tasks.named('remapJar').flatMap { it.archiveFile })
+    }
+    task.runDir.set(layout.dir(smokeProperty('Profile').map { file(it) }))
+    task.jvmArgs.addAll(providers.provider { smokeJvmArgs() + ['-Dfabric.client.gametest', '-Dfabric.client.gametest.modid=lotc-journal-tests', '-Xmx2G'] })
+    task.programArgs.addAll(['--username', 'SmokePlayer', '--uuid', '00000000-0000-0000-0000-000000000001',
+        '--accessToken', '0', '--version', project.minecraft_version, '--versionType', 'release'])
+    task.doFirst {
+        verifySmokeProfile()
+        // Loom's supported production launcher uses Minecraft/Loader libraries,
+        // never named development output or standalone journal/SQLite artifacts.
+        def runtimeFiles = task.classpath.files
+        def forbidden = runtimeFiles.findAll { f ->
+            !f.name.endsWith('.jar') || f.toPath().startsWith(rootProject.projectDir.toPath()) ||
+                f.name.startsWith('sqlite-jdbc') || f.name.startsWith('application-') ||
+                f.name.startsWith('domain-') || f.name.startsWith('storage-')
+        }
+        if (forbidden) throw new GradleException("Packaged smoke classpath contains forbidden development/runtime files: ${forbidden}")
+        def evidence = file(smokeProperty('Result').get() + '.launch.json')
+        evidence.parentFile.mkdirs()
+        evidence.text = JsonOutput.prettyPrint(JsonOutput.toJson([
+            runId: smokeProperty('RunId').get(), mode: smokeProperty('Mode').get(),
+            phase: smokeProperty('Phase').get(), production: true, journalIncluded: includeJournal,
+            mods: task.mods.files.collect { it.absolutePath }, classpath: runtimeFiles.collect { it.absolutePath }
+        ]))
+    }
+}
+tasks.register('runGraphicsPreflight', productionClientType) {
+    description = 'Launches the test-only graphics harness without the journal mod.'
+    configureProductionSmoke(delegate, false)
+}
+tasks.register('runPackagedSmoke', productionClientType) {
+    description = 'Exercises the shipped remapped journal JAR in Loom\'s production launcher.'
+    configureProductionSmoke(delegate, true)
+}
+tasks.register('prepareClientSmoke') {
+    group = 'verification'
+    description = 'Builds the production test harness, verifies the journal JAR, and downloads game assets without launching Minecraft.'
+    dependsOn 'verifyPackagedMod', remappedHarness, 'downloadAssets'
+}

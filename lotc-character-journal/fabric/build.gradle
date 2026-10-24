@@ -86,3 +86,4 @@ tasks.register('verifyPackagedMod') {
     }
 }
 
+apply from: rootProject.file('gradle/client-smoke.gradle')

@@ -56,14 +56,18 @@ To launch a development client:
 ./gradlew :fabric:runClient
 ```
 
-To run the separate client test (requires a working graphical or virtual-display
-environment and your acceptance of Minecraft's EULA):
+To run the isolated automated client smoke suite (requires a working graphical
+or virtual-display environment and your acceptance of Minecraft's EULA):
 
 ```sh
-./gradlew :fabric:runClientGameTest
+python3 scripts/client_smoke.py --eula-accepted
 ```
 
-A build or unit-test pass is not evidence of successful in-game testing.
+It first checks Minecraft graphics, then runs local-world/keybind/UI tests in
+development and packaged-mod profiles, with separate processes for persistence.
+See [docs/CLIENT_SMOKE_TESTS.md](docs/CLIENT_SMOKE_TESTS.md) for setup, isolation,
+timeouts, and evidence. A build or unit-test pass is not evidence of successful
+in-game testing; actual results remain in docs/STATUS.md.
 
 If an environment cannot initialize Loom, verify just the independent core with
 \`./gradlew -PcoreOnly check\`. This does not compile or validate the Minecraft adapter.

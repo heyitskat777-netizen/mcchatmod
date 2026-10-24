@@ -1,5 +1,30 @@
 # Current status — October 24, 2026
 
+## Client smoke-suite expansion — in progress
+
+Work is on `feature/client-smoke-tests`, based on `4059db5` from the still-open
+foundation PR. The target remains Fabric / Minecraft 1.21.11 / Java 21.
+
+First, the coordinator re-established actual cloud launch capability before
+changing the test harness. With Xvfb :99, `LIBGL_ALWAYS_SOFTWARE=1`,
+`ALSOFT_DRIVERS=null`, writable `XDG_CACHE_HOME`/`XDG_CONFIG_HOME`, and the Java
+activation below, the existing `:fabric:runClientGameTest` passed in **1m28s**.
+Fresh screenshot and exit 0 confirmed actual execution; evidence was retained
+outside suite profiles under `/workspace/smoke-baseline-evidence`.
+
+The new test harness compiled and prepared successfully using
+`./gradlew :fabric:compileGametestJava :fabric:prepareClientSmoke --no-daemon --console=plain`
+(39s, 17 tasks, 4 executed). This is compilation/preparation evidence, not a pass
+for the expanded real-world/keybind/restart/packaged test suite.
+
+Native build/test/review agents retain disjoint ownership. The initial applied
+Gradle script could not import Loom task types; resolving them through the plugin
+classloader fixed that configuration failure. Review then identified that killing
+only the Gradle wrapper process group could leave its detached daemon/Minecraft
+running. Scoped descendant cleanup and a detached-child regression test are being
+completed before the coordinator launches the expanded suite. No assertions have
+been weakened. See [CLIENT_SMOKE_TESTS.md](CLIENT_SMOKE_TESTS.md) for its contract.
+
 ## Phase 1 foundation — automated checks passed; user testing pending
 
 Target remains **Minecraft 1.21.11 / Fabric / Java 21**. Development is on
