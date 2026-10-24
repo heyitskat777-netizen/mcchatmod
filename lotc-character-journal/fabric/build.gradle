@@ -31,3 +31,58 @@ fabricApi {
     }
 }
 
+// Keep the separate client test source compiling even when Minecraft is not run.
+tasks.named('check') { dependsOn 'compileGametestJava', 'verifyPackagedMod' }
+
+tasks.register('verifyPackagedMod') {
+    group = 'verification'
+    description = 'Verifies the remapped mod metadata, client entrypoint, and bundled runtime dependencies.'
+    dependsOn 'remapJar'
+    inputs.file(tasks.named('remapJar').flatMap { it.archiveFile })
+    doLast {
+        def artifact = tasks.named('remapJar').get().archiveFile.get().asFile
+        new java.util.zip.ZipFile(artifact).withCloseable { archive ->
+            def metadataEntry = archive.getEntry('fabric.mod.json')
+            if (metadataEntry == null) throw new GradleException('Mod JAR is missing fabric.mod.json')
+            def metadata = new groovy.json.JsonSlurper().parse(archive.getInputStream(metadataEntry))
+            if (metadata.id != 'lotc_journal' || metadata.version != project.version.toString() ||
+                metadata.environment != 'client' || metadata.depends.minecraft != project.minecraft_version) {
+                throw new GradleException('Mod JAR has incorrect identity, version, environment, or Minecraft target')
+            }
+            if (metadata.entrypoints.client != ['dev.kat.lotcjournal.fabric.JournalClient']) {
+                throw new GradleException('Mod JAR has an unexpected client entrypoint')
+            }
+            ['JournalClient', 'JournalScreen'].each { name ->
+                if (archive.getEntry("dev/kat/lotcjournal/fabric/${name}.class") == null)
+                    throw new GradleException("Mod JAR is missing ${name}")
+            }
+            def bundled = metadata.jars.collect { it.file }
+            def expected = [
+                "META-INF/jars/domain-${project.version}.jar": 'dev/kat/lotcjournal/domain/JournalSettings.class',
+                "META-INF/jars/application-${project.version}.jar": 'dev/kat/lotcjournal/application/JournalService.class',
+                "META-INF/jars/storage-${project.version}.jar": 'dev/kat/lotcjournal/storage/SqliteJournalStore.class',
+                "META-INF/jars/sqlite-jdbc-${project.sqlite_version}.jar": 'org/sqlite/JDBC.class'
+            ]
+            if (bundled.toSet() != expected.keySet().collect { it.toString() }.toSet())
+                throw new GradleException("Unexpected bundled runtime JARs: ${bundled}")
+            expected.each { name, requiredClass ->
+                def entry = archive.getEntry(name.toString())
+                if (entry == null) throw new GradleException("Missing bundled runtime JAR: ${name}")
+                boolean found = false
+                new java.util.zip.ZipInputStream(archive.getInputStream(entry)).withCloseable { nested ->
+                    for (def item = nested.nextEntry; item != null; item = nested.nextEntry) {
+                        if (item.name == requiredClass) found = true
+                    }
+                }
+                if (!found) throw new GradleException("${name} is missing ${requiredClass}")
+            }
+            archive.entries().each { entry ->
+                if (entry.name.endsWith('.sqlite') || entry.name.endsWith('.db') ||
+                    entry.name.contains('/gametest/') || entry.name.endsWith('JournalClientGameTest.class'))
+                    throw new GradleException("Unexpected test or database content in mod JAR: ${entry.name}")
+            }
+        }
+        logger.lifecycle("Packaged mod verified: ${artifact.name}; client metadata and four runtime JARs present.")
+    }
+}
+

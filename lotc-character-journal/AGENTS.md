@@ -8,6 +8,24 @@ Target Minecraft 1.21.11, Fabric, Java 21. Do not silently upgrade Minecraft.
 - Use a coordinator and narrowly scoped subagents for independent implementation,
   verification, or review when parallel work is requested. Assign non-overlapping
   files or use separate worktrees. Only the coordinator integrates changes.
+- For delegated milestones, confirm native subagent tools are available. If they
+  are unavailable, say so explicitly and work as one agent; do not simulate agents.
+  Use a coordinator and at most three native subagents with these default scopes:
+  build agent owns build/configuration changes and environment investigation;
+  verification agent owns meaningful tests and synthetic fixtures; review agent
+  independently checks modularity, integrity, threading, and privacy without edits.
+- Give each agent concrete non-overlapping file ownership. Keep production fixes,
+  documentation, integration, commits, and pull requests with the coordinator unless
+  explicitly reassigned. Use the existing isolated checkout, not new worktrees,
+  unless the user requests them. Agents must not switch the shared branch.
+- Parallelize independent investigation, but sequence dependent changes and shared
+  Gradle runs. Wait for relevant findings before integrating. The coordinator runs
+  the integrated checks, fixes defects, and repeats affected checks. After three
+  unsuccessful repair cycles, document the blocker and reassess instead of retrying
+  the same approach. Never weaken assertions or checked expectations to pass.
+- Keep main as the reviewed baseline; use feature branches, commit verified work,
+  and open a pull request when ready. Record compilation, executed automated client
+  tests, and user/modpack testing separately. Include a concise user-test checklist.
 - Keep interfaces explicit. No global service locator or central all-purpose manager.
 - Prefer small coherent features; do not create empty modules merely to fill a chart.
 - Run ./gradlew check :fabric:build. For plain logic, use the narrow module tests first.
