@@ -1,0 +1,44 @@
+tasks.register('verifyArchitecture') {
+    group = 'verification'
+    description = 'Checks allowed module imports and production dependencies.'
+    doLast {
+        def allowed = [
+            domain: [] as Set, parsing: ['domain'] as Set, storage: ['domain'] as Set,
+            application: ['domain'] as Set, fabric: ['domain', 'application', 'storage'] as Set
+        ]
+        def errors = []
+        allowed.each { module, dependencies ->
+            fileTree("${module}/src/main").matching { include '**/*.java' }.each { source ->
+                def matcher = source.text =~ /(?m)^import\s+(?:static\s+)?([^;]+);/
+                matcher.each { match ->
+                    def name = match[1]
+                    if (name.startsWith('dev.kat.lotcjournal.')) {
+                        def target = name.tokenize('.')[3]
+                        if (target != module && !dependencies.contains(target))
+                            errors << "${source.name}: ${module} cannot import ${target}"
+                    }
+                    if (module != 'fabric' && ['net.minecraft.', 'net.fabricmc.', 'org.lwjgl.'].any { name.startsWith(it) })
+                        errors << "${source.name}: Minecraft dependency outside fabric"
+                    if (module in ['domain', 'application', 'parsing'] &&
+                        ['java.sql.', 'org.sqlite.', 'java.net.', 'javax.net.'].any { name.startsWith(it) })
+                        errors << "${source.name}: infrastructure dependency in ${module}"
+                }
+            }
+            if (module != 'fabric') {
+                ['api', 'implementation', 'compileOnly', 'runtimeOnly'].each { configuration ->
+                    project(":${module}").configurations.getByName(configuration).dependencies.each { dependency ->
+                        if (dependency instanceof ProjectDependency) {
+                            if (!dependencies.contains(dependency.name))
+                                errors << "Forbidden project dependency ${module} -> ${dependency.name}"
+                        } else if (!(module == 'storage' && dependency.group == 'org.xerial' && dependency.name == 'sqlite-jdbc')) {
+                            errors << "Unexpected production dependency in ${module}: ${dependency}"
+                        }
+                    }
+                }
+            }
+        }
+        if (!errors.empty) throw new GradleException(errors.join('\n'))
+        logger.lifecycle('Architecture checks passed: five modules with explicit dependency boundaries.')
+    }
+}
+

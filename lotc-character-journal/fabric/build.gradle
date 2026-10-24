@@ -1,0 +1,33 @@
+plugins { id 'net.fabricmc.fabric-loom-remap' version "${loom_version}" }
+base { archivesName = 'lotc-character-journal' }
+loom {
+    splitEnvironmentSourceSets()
+    mods { lotc_journal { sourceSet sourceSets.main; sourceSet sourceSets.client } }
+}
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    ['domain', 'application', 'storage'].each { module ->
+        implementation project(":${module}")
+        include project(":${module}")
+    }
+    include "org.xerial:sqlite-jdbc:${project.sqlite_version}"
+}
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand version: project.version }
+}
+java { toolchain { languageVersion = JavaLanguageVersion.of(21) }; withSourcesJar() }
+tasks.withType(JavaCompile).configureEach { options.release = 21; options.encoding = 'UTF-8' }
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = 'lotc-journal-tests'
+        enableGameTests = false
+        enableClientGameTests = true
+        // EULA acceptance is deliberately left to the person running Minecraft.
+    }
+}
+

@@ -1,0 +1,2 @@
+dependencies { api project(':domain'); implementation "org.xerial:sqlite-jdbc:${rootProject.sqlite_version}" }
+

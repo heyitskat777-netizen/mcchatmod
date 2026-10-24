@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "lotc_journal",
+  "version": "${version}",
+  "name": "LoTC Character Journal",
+  "description": "Local roleplay journal. Phase 1 foundation: journal interface, settings, and SQLite storage.",
+  "authors": [
+    "Kat"
+  ],
+  "license": "LicenseRef-All-Rights-Reserved",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.kat.lotcjournal.fabric.JournalClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
+

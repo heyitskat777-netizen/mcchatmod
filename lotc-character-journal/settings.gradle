@@ -1,0 +1,8 @@
+pluginManagement {
+    repositories { maven { url = 'https://maven.fabricmc.net/' }; mavenCentral(); gradlePluginPortal() }
+}
+rootProject.name = 'lotc-character-journal'
+include 'domain', 'parsing', 'storage', 'application'
+// Allows core verification in environments unable to initialize Fabric Loom.
+if (!providers.gradleProperty('coreOnly').isPresent()) include 'fabric'
+

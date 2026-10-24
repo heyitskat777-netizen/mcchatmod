@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-24",
+  "java_target": 21,
+  "gradle": "9.7.1",
+  "core_gradle_result": "passed",
+  "architecture_negative_control": "passed",
+  "suites": [
+    {
+      "suite": "dev.kat.lotcjournal.application.JournalServiceTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "dev.kat.lotcjournal.domain.PrivacyPolicyTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "dev.kat.lotcjournal.parsing.LogLineParserTest",
+      "tests": 18,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "dev.kat.lotcjournal.storage.SqliteJournalStoreTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "total_tests": 29,
+  "fabric_build": "blocked during Loom platform initialization; Unix-domain socket probe denied by host",
+  "client_game_test": "not run",
+  "user_test": "pending"
+}

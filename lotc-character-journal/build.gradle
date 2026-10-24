@@ -1,0 +1,28 @@
+plugins { id 'base' }
+allprojects {
+    group = rootProject.group
+    version = rootProject.version
+    repositories { mavenCentral() }
+}
+subprojects {
+    if (name != 'fabric') {
+        apply plugin: 'java-library'
+        java { toolchain { languageVersion = JavaLanguageVersion.of(21) }; withSourcesJar() }
+        tasks.withType(JavaCompile).configureEach { options.release = 21; options.encoding = 'UTF-8' }
+        dependencies {
+            testImplementation platform('org.junit:junit-bom:5.12.2')
+            testImplementation 'org.junit.jupiter:junit-jupiter'
+            testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+        }
+        test { useJUnitPlatform(); testLogging { events 'failed', 'skipped' } }
+    }
+}
+apply from: 'gradle/architecture.gradle'
+tasks.named('check') {
+    dependsOn 'verifyArchitecture', ':domain:test', ':parsing:test', ':storage:test', ':application:test'
+}
+tasks.named('build') {
+    dependsOn 'check'
+    if (findProject(':fabric') != null) dependsOn ':fabric:build'
+}
+
