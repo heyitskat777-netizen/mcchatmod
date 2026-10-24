@@ -1,6 +1,48 @@
 # Current status — October 24, 2026
 
-## Cloud continuation — feature/foundation-build
+## Latest verification — Fabric build successful
+
+The Java 21 / Gradle 9.7.1 / Fabric Minecraft 1.21.11 development environment
+now supports the required full build. The network additions have taken effect:
+Fabric's Maven host responds successfully, Loom 1.14.10 initializes, and Minecraft
+downloads and remapping complete. The earlier network and original-host socket
+blockers below are historical, not current blockers.
+
+From `/workspace/mcchatmod/lotc-character-journal`, with the Java/proxy/trust-store
+activation documented below:
+
+```sh
+./gradlew check :fabric:build --no-daemon --console=plain
+```
+
+**Passed**, 23 actionable tasks (10 executed, 13 up-to-date), including
+`:fabric:compileClientJava` and `:fabric:remapJar`. Core test results remain
+29 passed, 0 failed, 0 skipped; the full build reused those verified outputs.
+Architecture verification executed successfully again. Fabric's ordinary test
+task reports `NO-SOURCE`; this is not an in-game test pass.
+
+`./gradlew :fabric:compileGametestJava --no-daemon --console=plain` also passed
+(6 actionable tasks, 1 executed, 5 up-to-date). This compiles the separate client
+test source without launching Minecraft; `:fabric:runClientGameTest` is unrun.
+
+Development artifact:
+`fabric/build/libs/lotc-character-journal-0.1.0-alpha.1.jar` (14,418,408 bytes).
+SHA-256: `a5c915f5ec0585a171e68185b5ffd4ac7cb8d5e825457ab741ed52dff738f352`.
+Archive inspection confirmed both client classes, expanded version metadata,
+the exact Minecraft 1.21.11 dependency, and nested domain/application/storage/
+SQLite JDBC JARs. This inspection does not establish successful mod loading.
+
+Non-fatal build diagnostics include Gradle deprecations, a mapping warning, and
+Loom's warning that SQLite's four-part version `3.51.3.0` is not semver. No
+dependency pins, source behavior, assertions, or reference expectations changed.
+
+Phase 1 now has a compiled/remapped development JAR; it remains incomplete until
+client startup, restart/persistence behavior, and Kat's modpack smoke test are
+verified. Minecraft has not been launched and its EULA has not been accepted
+on the user's behalf. No live LoTC server was contacted. Environment publication
+and fresh-task restoration also remain user/platform actions, not verified here.
+
+## Earlier cloud continuation — feature/foundation-build
 
 The repository is available at `/workspace/mcchatmod`; the project is in
 `lotc-character-journal`. The empty local checkout was populated from the selected
