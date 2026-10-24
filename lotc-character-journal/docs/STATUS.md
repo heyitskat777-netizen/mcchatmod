@@ -1,29 +1,119 @@
 # Current status — October 24, 2026
 
-## Client smoke-suite expansion — in progress
+## Client smoke suite — local and GitHub Actions checks passed
 
-Work is on `feature/client-smoke-tests`, based on `4059db5` from the still-open
-foundation PR. The target remains Fabric / Minecraft 1.21.11 / Java 21.
+Branch: `feature/client-smoke-tests`, stacked on foundation PR #1.
+[Smoke PR #2](https://github.com/heyitskat777-netizen/mcchatmod/pull/2).
+Target remains Fabric / Minecraft **1.21.11** / **Java 21**. Production feature
+logic was unchanged; this expands the test harness, launcher, and CI evidence.
 
-First, the coordinator re-established actual cloud launch capability before
-changing the test harness. With Xvfb :99, `LIBGL_ALWAYS_SOFTWARE=1`,
-`ALSOFT_DRIVERS=null`, writable `XDG_CACHE_HOME`/`XDG_CONFIG_HOME`, and the Java
-activation below, the existing `:fabric:runClientGameTest` passed in **1m28s**.
-Fresh screenshot and exit 0 confirmed actual execution; evidence was retained
-outside suite profiles under `/workspace/smoke-baseline-evidence`.
+First, before edits, the coordinator re-established cloud graphics using the
+existing real-client test under Xvfb/Mesa: **passed in 1m28s**, with fresh
+screenshot and exit 0. Evidence: `/workspace/smoke-baseline-evidence`.
 
-The new test harness compiled and prepared successfully using
+New coverage uses actual registered J input, synthetic local-world entry, typed
+search text, layout/backup widgets, backup contents/independence, Done, J-to-K
+rebinding, world exit, and worker shutdown. Writer/reader phases use separate
+Minecraft JVMs sharing only their isolated profile, asserting a nondefault saved
+setting in the reader. No direct journal/service construction substitutes for
+those interactions. No live LoTC server or personal profile was used.
+
+### Coordinator results
+
+With the Java activation below, Xvfb :99, `LIBGL_ALWAYS_SOFTWARE=1`,
+`ALSOFT_DRIVERS=null`, and writable XDG cache/config directories:
+
+```sh
+python3 scripts/client_smoke.py --eula-accepted --prepared --run-id cloud-smoke-5 --mode packaged --timeout 300
+python3 scripts/client_smoke.py --eula-accepted --prepared --run-id cloud-smoke-7 --mode development --timeout 300
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+```
+
+| Run | Graphics preflight | Writer JVM | Reader JVM | Result |
+| --- | --- | --- | --- | --- |
+| Packaged, cloud-smoke-5 | 95.6s | 123.6s, PID 30496 | 67.0s, PID 30833 | All passed |
+| Development, cloud-smoke-7 | 75.7s | 65.0s, PID 32838 | 69.0s, PID 33175 | All passed |
+
+Each application report has 11 passing assertion stages, successful body and
+CLIENT_STOPPING witnesses, matching run/mode/phase/profile/PID, and a fresh PNG.
+The actual packaged mod loaded from `fabric/build/libs/`; SQLite loaded from its
+nested processed JAR. The supported Loom production launcher excludes all named
+project outputs and standalone SQLite/core JARs. Launch manifests are validated,
+so development dependencies cannot mask a missing packaged runtime dependency.
+Screenshots were inspected; screenshots alone do not establish success.
+
+**14 Python contract tests passed**, including missing/stale/zero/incomplete
+reports, malformed evidence, failed assertions despite graphics warnings,
+classpath masking, screenshot validity, and a real detached-child timeout. Linux
+subreaper cleanup tracks owned descendants and PID start identity; it does not
+kill arbitrary Java processes. Each JVM has a hard 300-second bound plus bounded
+cleanup. Explicit tick waits and post-action stage duration budgets also apply.
+
+Preparation/compilation passed with
 `./gradlew :fabric:compileGametestJava :fabric:prepareClientSmoke --no-daemon --console=plain`
-(39s, 17 tasks, 4 executed). This is compilation/preparation evidence, not a pass
-for the expanded real-world/keybind/restart/packaged test suite.
+(39s, 17 tasks, 4 executed). The coordinator also ran the required integrated
+`./gradlew check :fabric:build --rerun-tasks --no-daemon --console=plain`; it **passed in 56s**, with all **25 tasks executed** and **40 core tests,
+0 failures/errors/skips** confirmed from fresh JUnit XML. Compilation and
+runtime checks are separate evidence.
 
-Native build/test/review agents retain disjoint ownership. The initial applied
-Gradle script could not import Loom task types; resolving them through the plugin
-classloader fixed that configuration failure. Review then identified that killing
-only the Gradle wrapper process group could leave its detached daemon/Minecraft
-running. Scoped descendant cleanup and a detached-child regression test are being
-completed before the coordinator launches the expanded suite. No assertions have
-been weakened. See [CLIENT_SMOKE_TESTS.md](CLIENT_SMOKE_TESTS.md) for its contract.
+### Failure history and corrections
+
+- Applied-script Loom imports failed before Java compilation. Resolving public
+  task classes through the installed plugin classloader fixed it.
+- The first production preflight rendered Minecraft but timed out with no test
+  report. Fabric API's production aggregator omits its test modules. Explicitly
+  installing the matching client/server gametest modules fixed harness loading;
+  launch validation now requires those exact additional test-module categories.
+- The next run executed successfully but failed the original mod-count witness;
+  its launch contract was corrected to include the required test modules while
+  still excluding standalone journal dependencies. This was not counted as pass.
+- Development world entry timed out. The runner's small render profile was being
+  reset by Fabric, so the harness now applies it after reset. A thread dump then
+  captured test/server waits in Fabric scheduling. Its documented packet-sync
+  disable option resolved the observed world-entry stall. Real world, key/input,
+  database, and shutdown assertions and deadlines remain intact.
+- Development reader then correctly failed nondefault persistence: Loom's
+  `deleteGameTestRunDir` erased the writer's database. That cleanup is disabled
+  only for runner-managed profiles. Run IDs still create fresh isolated roots;
+  the corrected writer/reader pair passed without changing expectations.
+
+Failed and blocked/skipped phase reports remain under the ignored evidence roots
+`fabric/build/client-smoke/evidence/cloud-smoke-{1,2,3,4,6}/`; they were not
+replaced with passing outcomes. This used diagnosed corrections, not unchanged
+retry loops. No reference expectations or application assertions were weakened.
+
+### CI, artifacts, and remaining scope
+
+GitHub Actions now has an actual `client-smoke` job with Xvfb/Mesa, graphics-only
+preflight excluding the journal, development write/read, and production-JAR
+write/read. Job/step/process deadlines are bounded. It always uploads selected
+JSON, JUnit XML, logs, and PNGs from evidence directories; profiles/worlds,
+databases, Minecraft binaries, credentials, and arbitrary files are excluded.
+The first two workflow versions failed the smoke job while core/build/runner
+checks passed. The corrected complete workflow **passed** on functional commit
+`9ffc3114060754387c6a9f85af62d0a8016d3bb6`: [PR run 40124599154](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40124599154).
+Both verify and client-smoke jobs succeeded, including the default five-JVM
+plan and selected synthetic evidence upload. This is executed CI runtime evidence,
+not just a workflow syntax check. Detailed
+log download was blocked by the environment proxy; a draft domain addition for
+`results-receiver.actions.githubusercontent.com` was saved, not asserted applied.
+
+Local successful evidence: `fabric/build/client-smoke/evidence/cloud-smoke-5/`
+and `cloud-smoke-7/` (including `summary.json`, `junit.xml`, phase reports, shutdown
+and launch witnesses, logs, screenshots). See [CLIENT_SMOKE_TESTS.md](CLIENT_SMOKE_TESTS.md).
+
+The runner is Linux-specific for scoped process cleanup; the mod's platform
+support is unchanged. Actual launcher/modpack compatibility, hardware audio/GPU,
+and a real user judging GUI scales/usability remain user tests. AI/capture/persona
+features remain absent. EULA acceptance was supplied explicitly for this runtime
+and represented by the runner flag/CI invocation.
+
+A six-hour review/continuation cadence was requested. **No scheduling tool was
+available and no recurring task was created.** The reusable prompt is saved in
+[CONTINUE_PROJECT.md](CONTINUE_PROJECT.md); saving a prompt does not schedule it.
+
+The remainder records the earlier foundation verification, before this expanded
+world/keybind/restart/packaged coverage.
 
 ## Phase 1 foundation — automated checks passed; user testing pending
 
