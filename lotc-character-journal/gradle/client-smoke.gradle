@@ -60,7 +60,7 @@ def verifySmokeProfile = {
 if (smokeProperty('Phase').isPresent()) {
     loom.runs.named('clientGameTest') {
         runDir project.relativePath(file(smokeProperty('Profile').get()))
-        vmArgs smokeJvmArgs()
+        vmArgs smokeJvmArgs() + ['-Dfabric.client.gametest.disableNetworkSynchronizer']
     }
     tasks.named('runClientGameTest') { doFirst { verifySmokeProfile() } }
 }
@@ -75,7 +75,7 @@ def configureProductionSmoke = { task, boolean includeJournal ->
         task.mods.from(tasks.named('remapJar').flatMap { it.archiveFile })
     }
     task.runDir.set(layout.dir(smokeProperty('Profile').map { file(it) }))
-    task.jvmArgs.addAll(providers.provider { smokeJvmArgs() + ['-Dfabric.client.gametest', '-Dfabric.client.gametest.modid=lotc-journal-tests', '-Xmx2G'] })
+    task.jvmArgs.addAll(providers.provider { smokeJvmArgs() + ['-Dfabric.client.gametest', '-Dfabric.client.gametest.modid=lotc-journal-tests', '-Dfabric.client.gametest.disableNetworkSynchronizer', '-Xmx2G'] })
     task.programArgs.addAll(['--username', 'SmokePlayer', '--uuid', '00000000-0000-0000-0000-000000000001',
         '--accessToken', '0', '--version', project.minecraft_version, '--versionType', 'release'])
     task.doFirst {

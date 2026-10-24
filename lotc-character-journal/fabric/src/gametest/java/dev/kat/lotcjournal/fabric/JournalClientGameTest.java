@@ -76,6 +76,12 @@ public final class JournalClientGameTest implements FabricClientGameTest {
     }
 
     private void exerciseJournal(ClientGameTestContext context, SmokeReport report, Path database) throws Exception {
+        // Fabric resets game options before each test, so options.txt alone cannot
+        // enforce the small render footprint of this isolated CI smoke profile.
+        context.runOnClient(client -> {
+            client.options.renderDistance().set(2);
+            client.options.simulationDistance().set(5);
+        });
         var world = report.measure("local-world", 120_000, () -> {
             var created = context.worldBuilder().create();
             context.waitFor(client -> client.level != null && client.player != null && client.screen == null, WAIT_TICKS);
