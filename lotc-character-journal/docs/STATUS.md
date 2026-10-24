@@ -1,5 +1,77 @@
 # Current status — October 24, 2026
 
+## Cloud continuation — feature/foundation-build
+
+The repository is available at `/workspace/mcchatmod`; the project is in
+`lotc-character-journal`. The empty local checkout was populated from the selected
+GitHub `main` commit `2b39688b9ec728e76efab429e38058e0ea746216` without deleting
+local work or changing the saved repository selection. Development continues on
+`feature/foundation-build`; `main` remains unchanged.
+
+Phase 1 remains incomplete. This session fixes the Unix executable bit on the
+Gradle wrapper and excludes generated build/cache/game-run directories from Git.
+The uploaded checkout did not contain a GitHub Actions workflow. A root-level
+`.github/workflows/build.yml` now runs the core checks followed by the required
+Fabric build on pushes and pull requests, with test-report and JAR artifacts.
+The workflow has been parsed locally; execution on GitHub has not been observed.
+
+### Current-instance verification
+
+The provisioned machine initially had a Java 21 runtime without `javac`. A
+Temurin JDK **21.0.13+9** was installed outside the checkout and verified against
+the publisher's SHA-256 checksum. Gradle remains **9.7.1**. Minecraft and Fabric
+dependency pins are unchanged. Java uses the provisioned system trust store;
+certificate verification was not disabled.
+
+Commands run from `/workspace/mcchatmod/lotc-character-journal`, with this
+machine-specific activation kept outside repository build configuration:
+
+```sh
+export JAVA_HOME=/workspace/toolchains/jdk-21.0.13+9
+export PATH="$JAVA_HOME/bin:$PATH"
+export GRADLE_USER_HOME=/workspace/.gradle
+export JAVA_TOOL_OPTIONS='-Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080 -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts'
+./gradlew -PcoreOnly check --no-daemon --console=plain
+./gradlew check :fabric:build --no-daemon --console=plain --info
+```
+
+- Core: **passed**, 29 tests, 0 failures, 0 errors, 0 skipped, confirmed from the
+  current JUnit XML reports. Architecture verification also passed.
+- Full build: **blocked before compilation**. The diagnostic run reports HTTP
+  **403** fetching the Loom plugin marker from `https://maven.fabricmc.net/`.
+  Direct connectivity checks also report proxy CONNECT 403 for that host and
+  `piston-meta.mojang.com`. This is an environment network restriction, not
+  evidence of a client source defect or a successful Fabric build.
+- Earlier attempts diagnosed the unwritable default Gradle cache, absent JDK,
+  Java's lack of automatic proxy discovery, and the downloaded JDK's missing
+  proxy trust anchor. Writable cache, explicit proxy options, JDK installation,
+  and the provisioned system trust store resolved those prerequisites.
+- The reusable environment install script passed when executed again; Gradle
+  reused valid task outputs (13 up-to-date tasks, architecture check executed).
+- `git diff --check`: passed. Workflow YAML parsed and expected job/step commands
+  inspected locally. This does not establish GitHub Actions execution.
+- Minecraft startup, client gametest, screenshots, modpack compatibility, and
+  Kat's Phase 1 smoke test: **not run**. No EULA acceptance was supplied, and no
+  installable JAR was produced.
+
+### Saved configuration and next action
+
+The environment draft now contains tested `install_script` contents and
+`start_skill` activation/check instructions. Required custom network additions:
+`maven.fabricmc.net`, `piston-meta.mojang.com`, `piston-data.mojang.com`,
+`libraries.minecraft.net`, and `resources.download.minecraft.net`. Existing
+package-manager presets and the repository selection were preserved.
+
+Review and save those changes in environment settings, then publish the prepared
+environment. Draft persistence does not apply network policy or publish a
+snapshot. After policy application, retry the full command above and investigate
+any subsequent compilation/packaging failures. Fresh-task restoration has not
+been tested. The older socket-probe blocker below describes the original host;
+this host has not yet reached Loom initialization. Do not start Phase 2 on the
+assumption that Phase 1 passed.
+
+## Original implementation record
+
 ## Outcome
 
 Implementation has started. The independent Java core is verified.
