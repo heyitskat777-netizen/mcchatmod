@@ -13,7 +13,8 @@ Build and core checks remain:
 python3 -m unittest discover -s scripts -p 'test_*.py'
 ```
 
-On Linux, provide an X display with OpenGL support. GitHub Actions installs Xvfb
+The automated runner currently supports Linux for its scoped process cleanup;
+this does not change the mod's platform support. Provide an X display with OpenGL support. GitHub Actions installs Xvfb
 and Mesa, starts a virtual display, and runs the suite with software rendering.
 For an existing display, activate JDK 21 and run:
 
@@ -24,7 +25,8 @@ LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eu
 Pass `--eula-accepted` only after accepting the [Minecraft EULA](https://www.minecraft.net/eula).
 Kat accepted it for this development test runtime in the setup session; the
 explicit flag documents that acceptance for a run. `--preflight-only` establishes
-the graphics-only launch before application testing. `--timeout 300` sets the
+the graphics-only launch before application testing. Use `--mode development` or `--mode packaged` to repeat only the affected mode
+(with a fresh graphics preflight). `--timeout 300` sets the
 bounded per-launch timeout; preparation is bounded separately. Do not retry a
 failure without reading its report and diagnosing it.
 
@@ -68,6 +70,13 @@ failures are reported separately from application assertion failures; optional
 audio/profile lookup/cursor warnings do not excuse an application failure.
 
 The client has a dummy audio device in CI, and Mesa uses software rendering.
+The pinned Fabric test packet synchronizer is disabled using its documented
+`fabric.client.gametest.disableNetworkSynchronizer` option: initial local-world
+loads stalled with it enabled. Real world-entry, key/input, database, and shutdown
+assertions remain active; their state waits do not rely on that synchronizer.
+Stage durations are post-action budgets; explicit tick waits and the hard process
+deadline enforce active bounds.
+
 These checks do not validate hardware audio, GPU-driver compatibility, other mods,
 live capture, persona isolation, or AI features. See [STATUS.md](STATUS.md) for
 actual commands/outcomes and [USER_TEST_PHASE1.md](USER_TEST_PHASE1.md) for the

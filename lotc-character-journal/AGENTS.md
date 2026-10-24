@@ -31,6 +31,11 @@ Target Minecraft 1.21.11, Fabric, Java 21. Do not silently upgrade Minecraft.
 - Run ./gradlew check :fabric:build. For plain logic, use the narrow module tests first.
 - Run ./gradlew :fabric:runClientGameTest only in an environment prepared to launch
   Minecraft, with its EULA accepted by the user. Never call compilation an in-game test.
+- For the isolated graphics/world/keybind/restart/packaged-JAR suite, use
+  `python3 scripts/client_smoke.py --eula-accepted` on Linux after EULA acceptance.
+  The helper supplies required profile/phase properties and validates shutdown and
+  assertion evidence; a raw Gradle task exit alone is not the full suite result.
+  See docs/CLIENT_SMOKE_TESTS.md. Record failed and skipped phases explicitly.
 - Review failures independently where possible. After three unsuccessful repair
   cycles, document the blocker and reassess; do not weaken acceptance criteria.
 - Do not change checked reference expectations just to match implementation.

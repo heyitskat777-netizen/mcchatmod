@@ -58,6 +58,9 @@ def verifySmokeProfile = {
 // Optional properties leave the ordinary developer run unchanged. The runner
 // supplies the same isolated profile to both fresh Minecraft processes.
 if (smokeProperty('Phase').isPresent()) {
+    // The runner creates a fresh per-run profile. Loom's default per-launch
+    // cleanup would erase the writer's database before the reader JVM starts.
+    tasks.named('deleteGameTestRunDir') { enabled = false }
     loom.runs.named('clientGameTest') {
         runDir project.relativePath(file(smokeProperty('Profile').get()))
         vmArgs smokeJvmArgs() + ['-Dfabric.client.gametest.disableNetworkSynchronizer']
