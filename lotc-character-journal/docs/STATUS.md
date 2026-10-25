@@ -1,6 +1,102 @@
-# Current status — October 24, 2026
+# Current status — October 25, 2026
 
-## Current continuation — Phase 1 accepted; Phase 2a import verified, real-log review pending
+## Phase 2a import workflow — automated checks passed; user test pending
+
+Branch: `feature/import-workflow`, based on `56fbd97`. Kat accepted all proposed
+Phase 2 additions: folder preview and Import all, durable reports/retry, cross-source
+channel filters/UNKNOWN review, batch-owned undo, and opt-in stable finished-folder
+watch. They are now requirements, implemented on this branch. Preview does no writes; approved hashes are rechecked
+before source creation. Durable schema-3 reports preserve policy/names for retry,
+owned observation writes and removal accounting are transactional, and confirmed
+watch opt-in uses two stable scans with durable unchanged-attempt suppression.
+Cross-source/channel filters include an UNKNOWN review view. Phase 2b live capture
+and Phase 2c private real-source acceptance remain unfinished.
+
+Coordinator verification (Java/proxy/cache activation recorded below):
+
+```sh
+./gradlew check :fabric:build --rerun-tasks --no-daemon --console=plain
+./gradlew :ingestion:test --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --preflight-only --run-id batch-graphics-1 --timeout 300
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --run-id batch-smoke-1 --timeout 300
+```
+
+The integrated build passed in **46s**, all **30 tasks executed**. Fresh XML records
+**119 tests, 0 failures/errors/skips**: domain 1, application 9, parsing 39,
+ingestion 34, storage 36. The affected ingestion rerun after adding batch PM/OOC
+sentinel assertions passed in **30s** (9 tasks, 2 executed). All **14 Python runner
+contract tests passed**. Package checks verify metadata and six runtime JARs,
+including both new ingestion workflow services. Actual graphics-only preflight
+passed in **74.8s**, exit 0, with fresh report/shutdown/screenshot evidence under
+`fabric/build/client-smoke/evidence/batch-graphics-1/`.
+
+Actual five-JVM suite **`batch-smoke-1` passed all phases**, with a 300-second bound
+per JVM. This is executed client evidence, distinct from compilation:
+
+| Phase | Elapsed | Result |
+| --- | --- | --- |
+| Graphics-only preflight | 74.5s | Passed |
+| Development writer | 93.1s | Passed |
+| Development reader | 71.0s | Passed |
+| Packaged writer | 88.6s | Passed |
+| Packaged reader | 65.3s | Passed |
+
+Fresh evidence (JSON, JUnit XML, screenshots, selected logs, launch/shutdown
+witnesses) is under `fabric/build/client-smoke/evidence/batch-smoke-1/`.
+No automatic runtime repair attempt was needed; all assertions and timeouts stayed
+in place. Existing nonfatal software-graphics/audio/Realms diagnostics did not mask
+failures: all required body, report, shutdown and process-exit assertions passed.
+Writers have 13 assertion stages; readers have 14. The new mandatory batch stage
+asserts preview zero writes, known-source duplication without ownership, corrupt-file
+isolation with PARTIAL status, failed-file retry without duplicate successful rows,
+explicit undo confirmation, older-record preservation, payload-free removed-coordinate
+accounting, original-file preservation, and persisted watch opt-in/disable through
+actual widgets. A separate reader JVM asserts reports/undo/settings after restart.
+Cross-source/channel and UNKNOWN controls are exercised too. All journal workers,
+including batch/watch/clock workers, must stop. Screenshots of preview, transcript
+and both confirmation warnings were visually inspected and readable at the tested
+854x480 / normal GUI size. Screenshots alone are not pass criteria.
+
+GitHub Actions passed both **verify** and **client-smoke**, including all five JVMs
+and selected synthetic evidence uploads, on functional commit `b97a51a`:
+[PR run 40169848197](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40169848197).
+[PR #4](https://github.com/heyitskat777-netizen/mcchatmod/pull/4) stacks on
+`feature/client-smoke-tests`, where historical-import PR #3 has been merged.
+Main remains unchanged. Later documentation commits receive their normal CI rerun;
+the successful run above identifies its tested functional commit precisely.
+Logs: `/tmp/lotc-batch-integrated-2.log`, `/tmp/lotc-batch-privacy-tests.log`,
+`/tmp/lotc-batch-runner-tests.log`, `/tmp/lotc-batch-graphics.log`,
+`/tmp/lotc-batch-client.log`. New user/modpack testing is still pending; see
+[USER_TEST_BATCH_IMPORT.md](USER_TEST_BATCH_IMPORT.md).
+
+Independent read-only review found no remaining blocker after fixes for preview
+UI state, fail-closed ownership adapters, watcher configuration recovery, exclusive
+admission, durable failed-attempt suppression and compact confirmation layouts.
+Undo is logical removal, not secure erasure; source checkpoints/backups retain
+historical accounting. A watch stop between recording an attempt and dispatch may
+conservatively suppress an unchanged file without creating a batch; explicit
+Preview folder / Import all is the documented recovery path.
+
+Native subagents are available: build owns domain/storage/schema/build changes,
+verification owns batch/watch ingestion services and meaningful tests, and review
+inspects integrity/threading/privacy without edits. The coordinator owns existing
+importer hooks, client UI, documentation and integrated verification. Main remains
+the reviewed baseline. Live capture/reconciliation and real-source acceptance
+remain unfinished Phase 2 work.
+
+Current local installable artifact: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.3.jar`,
+14529015 bytes; SHA-256 `ef0073f9cf361753cbacf1c921e245711c4dfaa6770ba51a1565548881155444`.
+Use the non-`-sources` JAR in a copied instance. User testing of this new workflow
+is pending; the earlier accepted Phase 1 report does not cover these additions.
+
+Next unfinished Phase 2 work: live events/tailing, rotation and partial-line handling,
+historical/live overlap reconciliation without text-only deduplication, private
+manually checked real-log samples and measured performance budgets. No persona,
+character identity, encounter or AI functionality is claimed. The remainder is a
+historical verification record and does not override the current branch/results.
+
+## Historical verification — Phase 1 accepted; original single-file importer
 
 The user reports the requested tests completed with no issues: resizing, rebinding,
 layout, backup, and return to normal play all work. This closes the Phase 1 user

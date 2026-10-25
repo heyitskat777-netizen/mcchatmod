@@ -3,6 +3,8 @@ package dev.kat.lotcjournal.fabric;
 import dev.kat.lotcjournal.domain.ImportSource;
 import dev.kat.lotcjournal.domain.ImportView;
 import dev.kat.lotcjournal.ingestion.LogImportService;
+import dev.kat.lotcjournal.ingestion.BatchImportService;
+import dev.kat.lotcjournal.ingestion.FolderWatchService;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
@@ -18,6 +20,8 @@ public final class LogImportScreen extends Screen {
     private final Screen parent;
     private final LogImportService importer;
     private final Path gameDirectory;
+    private final BatchImportService batches;
+    private final FolderWatchService watcher;
     private List<ImportSource> sources = List.of();
     private String pathValue = "";
     private String namesValue = "";
@@ -27,11 +31,12 @@ public final class LogImportScreen extends Screen {
     private Button cancel;
     private Button transcript;
 
-    public LogImportScreen(Screen parent, LogImportService importer, Path gameDirectory) {
+    public LogImportScreen(Screen parent, LogImportService importer, BatchImportService batches, FolderWatchService watcher, Path gameDirectory) {
         super(Component.literal("Historical log import"));
         this.parent = parent;
         this.importer = importer;
         this.gameDirectory = gameDirectory;
+        this.batches = batches; this.watcher = watcher;
     }
 
     @Override protected void init() {
@@ -54,6 +59,9 @@ public final class LogImportScreen extends Screen {
             importer.cancel();
             notice = "Cancellation keeps committed batches; retry resumes";
         }).bounds(left + panel / 2 + 4, 112, panel / 2 - 4, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Import all / dashboard"), button ->
+            minecraft.setScreen(new FolderImportScreen(this, batches, watcher, gameDirectory)))
+            .bounds(left, height - 77, panel, 20).build());
         transcript = addRenderableWidget(Button.builder(Component.literal("View transcripts"), button ->
             minecraft.setScreen(new TranscriptScreen(this, importer, sources)))
             .bounds(left, height - 52, panel, 20).build());
@@ -108,8 +116,8 @@ public final class LogImportScreen extends Screen {
         var progress = importer.snapshot().progress();
         if (progress != null) graphics.drawString(font, "Lines " + progress.processedLines() + " | Records "
             + progress.importedLines() + " | Excluded " + progress.excludedLines(), left, 153, 0xFFD1D5DB);
-        if (height > 255) graphics.drawString(font, "Unknown channels stay review-only; date/timezone unresolved", left, 169, 0xFF9CA3AF);
-        if (!notice.isBlank() && height > 280)
+        if (height > 290) graphics.drawString(font, "Unknown channels stay review-only; date/timezone unresolved", left, 169, 0xFF9CA3AF);
+        if (!notice.isBlank() && height > 315)
             graphics.drawString(font, font.plainSubstrByWidth(notice, panel), left, 184, 0xFF9CA3AF);
     }
 

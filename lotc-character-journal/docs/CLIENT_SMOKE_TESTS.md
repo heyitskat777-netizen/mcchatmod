@@ -81,3 +81,16 @@ These checks do not validate hardware audio, GPU-driver compatibility, other mod
 live capture, persona isolation, or AI features. See [STATUS.md](STATUS.md) for
 actual commands/outcomes and [USER_TEST_PHASE1.md](USER_TEST_PHASE1.md) for the
 remaining user test.
+
+## Phase 2 batch workflow extension
+
+The mandatory `batch-workflow` stage exercises real folder-path widgets, preview
+without writes, confirmation, corrupt-file isolation, duplicate recognition,
+retry, two-step undo and watch opt-in. The reader JVM checks durable undone
+status, removed-coordinate accounting, older observations and saved watch intent,
+then disables the watcher through the UI. Cross-source/channel controls and the
+UNKNOWN review queue are also asserted. Screenshots capture preview and both
+confirmation warnings. All `lotc-journal-*` workers must stop on shutdown.
+Unit tests separately exercise stable-file watch polling, bounded/cancelled work,
+content changes, retries and transactional storage invariants. These are not a
+substitute for the executed client stage or private real-log acceptance.

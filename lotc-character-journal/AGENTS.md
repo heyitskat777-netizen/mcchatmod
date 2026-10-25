@@ -64,6 +64,15 @@ Target Minecraft 1.21.11, Fabric, Java 21. Do not silently upgrade Minecraft.
 - Partial import resumes are bound to a versioned parser/reviewed-name policy.
   Bump the policy version and test incompatibility when classification changes;
   do not silently mix policies or reclassify completed sources on repeat import.
+- Folder previews validate without writes; confirmation is bound to the approved
+  digest. Exclude symlinks, nested folders and active logs from bulk/watch discovery.
+- Batch ownership is attached atomically only to newly inserted observations. Undo
+  must preserve older data and original files, record payload-free removed coordinates,
+  and remain terminal. Cumulative source counters include accounted removed records;
+  active transcript counts do not. Never silently restore removed records on repeats.
+- Folder watch requires persisted explicit opt-in, stable finished-file checks and
+  bounded polling. It is separate from live capture; interrupted batches do not resume
+  automatically. Safe diagnostics contain codes, never private payload/exception text.
 - Identity merges require user confirmation and must be reversible.
 - AI defaults off. Never silently fall back to a paid provider.
 - Never run unattended tests against the live LoTC server.

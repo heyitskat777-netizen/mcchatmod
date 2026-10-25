@@ -10,16 +10,26 @@ The user has accepted the Phase 1 foundation smoke test. Press **J** in a world
 to open the journal; its key is rebindable in Controls. Layout settings and backup
 creation remain available. Character identity/search is still future work.
 
-The `0.1.0-alpha.2` development build adds **Log import** for finished UTF-8 `.log`
+The `0.1.0-alpha.3` development build expands **Log import** for finished UTF-8 `.log`
 and `.log.gz` files, background validation, progress/cancellation, restart-safe
 checkpoints, repeat-import deduplication, and a transcript browser with literal
-text search. Each record retains its source fingerprint, original line/text,
+text search. **Import all / dashboard** adds a read-only folder preview,
+confirmed batch import, durable per-file reports/retry and batch-owned undo.
+Transcript browsing supports All sources, channel filters and UNKNOWN review.
+An explicitly confirmed folder watch handles stable finished archives every 30s;
+it starts disabled and persists your opt-in. See
+[the folder workflow checklist](docs/USER_TEST_BATCH_IMPORT.md), especially the
+undo and watch limits. Check STATUS.md for actual checks on this build.
+
+Each record retains its source fingerprint, original line/text,
 log clock, and channel uncertainty. Names remain unresolved unless supplied as
 reviewed observations before import; no character or persona links are created.
 
 Settings live in `config/lotc-journal/journal.sqlite`. Backups are stored in
-`config/lotc-journal/backups/`. A schema migration backs up an existing Phase 1
-database before adding import tables. Live capture, log tailing/rotation,
+`config/lotc-journal/backups/`. A schema migration creates a verified backup of an existing schema-1 or schema-2
+database before adding the new tables. Undo removes active batch-owned records
+while keeping source checkpoints and payload-free removal accounting; it does not
+restore them on repeat import or erase existing backups. Live capture, log tailing/rotation,
 historical/live overlap reconciliation, nearby recognition, and AI are not enabled.
 See [docs/USER_TEST_IMPORT.md](docs/USER_TEST_IMPORT.md) for limits, recognized
 privacy exclusions, and the real-log test still required to advance Phase 2.

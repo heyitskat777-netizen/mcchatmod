@@ -3,6 +3,8 @@ package dev.kat.lotcjournal.fabric;
 import dev.kat.lotcjournal.application.JournalService;
 import dev.kat.lotcjournal.application.JournalSnapshot;
 import dev.kat.lotcjournal.ingestion.LogImportService;
+import dev.kat.lotcjournal.ingestion.BatchImportService;
+import dev.kat.lotcjournal.ingestion.FolderWatchService;
 import java.nio.file.Path;
 import java.time.Instant;
 import net.minecraft.client.gui.GuiGraphics;
@@ -17,6 +19,8 @@ public final class JournalScreen extends Screen {
     private final JournalService service;
     private final Path directory;
     private final LogImportService importer;
+    private final BatchImportService batches;
+    private final FolderWatchService watcher;
     private EditBox search;
     private Button layout;
     private Button backup;
@@ -27,11 +31,12 @@ public final class JournalScreen extends Screen {
     private final String version = FabricLoader.getInstance().getModContainer("lotc_journal")
         .orElseThrow().getMetadata().getVersion().getFriendlyString();
 
-    public JournalScreen(JournalService service, LogImportService importer, Path directory) {
+    public JournalScreen(JournalService service, LogImportService importer, BatchImportService batches, FolderWatchService watcher, Path directory) {
         super(Component.literal("Character Journal"));
         this.service = service;
         this.directory = directory;
         this.importer = importer;
+        this.batches = batches; this.watcher = watcher;
     }
 
     @Override protected void init() {
@@ -42,7 +47,7 @@ public final class JournalScreen extends Screen {
         search.setMaxLength(120);
         addRenderableWidget(search);
         importLogs = addRenderableWidget(Button.builder(Component.literal("Log import"), button ->
-            minecraft.setScreen(new LogImportScreen(this, importer, FabricLoader.getInstance().getGameDir())))
+            minecraft.setScreen(new LogImportScreen(this, importer, batches, watcher, FabricLoader.getInstance().getGameDir())))
             .bounds(left, 140, panel, 20).build());
         int y = Math.max(140, height - 76);
         layout = addRenderableWidget(Button.builder(Component.literal("Layout"),
