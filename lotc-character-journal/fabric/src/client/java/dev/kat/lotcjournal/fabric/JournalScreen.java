@@ -38,7 +38,7 @@ public final class JournalScreen extends Screen {
         int panel = Math.min(340, width - 32);
         int left = (width - panel) / 2;
         search = new EditBox(font, left, 55, panel, 20, Component.literal("Search characters"));
-        search.setHint(Component.literal("Search characters — available after import"));
+        search.setHint(Component.literal("Character search — planned with identity tools"));
         search.setMaxLength(120);
         addRenderableWidget(search);
         importLogs = addRenderableWidget(Button.builder(Component.literal("Log import"), button ->
@@ -89,7 +89,7 @@ public final class JournalScreen extends Screen {
         graphics.drawCenteredString(font, "Journal " + version + " | MC 1.21.11", width / 2, 36, 0xFF9CA3AF);
         int left = (width - Math.min(340, width - 32)) / 2;
         graphics.drawString(font, search.getValue().isBlank()
-            ? "No characters imported yet." : "Character search is not connected yet.",
+            ? "No character identities created yet." : "Character search is not connected yet.",
             left, 87, 0xFFD1D5DB);
         graphics.drawString(font, "AI: disabled | Live capture: not enabled", left, 103, 0xFF93C5FD);
         graphics.drawString(font, service.snapshot().message(), left, 116, 0xFF9CA3AF);
