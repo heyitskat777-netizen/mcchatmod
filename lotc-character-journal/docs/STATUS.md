@@ -1,85 +1,156 @@
 # Current status — October 24, 2026
 
-## Outcome
+## Phase 1 foundation — automated checks passed; user testing pending
 
-Implementation has started. The independent Java core is verified.
-The Fabric client adapter is written but is NOT compiled or tested in Minecraft.
-No installable mod JAR is available from this run.
+Target remains **Minecraft 1.21.11 / Fabric / Java 21**. Development is on
+`feature/foundation-build`; `main` remains the reviewed baseline. No Phase 2
+capture/import work has been started. Phase 0 has a compatibility target and
+explicit defaults; real-log reference samples, actual launcher/modpack details,
+and performance budgets still need user evidence. Subscription support is deferred.
 
 | Phase | State |
 | --- | --- |
-| 0 — Discovery | Target and architecture established; current legacy schema inspected read-only. Real-log gold set, modpack compatibility, performance budgets, and subscription access still pending. |
-| 1 — Foundation | Core verified; Fabric shell and client-test source written; full build blocked by hosted environment. User smoke test pending. |
-| 2 — Capture | Conservative parser prototype with synthetic tests only. No import pipeline or live capture. |
+| 0 — Discovery | Architecture and initial defaults established; real samples and modpack details pending. |
+| 1 — Foundation | Core, packaging, and automated development-client shell tests passed. Actual modpack/keybind/process-restart smoke test pending. |
+| 2 — Capture | Conservative parser prototype with synthetic tests only; no import pipeline or live capture. |
 | 3–7 | Planned; not implemented. |
 
-## Verification completed
+## Changes in this milestone
 
-- Java 21 compiler and JUnit console: 29 tests passed, 0 failed, 0 skipped.
-- Gradle 9.7.1, Java 21: `gradle -PcoreOnly check --no-daemon --console=plain`
-  passed, 14 tasks executed. All 29 tests also passed through Gradle.
-- Architecture check passed through Gradle. A deliberate temporary forbidden
-  network import into domain was also rejected; the probe was removed.
-- SQLite tests include restart persistence, snapshot backup restoration, refusing
-  an existing backup, rejecting newer/unrelated databases, and leaving corrupted
-  bytes intact.
-- Application tests include worker-thread execution, serialized changes,
-  initialization failure, shutdown rejection, and bounded-queue overload.
-- Parser tests cover known observed names, original clocks/source coordinates,
-  PM/OOC exclusions, unknown channels, name-prefix ambiguity, and malformed lines.
-- Current legacy master: read-only quick_check passed. See LEGACY_DATABASE_DISCOVERY.md.
+- Recoverable backup/save failures retain READY state and the last committed
+  settings, allowing retries. Initialization failures remain FAILED.
+- Forced/interrupted shutdown resolves accepted futures instead of abandoning
+  queued requests. Closing rejects new work; queued writes are **not guaranteed
+  to flush** when the journal closes. The shutdown wait remains bounded.
+- Schema ownership/shape and saved values are validated before switching an
+  existing database to WAL. Foreign databases claiming schema version 1 are
+  rejected without changing their bytes.
+- Backup paths are reserved atomically; concurrent attempts cannot replace the
+  winner's snapshot. Incomplete output owned by a failed attempt is removed.
+- The shell displays the actual mod version and storage/AI/capture diagnostics at
+  the tested normal GUI size. Controls start with correct readiness and stay
+  disabled during operations; failure messages permit retry.
+- Architecture checks cover Fabric client sources and production project
+  dependencies. `check` compiles client tests and verifies metadata, client
+  classes, bundled runtime JARs, and absence of test/database payloads in the mod.
+- The Gradle 9.7.1 wrapper distribution has its official SHA-256 pinned.
+- AGENTS.md preserves the coordinator/three-native-subagent workflow and ownership.
 
-These checks do NOT establish persona isolation, live capture correctness,
-full historical parsing support, successful client startup, AI accuracy, or
-compatibility with Kat's actual modpack.
+## Delegation and review
 
-## Full Fabric build blocker
+Native subagent tools were available and used. Build agent owned build/config
+files; verification agent owned Java tests/synthetic fixtures; review agent
+independently inspected modularity, integrity, threading, and privacy without
+edits. Coordinator owned production fixes/docs/integration and ran the integrated
+checks. Shared Gradle runs were sequenced. Independent final review reported no
+remaining merge-blocking defect. No tests or checked expectations were weakened.
 
-Command attempted:
-`gradle check :fabric:build --no-daemon --console=plain --stacktrace`
+## Reproduce the cloud checks
 
-The host used the downloaded Gradle distribution with its existing network proxy
-configured on the command line. No host-specific proxy settings are in the project.
+Working directory: `/workspace/mcchatmod/lotc-character-journal`.
+Current tested tools: Temurin **21.0.13+9**, Gradle **9.7.1**, Loom **1.14.10**,
+Fabric Loader **0.19.5**, Fabric API **0.141.6+1.21.11**, SQLite JDBC **3.51.3.0**.
+Local machines only need JDK 21 and the wrapper; cloud-specific activation is:
 
-Loom 1.14.10 stops during configuration, before compiling client source:
-
-```text
-java.lang.ExceptionInInitializerError
-  at net.fabricmc.loom.util.Platform.<clinit>
-Caused by: java.io.UncheckedIOException: java.net.SocketException: Operation not permitted
-  at net.fabricmc.loom.util.CurrentPlatform.isUnixDomainSocketsSupported
+```sh
+export JAVA_HOME=/workspace/toolchains/jdk-21.0.13+9
+export PATH="$JAVA_HOME/bin:$PATH"
+export GRADLE_USER_HOME=/workspace/.gradle
+export JAVA_TOOL_OPTIONS='-Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080 -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts'
+./gradlew check :fabric:build --rerun-tasks --no-daemon --console=plain
 ```
 
-The host denies the Unix-domain socket probe. No permissions were escalated and
-no dependency binary was patched to avoid it. Run the full build in a normal
-local development environment to establish whether additional project errors exist.
+Coordinator result: **passed in 55 seconds, all 25 tasks executed**. JUnit XML
+from this run reports **40 tests, 0 failures, 0 errors, 0 skipped**:
+application 9, storage 12, parsing 18, domain 1. Eleven new regression tests cover
+worker isolation, pre-start recovery, failed-save/backup retry, interrupted close,
+foreign/malformed schemas, concurrent backup reservation, existing-empty target
+preservation, and incomplete-backup cleanup. Existing parser/privacy tests remain.
+No baseline red-to-green test run was claimed: production fixes and tests were
+integrated before the new regressions were first executed.
 
-An initial attempt with Loom 1.18.4 also established that it requires Java 25.
-The project was corrected to pin Loom 1.14.10, whose published runtime target is
-Java 21. This is a resolved toolchain choice, not an outstanding bug.
+Agent checks (before coordinator integration):
 
-## Next work in local Codex
+```sh
+./gradlew verifyArchitecture :fabric:verifyPackagedMod --no-daemon --console=plain
+./gradlew :application:test :storage:test :fabric:compileGametestJava --no-daemon --console=plain
+```
 
-1. Use JDK 21 and run `./gradlew check :fabric:build`
-   (Windows: `.\\gradlew.bat check :fabric:build`).
-2. Fix any client compilation or packaging failures. Do not assume the adapter
-   compiles merely because the core tests pass.
-3. Compile and run the client gametest after preparing the runtime and accepting
-   Minecraft's EULA. Inspect its screenshot and journal behavior.
-4. Produce the remapped JAR; run USER_TEST_PHASE1.md in Kat's modpack.
-5. Record actual versioned results here, then begin Phase 2 import/capture work.
+Both passed. Build agent's two isolated synthetic negative fixtures correctly
+rejected a forbidden Fabric client import and Fabric-to-parsing project dependency.
+`git diff --check` passed. The ordinary Fabric unit-test task has `NO-SOURCE`;
+that task alone is not a client-test pass.
 
-## Remaining decisions
+## Executed automated Minecraft client test
 
-The actual modpack/launcher is unknown. Statistics and PM/OOC storage defaults
-remain provisional. Subscription access has not been tested or implemented.
-The complete accepted/proposed split is in DECISIONS.md.
+The user explicitly accepted the Minecraft EULA for this development test runtime
+in this session. A Debian-signed Xvfb package was downloaded and extracted under
+`/workspace/runtime/xvfb` without system installation or disabling verification.
+Mesa software rendering and the existing X/GL libraries provided the display.
+Start the retained Xvfb binary in a separate process/session before the check:
 
-## Contents and data safety
+```sh
+/workspace/runtime/xvfb/usr/bin/Xvfb :99 -screen 0 1280x720x24 -nolisten tcp -ac -noreset
+```
 
-The source package contains code, synthetic tests, configuration, documentation,
-and the standard Gradle wrapper. It excludes the private legacy database, RP logs,
-credentials, downloaded Minecraft files, build caches, and local toolchain.
+With the Java activation above, the coordinator ran:
 
-The source is ready to continue in Codex; it is not a finished mod release.
+```sh
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 timeout --signal=TERM --kill-after=15s 600s ./gradlew :fabric:runClientGameTest --no-daemon --console=plain
+```
 
+**Passed**, exit 0, 4m18s including initial asset downloads. The registered
+`JournalClientGameTest` actually executed: its fresh screenshot was produced at
+`fabric/build/run/clientGameTest/screenshots/0000_lotc-journal-foundation.png`.
+The test exercises the real shell, search field presence, non-pausing behavior,
+layout/backup buttons, SQLite snapshot contents/independence, Done, and service +
+store reconstruction followed by reopening the persisted layout. The runner's
+completion semantics were checked against Fabric's source; no test-failure
+exception occurred. The screenshot was visually inspected and is readable at the
+tested 854×480 image size. It contains only the synthetic/empty journal shell.
+
+This is an **executed development-client test**, not just compilation. It does
+not test the real keybind in a world, the remapped JAR installed in a separate
+launcher, a second Minecraft process reopening the same database, or the user's
+actual modpack. Those remain in [USER_TEST_PHASE1.md](USER_TEST_PHASE1.md).
+No live LoTC server was contacted. No AI/provider integration or captured dialogue
+exists, so capture accuracy and persona isolation remain future acceptance gates.
+
+Non-fatal runtime diagnostics: no physical audio device (sound disabled), blocked
+optional Mojang public-key/profile lookups for the development player, unavailable
+X11 cursor shape, and unwritable default Mesa cache. These did not prevent test
+execution. No real authentication or private data was used. Audio, cursor behavior,
+and hardware rendering are not validated by this software-rendered run.
+
+## Artifact and evidence
+
+Development JAR: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.1.jar`.
+Size: **14,420,066 bytes**.
+SHA-256: `4ebd5dcabb16df3c4923dbbcf715ebb9aa7b0571f3e7be27d09b37499610ddf4`.
+Package verification checks expanded metadata and nested domain/application/storage/
+SQLite JDBC classes. It does not substitute for installing that JAR in a launcher.
+Build warnings remain: Gradle deprecations and SQLite's four-part version is not
+semver. Dependencies were not upgraded to suppress warnings.
+
+Machine-local logs: `/tmp/lotc-integrated-checks.log`,
+`/tmp/lotc-client-gametest.log`, `/tmp/lotc-verification-final.log`. Current JUnit
+XML is under each core module's `build/test-results/test/`. Generated outputs,
+logs, screenshots, game files, and databases are ignored and are not committed.
+The earlier source-upload verification record is in Git history; its socket and
+Fabric-host network blockers were resolved in this environment.
+
+## Remaining work and environment state
+
+1. Review this foundation change through a feature-branch pull request.
+2. Run the concise Phase 1 user checklist in the actual modpack: keybind/rebind,
+   GUI-scale/resizing, complete restart/persistence, backup, close/join/leave.
+3. Record launcher/mod list and findings; fix blockers before declaring Phase 1
+   complete or starting Phase 2. Real sample review/performance targets remain open.
+
+The environment draft retains Java/build instructions and required Fabric/Mojang
+network destinations, and now includes reusable Xvfb installation and process
+startup instructions. Saving this draft does not publish the prepared environment
+or preserve a running display process. GitHub API access initially returned proxy CONNECT 403;
+adding `api.github.com` to the custom allowlist resolved it, and repository API
+access was verified. No new credential requirement was needed. Publication and
+fresh-task snapshot restoration have not been asserted or independently tested.

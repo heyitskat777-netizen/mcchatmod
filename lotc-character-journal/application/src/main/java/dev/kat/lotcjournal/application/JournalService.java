@@ -6,6 +6,7 @@ import dev.kat.lotcjournal.domain.SettingsRepository;
 import java.nio.file.Path;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -15,6 +16,7 @@ public final class JournalService implements AutoCloseable {
     private final SettingsRepository settings;
     private final BackupService backups;
     private final ThreadPoolExecutor worker;
+    private final java.util.Set<CompletableFuture<?>> pending = ConcurrentHashMap.newKeySet();
     private volatile JournalSnapshot snapshot = new JournalSnapshot(
         JournalSnapshot.Status.STARTING, JournalSettings.defaults(), "Opening journal");
     private boolean started;
@@ -35,7 +37,7 @@ public final class JournalService implements AutoCloseable {
         if (started || closed) return CompletableFuture.failedFuture(
             new IllegalStateException("Journal has already started or closed"));
         started = true;
-        return submit(() -> {
+        return submit(true, () -> {
             settings.initialize();
             ready(settings.load(), "Journal ready");
             return null;
@@ -45,7 +47,7 @@ public final class JournalService implements AutoCloseable {
     public JournalSnapshot snapshot() { return snapshot; }
 
     public CompletableFuture<Void> toggleCompactLayout() {
-        return submit(() -> {
+        return submit(false, () -> {
             requireReady();
             JournalSettings next = new JournalSettings(!snapshot.settings().compactLayout());
             settings.save(next);
@@ -55,7 +57,7 @@ public final class JournalService implements AutoCloseable {
     }
 
     public CompletableFuture<Path> backup(Path destination) {
-        return submit(() -> {
+        return submit(false, () -> {
             requireReady();
             Path saved = backups.createBackup(destination);
             ready(snapshot.settings(), "Backup created");
@@ -72,16 +74,19 @@ public final class JournalService implements AutoCloseable {
         if (!closed) snapshot = new JournalSnapshot(JournalSnapshot.Status.READY, value, message);
     }
 
-    private synchronized <T> CompletableFuture<T> submit(Operation<T> operation) {
+    private synchronized <T> CompletableFuture<T> submit(boolean initialization, Operation<T> operation) {
         if (closed) return CompletableFuture.failedFuture(new IllegalStateException("Journal closed"));
         CompletableFuture<T> result = new CompletableFuture<>();
+        pending.add(result);
+        result.whenComplete((value, error) -> pending.remove(result));
         try {
             worker.execute(() -> {
                 try { result.complete(operation.run()); }
                 catch (Exception error) {
                     synchronized (this) {
                         if (!closed) snapshot = new JournalSnapshot(
-                            JournalSnapshot.Status.FAILED, snapshot.settings(), "Storage operation failed");
+                            initialization ? JournalSnapshot.Status.FAILED : snapshot.status(),
+                            snapshot.settings(), "Storage operation failed");
                     }
                     result.completeExceptionally(error);
                 }
@@ -99,11 +104,19 @@ public final class JournalService implements AutoCloseable {
                 snapshot.settings(), "Journal closed");
         }
         try {
-            if (!worker.awaitTermination(3, TimeUnit.SECONDS)) worker.shutdownNow();
+            if (!worker.awaitTermination(3, TimeUnit.SECONDS)) forceShutdown();
         } catch (InterruptedException interrupted) {
-            worker.shutdownNow();
+            forceShutdown();
             Thread.currentThread().interrupt();
         }
+    }
+
+    private void forceShutdown() {
+        worker.shutdownNow();
+        // shutdownNow removes queued Runnables without executing their completion paths.
+        // Resolve both removed work and an interrupted operation that cannot finish promptly.
+        for (var result : pending)
+            result.completeExceptionally(new IllegalStateException("Journal closed"));
     }
 
     @FunctionalInterface private interface Operation<T> { T run() throws Exception; }

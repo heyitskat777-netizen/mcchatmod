@@ -1,0 +1,40 @@
+name: Build and check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lotc-character-journal
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Verify independent core
+        run: ./gradlew -PcoreOnly check --no-daemon --console=plain
+      - name: Build Fabric mod
+        run: ./gradlew check :fabric:build --no-daemon --console=plain
+      - name: Save test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: lotc-character-journal/**/build/reports/tests/
+          if-no-files-found: ignore
+      - name: Save development JARs
+        uses: actions/upload-artifact@v4
+        with:
+          name: journal-jars
+          path: lotc-character-journal/fabric/build/libs/*.jar
+          if-no-files-found: error

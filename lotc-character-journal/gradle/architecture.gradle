@@ -8,7 +8,10 @@ tasks.register('verifyArchitecture') {
         ]
         def errors = []
         allowed.each { module, dependencies ->
-            fileTree("${module}/src/main").matching { include '**/*.java' }.each { source ->
+            // Fabric's production adapter lives in src/client, not src/main.
+            fileTree("${module}/src").matching {
+                include 'main/**/*.java', 'client/**/*.java'
+            }.each { source ->
                 def matcher = source.text =~ /(?m)^import\s+(?:static\s+)?([^;]+);/
                 matcher.each { match ->
                     def name = match[1]
@@ -24,13 +27,19 @@ tasks.register('verifyArchitecture') {
                         errors << "${source.name}: infrastructure dependency in ${module}"
                 }
             }
-            if (module != 'fabric') {
-                ['api', 'implementation', 'compileOnly', 'runtimeOnly'].each { configuration ->
-                    project(":${module}").configurations.getByName(configuration).dependencies.each { dependency ->
+            def moduleProject = findProject(":${module}")
+            if (moduleProject != null) {
+                def productionConfigurations = [
+                    'api', 'implementation', 'compileOnly', 'compileOnlyApi', 'runtimeOnly',
+                    'clientApi', 'clientImplementation', 'clientCompileOnly', 'clientRuntimeOnly',
+                    'modApi', 'modImplementation', 'modCompileOnly', 'modRuntimeOnly', 'include'
+                ]
+                productionConfigurations.each { configuration ->
+                    moduleProject.configurations.findByName(configuration)?.dependencies?.each { dependency ->
                         if (dependency instanceof ProjectDependency) {
                             if (!dependencies.contains(dependency.name))
                                 errors << "Forbidden project dependency ${module} -> ${dependency.name}"
-                        } else if (!(module == 'storage' && dependency.group == 'org.xerial' && dependency.name == 'sqlite-jdbc')) {
+                        } else if (module != 'fabric' && !(module == 'storage' && dependency.group == 'org.xerial' && dependency.name == 'sqlite-jdbc')) {
                             errors << "Unexpected production dependency in ${module}: ${dependency}"
                         }
                     }
