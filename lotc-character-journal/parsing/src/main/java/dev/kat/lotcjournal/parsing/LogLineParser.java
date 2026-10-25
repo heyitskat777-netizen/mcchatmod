@@ -35,7 +35,8 @@ public final class LogLineParser {
         if (text.isBlank()) return Optional.empty();
         Channel channel = normalizer.classification(match.group(2));
         Optional<String> speaker = Optional.empty();
-        if (channel == Channel.UNKNOWN && !text.startsWith("[") && !text.startsWith("(")) {
+        if ((channel == Channel.UNKNOWN || channel == Channel.ROLEPLAY)
+            && !text.startsWith("[") && !text.startsWith("(")) {
             String observedText = text;
             speaker = speakers.stream().filter(name -> observedText.startsWith(name + " ")
                 || observedText.startsWith(name + ":")).findFirst();

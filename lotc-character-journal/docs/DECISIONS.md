@@ -74,6 +74,31 @@ removed non-dialogue observations into excluded/ignored counters atomically, kee
 processed positions fixed. Existing backups/original log files can retain raw bytes;
 this is not a secure-erasure feature.
 
+## Accepted roleplay/noise filtering refinement
+
+Kat supplied examples of persona commands/search results, map hints, friend
+requests, news, Soulstone notices, lock replies and build/region diagnostics in
+the dialogue view, and requested a meaningful roleplay-only filter. The classifier
+uses deterministic whole-message server templates plus positive original IC-channel
+and sender/emote evidence; generic Minecraft `[CHAT]` alone is insufficient.
+Privacy checks take priority. Reviewed-name observations remain explicit input;
+channel evidence does not infer a speaker, character, account link or persona.
+
+New imports can classify recognized IC dialogue as ROLEPLAY and exclude recognized
+system output from storage. Other unmarked/ambiguous messages remain UNKNOWN for
+review. The view keeps All dialogue available and adds a direct Roleplay only
+control. Persona lookup output is system metadata, not RP dialogue or a confirmed
+identity link; future identity work can inspect original sources separately.
+
+Schema 5 makes a verified backup and removes recognized notices from older imports,
+updating source/owned-file ignored counts without moving cursors or breaking undo.
+Old cleaned rows lost their IC-channel wrappers, so migration does not invent RP
+proof or promote old UNKNOWN rows from wording alone. Explicit ROLEPLAY records
+resembling notices are preserved; truly indistinguishable plain-text cases can
+remain for review. Parser policy 3 blocks incompatible older partial resumes;
+finish alpha.4 imports before upgrading or use the matching pre-upgrade backup
+and older mod first. Originals/backups remain untouched by filtering.
+
 ## Toolchain
 
 - Java 21 target and runtime.

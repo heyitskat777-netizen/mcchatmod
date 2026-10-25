@@ -150,7 +150,7 @@ public final class LogImportService implements AutoCloseable {
         var names = validatedNames(reviewedNames);
         try {
             var policy = MessageDigest.getInstance("SHA-256");
-            policy.update("parser-policy-2\n".getBytes(StandardCharsets.UTF_8));
+            policy.update("parser-policy-3\n".getBytes(StandardCharsets.UTF_8));
             for (String name : names.stream().sorted().toList()) {
                 byte[] value = name.getBytes(StandardCharsets.UTF_8);
                 policy.update((value.length + ":").getBytes(StandardCharsets.UTF_8));

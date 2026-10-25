@@ -36,7 +36,7 @@ import java.time.Instant;
 
 /** SQLite adapter. Callers use short-lived connections only on journal/import worker threads. */
 public final class SqliteJournalStore implements SettingsRepository, BackupService, CaptureRepository, BatchRepository {
-    private static final int SCHEMA_VERSION = 4;
+    private static final int SCHEMA_VERSION = 5;
     private static final String SETTINGS_SQL = "CREATE TABLE journal_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)";
     private static final String SOURCES_SQL = """
         CREATE TABLE capture_sources (
@@ -174,7 +174,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                     statement.execute("INSERT INTO journal_settings VALUES ('compact_layout','false')");
                     createCaptureSchema(connection);
                     createWorkflowSchema(connection);
-                    statement.execute("PRAGMA user_version=4");
+                    statement.execute("PRAGMA user_version=5");
                     validateSchema(connection, SCHEMA_VERSION);
                     verifyIntegrity(connection);
                     connection.commit();
@@ -187,7 +187,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 verifyIntegrity(connection);
                 // No schema or WAL mutation until a complete, owned old-version snapshot exists.
                 Path backup = createBackup(database.getParent().resolve("backups").resolve(
-                    database.getFileName() + "-pre-schema4-" + UUID.randomUUID() + ".sqlite"));
+                    database.getFileName() + "-pre-schema5-" + UUID.randomUUID() + ".sqlite"));
                 try (var saved = DriverManager.getConnection("jdbc:sqlite:" + backup)) {
                     validateSchema(saved, version);
                     verifyIntegrity(saved);
@@ -196,8 +196,8 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 try {
                     if (version == 1) createCaptureSchema(connection);
                     if (version < 3) createWorkflowSchema(connection);
-                    if (version >= 2) migrateDialogue(connection);
-                    statement.execute("PRAGMA user_version=4");
+                    if (version >= 2) migrateDialogue(connection, version);
+                    statement.execute("PRAGMA user_version=5");
                     validateSchema(connection, SCHEMA_VERSION);
                     verifyIntegrity(connection);
                     connection.commit();
@@ -240,7 +240,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
     }
 
     /** Keyset chunks bound memory; deleting a row cannot invalidate a live scan cursor. */
-    private void migrateDialogue(Connection connection) throws SQLException {
+    private void migrateDialogue(Connection connection, int previousVersion) throws SQLException {
         String lastSource = ""; long lastLine = 0;
         while (true) {
             var chunk = new ArrayList<LegacyDialogue>();
@@ -283,7 +283,9 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 lastSource = line.sourceId(); lastLine = line.line();
             }
         }
-        try (var statement = connection.createStatement()) { statement.execute("ALTER TABLE transcript_lines DROP COLUMN raw"); }
+        if (previousVersion < 4) {
+            try (var statement = connection.createStatement()) { statement.execute("ALTER TABLE transcript_lines DROP COLUMN raw"); }
+        }
     }
     private record LegacyDialogue(String sourceId, long line, String text, Channel channel, String batchId, int ordinal) {}
 
@@ -338,7 +340,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 }
             }
         }
-        if (version >= 2) validateCaptureData(connection, version >= 3, version >= 4);
+        if (version >= 2) validateCaptureData(connection, version >= 3, version >= 4, version >= SCHEMA_VERSION);
         if (version >= 3) validateWorkflowData(connection);
     }
 
@@ -359,7 +361,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
         return normalized.toString();
     }
 
-    private void validateCaptureData(Connection connection, boolean withRemoved, boolean dialogueOnly) throws SQLException {
+    private void validateCaptureData(Connection connection, boolean withRemoved, boolean dialogueOnly, boolean currentPolicy) throws SQLException {
         try (var statement = connection.createStatement(); var sources = statement.executeQuery(
             "SELECT s.*, (SELECT count(*) FROM transcript_lines t WHERE t.source_id=s.id)"
                 + (withRemoved ? "+(SELECT count(*) FROM removed_observations r WHERE r.source_id=s.id)" : "")
@@ -384,9 +386,14 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                     if (coordinate < 1 || coordinate > lines.getLong("processed_lines")) throw new SQLException("Transcript beyond saved checkpoint");
                     if (dialogueOnly) {
                         var line = readLine(lines);
-                        var cleaned = normalizer.clean(line.text(), line.channel());
-                        if (cleaned.disposition() != DialogueCleanup.Disposition.DIALOGUE || !line.text().equals(cleaned.text()))
-                            throw new SQLException("Stored dialogue is not canonical");
+                        // An old owned schema may contain notices recognized only by
+                        // the new policy. Validate its structure before backing up;
+                        // require current canonical payloads only after migration.
+                        if (currentPolicy) {
+                            var cleaned = normalizer.clean(line.text(), line.channel());
+                            if (cleaned.disposition() != DialogueCleanup.Disposition.DIALOGUE || !line.text().equals(cleaned.text()))
+                                throw new SQLException("Stored dialogue is not canonical");
+                        }
                     } else {
                         requireSourceId(lines.getString("source_id"));
                         String text = lines.getString("text"), raw = lines.getString("raw");

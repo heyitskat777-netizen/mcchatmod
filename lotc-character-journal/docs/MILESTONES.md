@@ -99,7 +99,9 @@ exit criterion below:
   now includes the implemented preview/dashboard/filter/undo/watch workflow.
   Alpha.3 smoke tests were accepted by Kat. The alpha.4 refinement adds a native
   scrollable dialogue conversation and backed-up cleanup of existing payloads;
-  new refinement user testing is separate from alpha.3 acceptance.
+  new refinement user testing is separate from alpha.3 acceptance. Alpha.5 adds
+  positive RP classification and anchored system-notice cleanup while preserving
+  uncertain observations in review; results are tracked in STATUS.md.
 - **2b — Live capture and reconciliation:** shared normalized observations, live
   events or tailing, rotation/partial-line handling, and overlapping historical/live
   provenance without collapsing repeated emotes.

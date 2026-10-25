@@ -459,7 +459,8 @@ class LogImportServiceTest {
             assertEquals(List.of(dialogue, dialogue), repository.received.stream().map(TranscriptLine::text).toList());
             assertEquals(List.of(1L, 2L), repository.received.stream().map(TranscriptLine::sourceLine).toList());
             assertEquals(content, Files.readString(path));
-            assertTrue(repository.received.stream().allMatch(line -> line.channel() == Channel.UNKNOWN));
+            assertTrue(repository.received.stream().allMatch(line -> line.channel() == Channel.ROLEPLAY));
+            assertTrue(repository.received.stream().allMatch(line -> line.observedSpeaker() == null));
         }
     }
 

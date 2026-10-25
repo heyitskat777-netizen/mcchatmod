@@ -108,3 +108,15 @@ expectations because the user requested a scrollable conversation. Privacy gates
 and runner exit/report/shutdown requirements are preserved. Schema-1/2/3 migration,
 cleanup failure rollback and ownership/undo accounting are tested separately using
 synthetic SQLite fixtures; a fresh client profile is not a legacy migration test.
+
+## Roleplay classification and noise regression
+
+The mandatory `roleplay-filter` stage imports 62 synthetic eligible observations
+(52 with positive IC evidence, 10 unmarked UNKNOWN), 13 representative system
+notice templates, two private/OOC lines and one non-chat line. It asserts 78 source
+lines = 62 imported + 2 excluded + 14 ignored, clean exact payloads, no inferred
+speaker identities, Roleplay only / UNKNOWN review / All UI counts, repeat import,
+and restart persistence in development and packaged JVMs. Existing scroll, backup,
+batch, undo, watch, world, keybind and shutdown criteria remain. Unit tests separately
+check every notice family against quoted/attributed/near-miss dialogue, privacy
+precedence, schema-4 cleanup with no raw column, rollback and legacy uncertainty.

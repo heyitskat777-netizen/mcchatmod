@@ -1,5 +1,67 @@
 # Current status — October 25, 2026
 
+## Alpha.5 — roleplay classification and system-noise cleanup
+
+Branch: `feature/roleplay-filtering`, based on `b8220c4`. Kat supplied screenshots
+of command/plugin output retained as UNKNOWN and requested RP-only chat/emotes.
+No private screenshot names, accounts or dialogue are included in fixtures.
+
+Scope: whole-message deterministic filters for persona switch/size/search/results,
+JourneyMap hints, friend requests, news headers/link bullets, Soulstone notices,
+lock and build/region replies; original IC-channel/sender evidence for new ROLEPLAY
+observations; direct Roleplay only control plus existing All/UNKNOWN review.
+Unmarked ambiguous text stays reviewable. Roleplay channel classification does not
+infer speaker identity or confirm persona/account links. Older cleaned UNKNOWN
+rows lack original IC wrappers and are not automatically promoted from wording.
+
+Schema 5 performs backed-up cleanup of old schema-4 notices, preserves source IDs,
+processed positions, classifications, ownership/undo and original files, and adjusts
+ignored/imported contributions atomically. Legacy-v4 structural validation must not
+apply the new notice policy before backup/migration; current-v5 canonical validation
+remains strict. Parser policy 3 requires original-compatible partial jobs; complete
+alpha.4 imports before upgrading or finish using alpha.4 and the pre-upgrade backup.
+
+Native agents are available for this refinement: build owns schema/storage tests
+and package/version checks; verification owns parser/ingestion policy and tests;
+review is read-only. The coordinator owns UI, client assertions, docs and integrated
+checks. Implementation is complete. Independent review found no remaining blocker after
+narrowing region/persona/news matches to preserve extended narration and star/hyphen
+emotes, and replacing recursive long-list matching with constant-stack parsing.
+No user acceptance is inferred from these checks. Alpha.4 results below are historical.
+
+Coordinator commands (Java/proxy/cache activation documented below):
+
+```sh
+./gradlew -PcoreOnly :parsing:test :ingestion:test :storage:test --no-daemon --console=plain
+./gradlew check :fabric:build --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --run-id roleplay-smoke-1 --timeout 300
+```
+
+The initial narrow check passed in **41s**. After conservative pattern refinements
+and a reproduced 30KB region-list StackOverflowError, the affected integrated
+check/build passed in **1m13s** (30 tasks: 11 executed, 19 up-to-date).
+Fresh XML: **207 tests, 0 failures/errors/skips** — domain 1, application 9,
+parsing 115, ingestion 39, storage 43. The new long-list regression covers 10,000
+regions and 2,000 accounts below the existing 64KiB limit, valid/malformed tails
+and actual parser execution under a two-second budget, without reducing limits.
+All **14 Python runner contract tests passed**. Package checks require the bundled
+notice classifier and normalizer as well as the six runtime JARs.
+
+The five-JVM `roleplay-smoke-1` suite is **running**, not yet a runtime-pass claim.
+Its mandatory `roleplay-filter` stage asserts 52 explicit-RP and 10 unmarked UNKNOWN
+observations, 13 ignored notice families, no inferred speaker identities, actual
+Roleplay only / UNKNOWN / All controls and persistence. The fixture totals 78 source
+lines = 62 imported + 2 excluded + 14 ignored. Existing scroll/resize/batch/retry/
+undo/watch/backup/world/keybind/shutdown assertions stay in place. Legacy schema-4
+cleanup, no-raw-column backups, rollback/counters/ownership and UNKNOWN preservation
+are separately covered with synthetic databases.
+
+Logs: `/tmp/lotc-roleplay-core.log`, `/tmp/lotc-roleplay-integrated-verified.log`,
+`/tmp/lotc-roleplay-runner-tests.log`, `/tmp/lotc-roleplay-client.log`.
+User/private-source testing remains pending:
+[USER_TEST_ROLEPLAY_FILTER.md](USER_TEST_ROLEPLAY_FILTER.md).
+
 ## Alpha.4 refinement — dialogue-only persistence and scrolling
 
 Branch: `feature/dialogue-transcript`, based on `82884d4`. Kat reports **all alpha.3

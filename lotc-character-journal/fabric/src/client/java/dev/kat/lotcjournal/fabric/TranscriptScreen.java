@@ -46,9 +46,12 @@ public final class TranscriptScreen extends Screen {
         channel = addRenderableWidget(Button.builder(Component.literal("Channel: ALL"), button -> {
             channelIndex = (channelIndex + 1) % CHANNELS.length; offset = 0; load(false);
         }).bounds(left + panel / 2 + 4, 24, panel / 2 - 4, 20).build());
-        var search = new EditBox(font, left, 49, panel - 106, 20, Component.literal("Transcript search"));
+        var search = new EditBox(font, left, 49, panel - 212, 20, Component.literal("Transcript search"));
         search.setMaxLength(200); search.setHint(Component.literal("Search dialogue")); search.setValue(query);
         search.setResponder(value -> { query = value; offset = 0; load(false); }); addRenderableWidget(search);
+        addRenderableWidget(Button.builder(Component.literal("Roleplay only"), button -> {
+            channelIndex = 1; offset = 0; load(false);
+        }).bounds(left + panel - 206, 49, 100, 20).build());
         addRenderableWidget(Button.builder(Component.literal("UNKNOWN review"), button -> {
             channelIndex = 2; sourceIndex = -1; offset = 0; load(false);
         }).bounds(left + panel - 100, 49, 100, 20).build());
@@ -97,7 +100,9 @@ public final class TranscriptScreen extends Screen {
                         offset = (int) Math.min(Integer.MAX_VALUE - PAGE_SIZE, ((total - 1) / PAGE_SIZE) * PAGE_SIZE);
                         load(true); return;
                     }
-                    notice = entries.isEmpty() ? "No matching records in this filter" : "";
+                    notice = entries.isEmpty() ? (channelIndex == 1 && query.isBlank()
+                        ? "No confirmed RP; older or ambiguous imports may need UNKNOWN review"
+                        : "No matching records in this filter") : "";
                 }
                 pane.setEntries(entries, null, bottom); tick();
             }));

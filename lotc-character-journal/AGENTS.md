@@ -81,6 +81,12 @@ Target Minecraft 1.21.11, Fabric, Java 21. Do not silently upgrade Minecraft.
 - Folder watch requires persisted explicit opt-in, stable finished-file checks and
   bounded polling. It is separate from live capture; interrupted batches do not resume
   automatically. Safe diagnostics contain codes, never private payload/exception text.
+- Roleplay classification requires original IC-channel/sender evidence or an
+  explicitly reviewed name observation, never generic Minecraft CHAT alone. Never
+  infer identities from sender-shaped text. Lost legacy channel proof stays unknown.
+- Noise filters match complete known unattributed server notices. Preserve real
+  roleplay, quoted notices and unknown bracketed actions; privacy gates take priority.
+  Persona command replies do not become RP or automatic identity links.
 - Identity merges require user confirmation and must be reversible.
 - AI defaults off. Never silently fall back to a paid provider.
 - Never run unattended tests against the live LoTC server.

@@ -21,7 +21,7 @@ class DialogueTextNormalizerTest {
         var parsed = new LogLineParser(Set.of()).parse(
             "[01:23:45] [Render thread/INFO]: [System] [CHAT][Quiet] Synthetic Speaker: \"Hello.\"", 9).orElseThrow();
         assertEquals("Synthetic Speaker: \"Hello.\"", parsed.text());
-        assertEquals(Channel.UNKNOWN, parsed.channel()); assertTrue(parsed.observedSpeaker().isEmpty());
+        assertEquals(Channel.ROLEPLAY, parsed.channel()); assertTrue(parsed.observedSpeaker().isEmpty());
         assertEquals(9, parsed.sourceLine()); assertEquals("01:23:45", parsed.clock().toString());
     }
     @ParameterizedTest @ValueSource(strings = {"[Quiet] [PM] PRIVATE_SENTINEL", "[RP][OOC] PRIVATE_SENTINEL", "[Whisper] PRIVATE_SENTINEL", "[Quiet] (( PRIVATE_SENTINEL"})
