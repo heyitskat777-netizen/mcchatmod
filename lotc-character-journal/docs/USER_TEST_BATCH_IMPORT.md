@@ -30,7 +30,13 @@ keep a journal backup before trying migration or undo with valuable data.
 6. Enable folder watch only if wanted, and confirm. It checks the selected folder
    every 30 seconds, including after restart, and waits for two unchanged scans.
    Add a completed log and check its durable report. An actively changing file or
-   latest.log must not import. Disable watch and verify the choice after restart.
+   latest.log must not import. Stability is a size/mtime/file-identity heuristic,
+   not a lock proving another process has finished writing; select an archive
+   folder rather than a folder of actively written custom logs. Disable watch and
+   verify the choice after restart. Unchanged failed/attempted files are suppressed
+   across restarts; retry their saved batch explicitly. A stop or configuration
+   change between recording an automatic attempt and dispatch can leave no batch;
+   use Preview folder / Import all to process that file manually.
 7. Resize at normal and smaller GUI scales, close all screens, resume play, and
    leave the world. Report the build/version, expected and actual counts, safe
    error codes and source IDs. Keep private raw dialogue out of public issues.

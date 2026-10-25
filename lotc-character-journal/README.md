@@ -10,7 +10,7 @@ The user has accepted the Phase 1 foundation smoke test. Press **J** in a world
 to open the journal; its key is rebindable in Controls. Layout settings and backup
 creation remain available. Character identity/search is still future work.
 
-The `0.1.0-alpha.3` development branch expands **Log import** for finished UTF-8 `.log`
+The `0.1.0-alpha.3` development build expands **Log import** for finished UTF-8 `.log`
 and `.log.gz` files, background validation, progress/cancellation, restart-safe
 checkpoints, repeat-import deduplication, and a transcript browser with literal
 text search. **Import all / dashboard** adds a read-only folder preview,

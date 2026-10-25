@@ -96,7 +96,8 @@ exit criterion below:
   content identities, atomic checkpoints, cancellation/restart recovery, recognized
   channel exclusions, source-traceable transcript search/paging, and an **Import all
   logs** folder queue. The single-file importer is implemented; the folder queue
-  is being expanded with the accepted preview/dashboard/filter/undo/watch workflow.
+  now includes the implemented preview/dashboard/filter/undo/watch workflow.
+  Automated checks passed; new workflow user acceptance remains pending.
 - **2b — Live capture and reconciliation:** shared normalized observations, live
   events or tailing, rotation/partial-line handling, and overlapping historical/live
   provenance without collapsing repeated emotes.
