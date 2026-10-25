@@ -9,7 +9,7 @@ dependencies {
     mappings loom.officialMojangMappings()
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-    ['domain', 'application', 'storage'].each { module ->
+    ['domain', 'application', 'storage', 'ingestion', 'parsing'].each { module ->
         implementation project(":${module}")
         include project(":${module}")
     }
@@ -61,6 +61,8 @@ tasks.register('verifyPackagedMod') {
                 "META-INF/jars/domain-${project.version}.jar": 'dev/kat/lotcjournal/domain/JournalSettings.class',
                 "META-INF/jars/application-${project.version}.jar": 'dev/kat/lotcjournal/application/JournalService.class',
                 "META-INF/jars/storage-${project.version}.jar": 'dev/kat/lotcjournal/storage/SqliteJournalStore.class',
+                "META-INF/jars/ingestion-${project.version}.jar": 'dev/kat/lotcjournal/ingestion/LogImportService.class',
+                "META-INF/jars/parsing-${project.version}.jar": 'dev/kat/lotcjournal/parsing/LogLineParser.class',
                 "META-INF/jars/sqlite-jdbc-${project.sqlite_version}.jar": 'org/sqlite/JDBC.class'
             ]
             if (bundled.toSet() != expected.keySet().collect { it.toString() }.toSet())
@@ -82,7 +84,7 @@ tasks.register('verifyPackagedMod') {
                     throw new GradleException("Unexpected test or database content in mod JAR: ${entry.name}")
             }
         }
-        logger.lifecycle("Packaged mod verified: ${artifact.name}; client metadata and four runtime JARs present.")
+        logger.lifecycle("Packaged mod verified: ${artifact.name}; client metadata and six runtime JARs present.")
     }
 }
 

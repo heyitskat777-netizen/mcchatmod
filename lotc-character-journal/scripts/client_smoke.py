@@ -19,7 +19,7 @@ import xml.etree.ElementTree as ET
 
 PROJECT = Path(__file__).resolve().parents[1]
 BASE = PROJECT / "fabric/build/client-smoke"
-COMMON_STAGES = {"startup", "local-world", "keybind-open", "search-widget", "layout-save",
+COMMON_STAGES = {"startup", "local-world", "keybind-open", "search-widget", "layout-save", "import-ui",
                  "backup", "journal-close", "keybind-rebind", "world-leave", "shutdown"}
 GRAPHICS_ERRORS = ("Failed to create window", "Failed to initialize GLFW", "GLFW error 65542",
                    "GLFW error 65543", "GLXBadFBConfig", "No X11 DISPLAY")
@@ -30,7 +30,7 @@ def required_stages(phase: str) -> set[str]:
         return {"startup", "shutdown"}
     if phase not in {"write", "read"}:
         raise ValueError(f"Unknown phase: {phase}")
-    return COMMON_STAGES | {"initial-defaults" if phase == "write" else "restart-persistence"}
+    return COMMON_STAGES | ({"initial-defaults"} if phase == "write" else {"restart-persistence", "import-persistence"})
 
 
 def validate_report(report: dict | None, shutdown: dict | None, expected: dict) -> list[str]:

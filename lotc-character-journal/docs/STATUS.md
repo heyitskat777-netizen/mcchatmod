@@ -1,5 +1,35 @@
 # Current status — October 24, 2026
 
+## Current continuation — Phase 1 user accepted; Phase 2a import under verification
+
+The user reports the requested tests completed with no issues: resizing, rebinding,
+layout, backup, and return to normal play all work. This closes the Phase 1 user
+smoke-test gate. The exact tested JAR hash/launcher/mod list was not supplied; do
+not infer those details or general hardware/modpack compatibility beyond the report.
+
+Work continues on `feature/log-import`, based on the smoke-suite branch. The first
+Phase 2 slice is historical `.log`/`.log.gz` import plus transcript review. It adds
+a bounded background importer, content identities, recoverable atomic checkpoints,
+recognized-channel exclusions, literal text search, and schema-1 migration with a
+verified backup. The planned development artifact is `0.1.0-alpha.2`.
+
+Phase 2 remains incomplete: live capture, rotation/tailing, historical/live overlap
+reconciliation, and a manually checked real-log acceptance test remain outstanding.
+No character records/identity merges/persona memories/AI are claimed. See
+[USER_TEST_IMPORT.md](USER_TEST_IMPORT.md) for the new user checklist and limits.
+
+Native build/contracts/storage, parser/test, and read-only review agents worked
+with explicit non-overlapping ownership. Independent review found and prompted
+fixes for changed classifier configuration on partial resume and raw gzip-header
+size/cancellation bounds. The coordinator owns importer/UI/docs/integration and
+ran `./gradlew check :fabric:build --rerun-tasks --no-daemon --console=plain`:
+**passed in 52s, all 30 tasks executed**. Fresh JUnit XML confirms **93 tests,
+0 failures/errors/skips** (domain 1, application 9, parsing 39, ingestion 20,
+storage 24). The 14 Python runner contract tests also passed. Actual expanded
+development/packaged client tests are running; compilation is not being counted
+as their success. Results below the
+current continuation describe prior verified builds until new results are added.
+
 ## Client smoke suite — local and GitHub Actions checks passed
 
 Branch: `feature/client-smoke-tests`, stacked on foundation PR #1.

@@ -43,7 +43,7 @@ def smokeJvmArgs = {
         def value = smokeProperty(name).orNull
         if (!value) throw new GradleException("Missing -PjournalSmoke${name}; use scripts/client_smoke.py")
         "-Dlotc.journal.smoke.${name[0].toLowerCase() + name.substring(1)}=${value}"
-    }
+    } + ["-Dlotc.journal.smoke.expectedVersion=${project.version}"]
 }
 def verifySmokeProfile = {
     def profile = file(smokeProperty('Profile').get()).toPath().toAbsolutePath().normalize()
