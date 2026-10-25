@@ -58,6 +58,12 @@ Target Minecraft 1.21.11, Fabric, Java 21. Do not silently upgrade Minecraft.
 - Use synthetic log samples with realistic formatting.
 - PM, OOC, unknown channels, and other-persona knowledge cannot enter AI analysis.
 - Store original observations separately from interpretations; preserve provenance.
+- Historical import identity hashes exact decompressed bytes. Keep observations,
+  counters and cursor checkpoints atomic. Preserve repeated text at different
+  source coordinates; never deduplicate observations by text alone.
+- Partial import resumes are bound to a versioned parser/reviewed-name policy.
+  Bump the policy version and test incompatibility when classification changes;
+  do not silently mix policies or reclassify completed sources on repeat import.
 - Identity merges require user confirmation and must be reversible.
 - AI defaults off. Never silently fall back to a paid provider.
 - Never run unattended tests against the live LoTC server.

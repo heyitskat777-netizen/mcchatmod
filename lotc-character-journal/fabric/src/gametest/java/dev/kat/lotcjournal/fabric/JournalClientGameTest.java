@@ -3,8 +3,11 @@ package dev.kat.lotcjournal.fabric;
 import com.mojang.blaze3d.platform.InputConstants;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.sql.DriverManager;
 import java.util.Arrays;
+import java.util.HexFormat;
 import java.util.List;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -22,6 +25,8 @@ import org.lwjgl.glfw.GLFW;
 @SuppressWarnings("UnstableApiUsage")
 public final class JournalClientGameTest implements FabricClientGameTest {
     private static final String SCREEN_CLASS = "dev.kat.lotcjournal.fabric.JournalScreen";
+    private static final String IMPORT_SCREEN = "dev.kat.lotcjournal.fabric.LogImportScreen";
+    private static final String TRANSCRIPT_SCREEN = "dev.kat.lotcjournal.fabric.TranscriptScreen";
     private static final int WAIT_TICKS = 400;
 
     @Override public void runTest(ClientGameTestContext context) {
@@ -43,14 +48,22 @@ public final class JournalClientGameTest implements FabricClientGameTest {
                 if (!report.phase().equals("preflight")) {
                     var metadata = FabricLoader.getInstance().getModContainer("lotc_journal")
                         .orElseThrow(() -> new AssertionError("Journal mod was not installed"));
-                    check(metadata.getMetadata().getVersion().getFriendlyString().equals("0.1.0-alpha.1"),
+                    String expectedVersion = System.getProperty("lotc.journal.smoke.expectedVersion");
+                    if (report.phase().equals("standalone") && expectedVersion == null)
+                        expectedVersion = metadata.getMetadata().getVersion().getFriendlyString();
+                    check(expectedVersion != null && metadata.getMetadata().getVersion().getFriendlyString().equals(expectedVersion),
                         "Unexpected tested journal version");
                     var adapter = Class.forName("dev.kat.lotcjournal.fabric.JournalClient");
                     var sqlite = Class.forName("org.sqlite.JDBC");
                     report.origin("journal", adapter);
                     report.origin("sqlite", sqlite);
+                    var ingestion = Class.forName("dev.kat.lotcjournal.ingestion.LogImportService");
+                    var parsing = Class.forName("dev.kat.lotcjournal.parsing.LogLineParser");
+                    report.origin("ingestion", ingestion);
+                    report.origin("parsing", parsing);
                     if (report.mode().equals("packaged")) {
-                        check(isJar(adapter) && isJar(sqlite), "Packaged run must load journal and SQLite from JARs");
+                        check(isJar(adapter) && isJar(sqlite) && isJar(ingestion) && isJar(parsing),
+                            "Packaged run must load journal, import/parser modules and SQLite from JARs");
                     }
                 } else {
                     check(!FabricLoader.getInstance().isModLoaded("lotc_journal"), "Graphics preflight must exclude the journal mod");
@@ -124,6 +137,7 @@ public final class JournalClientGameTest implements FabricClientGameTest {
                 context.runOnClient(client -> check(search(client.screen).getValue().equals("Synthetic Visitor"),
                     "Search field must accept actual typed input"));
             });
+            exerciseImport(context, report, database);
             report.stage("layout-save", 30_000, () -> {
                 // The read phase proves that changing the setting still works after a process restart.
                 if (initial) toggle(context, false);
@@ -171,6 +185,125 @@ public final class JournalClientGameTest implements FabricClientGameTest {
         report.stage("world-leave", 30_000, () -> context.waitFor(
             client -> client.level == null && client.player == null && client.getSingleplayerServer() == null
                 && client.screen instanceof TitleScreen, WAIT_TICKS));
+    }
+
+    private void exerciseImport(ClientGameTestContext context, SmokeReport report, Path database) throws Exception {
+        String raw = "[23:59:59] [Render thread/INFO]: [System] [CHAT] §aSynthetic Visitor§r waves.";
+        String fixture = raw + "\n" + raw + "\n"
+            + "[00:00:00] [Render thread/INFO]: [CHAT] [PM] IMPORT_PRIVATE_SENTINEL\n"
+            + "[00:00:01] [Render thread/INFO]: [CHAT] [OOC]IMPORT_OOC_SENTINEL\n"
+            + "synthetic non-chat diagnostic\n";
+        byte[] bytes = fixture.getBytes(StandardCharsets.UTF_8);
+        String sourceId = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+        Path path = FabricLoader.getInstance().getGameDir().resolve("synthetic-import.log").toAbsolutePath();
+        if (report.phase().equals("read")) {
+            report.stage("import-persistence", 20_000, () -> {
+                check(Files.isRegularFile(path), "Reader must see the writer's original source fixture");
+                check(Arrays.equals(bytes, Files.readAllBytes(path)), "Source fixture bytes must survive process restart");
+                verifyImported(database, sourceId, raw);
+            });
+        } else Files.write(path, bytes);
+
+        report.stage("import-ui", 60_000, () -> {
+            context.clickScreenButton("Log import");
+            context.waitFor(client -> isScreen(client.screen, IMPORT_SCREEN), WAIT_TICKS);
+            context.runOnClient(client -> {
+                var fields = editBoxes(client.screen);
+                check(fields.size() == 2, "Import UI needs explicit path and optional reviewed-name inputs");
+                check(fields.get(1).getValue().isEmpty(), "Historical names must remain unreviewed by default");
+                fields.getFirst().setValue("");
+                client.screen.setFocused(fields.getFirst());
+                fields.getFirst().setFocused(true);
+            });
+            context.getInput().typeChars(path.toString());
+            context.waitFor(client -> screenButtonActive(client.screen, "Import log"), WAIT_TICKS);
+            context.clickScreenButton("Import log");
+            waitForImportComplete(context);
+            verifyImported(database, sourceId, raw);
+            // Exercise the repeat-import UI path, including successful completion, not just stable row counts.
+            context.clickScreenButton("Import log");
+            waitForImportComplete(context);
+            verifyImported(database, sourceId, raw);
+            context.clickScreenButton("View transcripts");
+            context.waitFor(client -> isScreen(client.screen, TRANSCRIPT_SCREEN)
+                && client.screen.getNarrationMessage().getString().contains("Record 1 of 2"), WAIT_TICKS);
+            context.runOnClient(client -> {
+                String narration = client.screen.getNarrationMessage().getString();
+                check(narration.contains("line 1.") && narration.contains("Channel UNKNOWN"),
+                    "Transcript must expose source coordinate and unresolved channel");
+                check(narration.contains("Date and timezone unresolved"), "UI must not invent a date or timezone");
+                check(screenButtonActive(client.screen, "Next") && !screenButtonActive(client.screen, "Previous"),
+                    "Transcript must start at the first source observation");
+            });
+            context.clickScreenButton("Next");
+            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Record 2 of 2"), WAIT_TICKS);
+            context.runOnClient(client -> check(client.screen.getNarrationMessage().getString().contains("line 2.")
+                && !screenButtonActive(client.screen, "Next") && screenButtonActive(client.screen, "Previous"),
+                "Repeated text must navigate to a distinct second source coordinate"));
+            context.clickScreenButton("Previous");
+            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Record 1 of 2"), WAIT_TICKS);
+            context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("NO_SYNTHETIC_MATCH"));
+            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("No matching records"), WAIT_TICKS);
+            context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("Synthetic Visitor"));
+            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Record 1 of 2"), WAIT_TICKS);
+            report.screenshot(context.takeScreenshot("lotc-import-transcript-" + report.phase()));
+            context.clickScreenButton("Done");
+            context.waitFor(client -> isScreen(client.screen, IMPORT_SCREEN), WAIT_TICKS);
+            context.clickScreenButton("Done");
+            waitForJournal(context);
+        });
+    }
+
+    private static void waitForImportComplete(ClientGameTestContext context) {
+        context.waitFor(client -> isScreen(client.screen, IMPORT_SCREEN)
+            && screenButtonActive(client.screen, "Import log") && screenButtonActive(client.screen, "View transcripts")
+            && client.screen.getNarrationMessage().getString().contains(". COMPLETE."), WAIT_TICKS);
+    }
+
+    private static void verifyImported(Path database, String sourceId, String raw) throws Exception {
+        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database.toUri() + "?mode=ro")) {
+            try (var query = connection.prepareStatement("SELECT * FROM capture_sources WHERE id=?")) {
+                query.setString(1, sourceId);
+                try (var source = query.executeQuery()) {
+                    check(source.next(), "Import source checkpoint must exist");
+                    check(source.getLong("total_lines") == 5 && source.getLong("processed_lines") == 5
+                        && source.getLong("imported_lines") == 2 && source.getLong("excluded_lines") == 2
+                        && source.getLong("ignored_lines") == 1 && source.getInt("complete") == 1,
+                        "Import counters and completion checkpoint must survive repeat import/restart");
+                    check(!source.next(), "Content identity must identify one source");
+                }
+            }
+            try (var query = connection.prepareStatement("SELECT * FROM transcript_lines WHERE source_id=? ORDER BY source_line")) {
+                query.setString(1, sourceId);
+                try (var rows = query.executeQuery()) {
+                    for (int coordinate = 1; coordinate <= 2; coordinate++) {
+                        check(rows.next() && rows.getLong("source_line") == coordinate, "Repeated observations need distinct coordinates");
+                        check(raw.equals(rows.getString("raw")), "Transcript must retain original observed bytes as UTF-8 text");
+                        check("23:59:59".equals(rows.getString("clock")), "Original clock must remain unchanged");
+                        check("UNKNOWN".equals(rows.getString("channel")) && rows.getString("observed_speaker") == null,
+                            "Unreviewed names must stay unresolved and ineligible for AI");
+                    }
+                    check(!rows.next(), "Repeat import must not add duplicates or excluded payloads");
+                }
+            }
+            try (var query = connection.createStatement();
+                 var rows = query.executeQuery("SELECT count(*) FROM transcript_lines WHERE raw LIKE '%IMPORT_PRIVATE_SENTINEL%' OR raw LIKE '%IMPORT_OOC_SENTINEL%'")) {
+                check(rows.next() && rows.getInt(1) == 0, "PM/OOC payloads must never enter stored transcripts");
+            }
+        }
+    }
+
+    private static boolean isScreen(Screen screen, String name) {
+        return screen != null && screen.getClass().getName().equals(name);
+    }
+
+    private static List<EditBox> editBoxes(Screen screen) {
+        return screen.children().stream().filter(EditBox.class::isInstance).map(EditBox.class::cast).toList();
+    }
+
+    private static boolean screenButtonActive(Screen screen, String label) {
+        return screen != null && screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast)
+            .anyMatch(button -> button.active && button.getMessage().getString().equals(label));
     }
 
     private static void waitForJournal(ClientGameTestContext context) {

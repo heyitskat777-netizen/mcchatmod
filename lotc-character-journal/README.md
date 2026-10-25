@@ -6,16 +6,23 @@ actually been verified. It is not the complete character-memory mod yet.
 
 ## Current build
 
-Phase 1 foundation: press **J** in a world to open the journal shell. The key is
-rebindable in Minecraft's normal Controls menu. The shell shows an empty character
-search field, a persisted layout preference, and a backup control. Character
-search is visibly marked unavailable until import is implemented. The layout
-preference is saved now; full compact character rows arrive with the character UI.
+The user has accepted the Phase 1 foundation smoke test. Press **J** in a world
+to open the journal; its key is rebindable in Controls. Layout settings and backup
+creation remain available. Character identity/search is still future work.
+
+The `0.1.0-alpha.2` development build adds **Log import** for finished UTF-8 `.log`
+and `.log.gz` files, background validation, progress/cancellation, restart-safe
+checkpoints, repeat-import deduplication, and a transcript browser with literal
+text search. Each record retains its source fingerprint, original line/text,
+log clock, and channel uncertainty. Names remain unresolved unless supplied as
+reviewed observations before import; no character or persona links are created.
 
 Settings live in `config/lotc-journal/journal.sqlite`. Backups are stored in
-`config/lotc-journal/backups/`. The shell does not capture chat, recognize nearby
-players, or call an AI service. The parser prototype is tested separately and is
-not connected to live capture.
+`config/lotc-journal/backups/`. A schema migration backs up an existing Phase 1
+database before adding import tables. Live capture, log tailing/rotation,
+historical/live overlap reconciliation, nearby recognition, and AI are not enabled.
+See [docs/USER_TEST_IMPORT.md](docs/USER_TEST_IMPORT.md) for limits, recognized
+privacy exclusions, and the real-log test still required to advance Phase 2.
 
 ## Start this project in Codex on your computer
 
@@ -77,10 +84,11 @@ If an environment cannot initialize Loom, verify just the independent core with
 | Module | Owns | Production dependencies |
 | --- | --- | --- |
 | domain | Models and service contracts | None |
-| parsing | Conservative log-format prototype | domain |
-| storage | SQLite initialization, settings, backups | domain, SQLite JDBC |
+| parsing | Conservative channel/name observations | domain |
+| ingestion | Bounded historical-file validation/import worker | domain, parsing |
+| storage | SQLite settings, import checkpoints/transcripts, migrations, backups | domain, SQLite JDBC |
 | application | Background scheduling and immutable UI snapshots | domain |
-| fabric | Minecraft UI, keybind, startup wiring | domain, application, storage, Fabric |
+| fabric | Minecraft UI, keybind, import/transcript screens, startup wiring | domain, application, storage, ingestion, Fabric |
 
 Future identity, encounter, statistics, analysis, and provider modules are added
 as coherent features rather than empty placeholders. The development-agent

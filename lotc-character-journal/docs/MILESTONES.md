@@ -89,6 +89,20 @@ The shell is usable in the target installation and has no known loading, keybind
 
 ## Phase 2 — Reliable historical and live capture
 
+Implementation is delivered in reviewable slices while retaining the full Phase 2
+exit criterion below:
+
+- **2a — Historical import and review:** finished `.log`/`.log.gz` validation,
+  content identities, atomic checkpoints, cancellation/restart recovery, recognized
+  channel exclusions, and source-traceable transcript search/paging.
+- **2b — Live capture and reconciliation:** shared normalized observations, live
+  events or tailing, rotation/partial-line handling, and overlapping historical/live
+  provenance without collapsing repeated emotes.
+- **2c — Real-source acceptance:** manually checked private examples, unexplained
+  count differences resolved, and measured import/capture performance budgets.
+
+Completing 2a does not mark live capture or the entire Phase 2 complete.
+
 **Deliverables**
 
 Historical log and supported archive import, live chat capture, channel filtering, timestamp provenance, source locations, import progress, and a transcript inspector. Unrecognized formats go to a local diagnostic/review path rather than being confidently attributed.
@@ -237,5 +251,7 @@ The initial release is one client-side mod with a local database. A local model 
 
 Cloud synchronization, a server plugin, a standalone desktop app, multi-version support, and automatic nearby-player recognition are not prerequisites for the first release. Revisit them as independent milestones if requested.
 
-Development has started with Phase 0 discovery and the Phase 1 foundation. STATUS.md records the verified implementation state; later phases and user verification remain pending.
+Phase 1's user smoke test has been accepted; historical import is the current
+Phase 2a slice. STATUS.md records exact implementation and verification results;
+live capture, real-source acceptance, and later phases remain pending.
 

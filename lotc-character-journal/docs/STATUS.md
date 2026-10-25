@@ -1,5 +1,107 @@
 # Current status — October 24, 2026
 
+## Current continuation — Phase 1 accepted; Phase 2a import verified, real-log review pending
+
+The user reports the requested tests completed with no issues: resizing, rebinding,
+layout, backup, and return to normal play all work. This closes the Phase 1 user
+smoke-test gate. The exact tested JAR hash/launcher/mod list was not supplied; do
+not infer those details or general hardware/modpack compatibility beyond the report.
+
+Work continues on `feature/log-import`, based on the smoke-suite branch. The first
+Phase 2 slice is historical `.log`/`.log.gz` import plus transcript review. It adds
+a bounded background importer, content identities, recoverable atomic checkpoints,
+recognized-channel exclusions, literal text search, and schema-1 migration with a
+verified backup. The planned development artifact is `0.1.0-alpha.2`.
+
+Phase 2 remains incomplete: live capture, rotation/tailing, historical/live overlap
+reconciliation, and a manually checked real-log acceptance test remain outstanding.
+No character records/identity merges/persona memories/AI are claimed. See
+[USER_TEST_IMPORT.md](USER_TEST_IMPORT.md) for the new user checklist and limits.
+
+Native build/contracts/storage, parser/test, and read-only review agents worked
+with explicit non-overlapping ownership. Independent review prompted fixes for
+classification-policy changes on partial resume and bounded/cancellable raw gzip
+headers (including skips). Canonical latest.log aliases are also refused. No
+remaining production blocker was reported by independent review.
+
+Coordinator verification:
+
+```sh
+./gradlew check :fabric:build --rerun-tasks --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --run-id import-smoke-1 --timeout 300
+```
+
+Use the Java/proxy/cache activation from the earlier record below. The integrated
+build passed in **52s**, with **all 30 tasks executed**. Fresh JUnit XML confirms
+**93 tests, 0 failures/errors/skips**: domain 1, application 9, parsing 39,
+ingestion 20, storage 24. The **14 Python runner contract tests** also passed.
+The original 18 parser expectations were preserved. New tests cover recognized
+privacy formats, midnight/clock provenance, full validation before writes,
+truncated gzip/UTF-8/partial-line/size bounds, header cancellation, source aliases,
+atomic batch recovery/concurrency, policy conflicts, cancellation/queue shutdown,
+backed-up migration, imported-data backup restoration, search and paging.
+
+The coordinator's actual five-JVM client run **passed all phases**:
+
+| Phase | Elapsed | Result |
+| --- | --- | --- |
+| Graphics-only preflight | 74.2s | Passed |
+| Development writer | 74.5s | Passed |
+| Development reader | 89.5s | Passed |
+| Packaged writer | 75.9s | Passed |
+| Packaged reader | 156.5s | Passed |
+
+The writer exercises the real keybind and Log import controls, imports a synthetic
+source, repeats it with unchanged counts, checks 2 distinct UNKNOWN records at
+lines 1/2 with identical text, 2 recognized PM/OOC exclusions and 1 ignored line,
+then tests transcript paging, no-match/matching text search, source/clock/raw
+provenance and screenshots. The separate reader verifies the original source
+bytes and imported database records before using the UI again. Both original
+journal and import workers must stop. Development and packaged runtimes both
+completed their existing layout/backup/key-rebind/world/shutdown assertions too.
+The writer has 12 required assertion stages; the reader has 13. Screenshots were
+visually inspected and are readable at the tested normal GUI size.
+
+The packaged run loads ingestion and parsing from their nested JARs as well as
+storage/domain/application/SQLite. Package verification now checks all six nested
+runtime JARs. No real RP logs or user database was used in automated tests. Actual
+Phase 1 schema migration is covered with synthetic schema-1 databases and verified
+pre-migration snapshots; the fresh-profile client test does not itself test a real
+user's database migration.
+
+Successful local evidence is under
+`fabric/build/client-smoke/evidence/import-smoke-1/` (JSON, JUnit XML, phase and
+shutdown/launch witnesses, selected logs and PNGs). Core logs:
+`/tmp/lotc-phase2-integrated.log`, `/tmp/lotc-phase2-verification.log`,
+`/tmp/lotc-phase2-runner-tests.log`, `/tmp/lotc-phase2-client.log`.
+Outputs/private data remain ignored and uncommitted. A final wording-only
+clarification labels character search as future identity work; its affected
+Fabric build is checked separately from the full runtime run above.
+
+GitHub Actions also passed both jobs on functional commit `bebd523`:
+[PR run 40151619378](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40151619378).
+This includes actual development/packaged JVMs and evidence uploads, not just
+compilation. Any subsequent documentation/wording commit receives its normal CI
+rerun; this statement identifies the verified functional commit precisely.
+
+Limitations and next work: finish the private real-log checklist in
+[USER_TEST_IMPORT.md](USER_TEST_IMPORT.md), then implement live capture and
+historical/live reconciliation (Phase 2b). Identical decompressed bytes reuse a
+source even across plain/gzip/renames; different newline bytes, overlapping subsets,
+or changed files remain distinct sources. Completed classifications stay frozen;
+partial resumes require the original reviewed-name/policy fingerprint. Recognized
+PM/OOC payloads never reach journal storage; unsupported formats can remain UNKNOWN
+review records, never eligible for analysis. Dates/timezones remain unresolved.
+No live LoTC testing, persona isolation, character identities or AI is claimed.
+
+Current local artifact: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.2.jar`,
+14461590 bytes; SHA-256 `8eacdbb4131a10427dc71c9a07666dd5b4db1f6a9a9b5d17e3d7cff262afa9c4`.
+The final wording-only Fabric build passed in 23s (19 tasks: 6 executed, 13 up-to-date).
+
+The remainder is a historical record of the earlier foundation/smoke-suite work.
+Its pending Phase 1 user-test notes are superseded by the user's acceptance above.
+
 ## Client smoke suite — local and GitHub Actions checks passed
 
 Branch: `feature/client-smoke-tests`, stacked on foundation PR #1.
