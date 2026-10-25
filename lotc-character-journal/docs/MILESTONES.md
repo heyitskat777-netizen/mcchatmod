@@ -96,7 +96,7 @@ exit criterion below:
   content identities, atomic checkpoints, cancellation/restart recovery, recognized
   channel exclusions, source-traceable transcript search/paging, and an **Import all
   logs** folder queue. The single-file importer is implemented; the folder queue
-  is an accepted next requirement, not an enabled feature yet.
+  is being expanded with the accepted preview/dashboard/filter/undo/watch workflow.
 - **2b — Live capture and reconciliation:** shared normalized observations, live
   events or tailing, rotation/partial-line handling, and overlapping historical/live
   provenance without collapsing repeated emotes.
@@ -131,6 +131,20 @@ Historical logs and live events share a normalized message representation. Recon
   filesystem scanning or resume a queue without user intent.
 - Report the batch outcome and per-file failures without copying private chat text
   into diagnostics or changing source files.
+
+**Accepted import workflow additions**
+
+- Validate a read-only folder preview before confirmation, showing eligible files,
+  encoded/decompressed workload and known sources without importing records.
+- Persist batch/per-file progress, safe error codes and reviewed-name policy;
+  provide explicit retry for failed/interrupted files after restart.
+- Browse across sources and filter channels, including a review-only UNKNOWN queue.
+- Confirm undo of only records newly inserted by a selected batch. Preserve original
+  files, older imports and source checkpoint provenance. Keep payload-free removal
+  accounting; repeating a completed source must not silently restore undone rows.
+- Offer a persisted, explicit opt-in folder watch for finished stable archives only.
+  Require two unchanged scans; exclude active latest.log, links and nested folders.
+  This is not live chat capture and does not close Phase 2b.
 
 **Developer verification**
 

@@ -1,6 +1,7 @@
 package dev.kat.lotcjournal.fabric;
 
 import dev.kat.lotcjournal.domain.ImportSource;
+import dev.kat.lotcjournal.domain.Channel;
 import dev.kat.lotcjournal.domain.TranscriptLine;
 import dev.kat.lotcjournal.ingestion.LogImportService;
 import java.util.List;
@@ -16,7 +17,11 @@ public final class TranscriptScreen extends Screen {
     private final Screen parent;
     private final LogImportService importer;
     private final List<ImportSource> sources;
-    private int sourceIndex;
+    private int sourceIndex = -1;
+    private int channelIndex;
+    private static final Channel[] CHANNELS = {null, Channel.ROLEPLAY, Channel.SYSTEM, Channel.UNKNOWN};
+    private Button channel;
+    private long removed;
     private int offset;
     private long total;
     private int scroll;
@@ -40,7 +45,7 @@ public final class TranscriptScreen extends Screen {
     @Override protected void init() {
         int panel = Math.min(420, width - 32), left = (width - panel) / 2;
         source = addRenderableWidget(Button.builder(Component.literal("Source"), button -> {
-            sourceIndex = (sourceIndex + 1) % sources.size();
+            sourceIndex = sourceIndex + 1 >= sources.size() ? -1 : sourceIndex + 1;
             offset = 0;
             load();
         }).bounds(left, 28, panel, 20).build());
@@ -50,6 +55,12 @@ public final class TranscriptScreen extends Screen {
         search.setValue(query);
         search.setResponder(value -> { query = value; offset = 0; load(); });
         addRenderableWidget(search);
+        channel = addRenderableWidget(Button.builder(Component.literal("Channel: ALL"), button -> {
+            channelIndex = (channelIndex + 1) % CHANNELS.length; offset = 0; load();
+        }).bounds(left, 82, panel / 2 - 4, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("UNKNOWN review"), button -> {
+            channelIndex = 3; sourceIndex = -1; offset = 0; load();
+        }).bounds(left + panel / 2 + 4, 82, panel / 2 - 4, 20).build());
         previous = addRenderableWidget(Button.builder(Component.literal("Previous"), button -> { offset--; load(); })
             .bounds(left, height - 51, panel / 2 - 4, 20).build());
         next = addRenderableWidget(Button.builder(Component.literal("Next"), button -> { offset++; load(); })
@@ -68,7 +79,11 @@ public final class TranscriptScreen extends Screen {
         notice = "Loading transcript";
         scroll = 0;
         tick();
-        importer.transcript(sources.get(sourceIndex).id(), query, offset, 1)
+        String sourceId = sourceIndex < 0 ? null : sources.get(sourceIndex).id();
+        importer.removedRecords(sourceId).whenComplete((count, error) -> minecraft.execute(() -> {
+            if (sequence == request && error == null) removed = count;
+        }));
+        importer.transcript(sourceId, query, CHANNELS[channelIndex], offset, 1)
             .whenComplete((page, error) -> minecraft.execute(() -> {
                 if (sequence != request) return;
                 pending = false;
@@ -77,7 +92,7 @@ public final class TranscriptScreen extends Screen {
                     total = page.total();
                     entry = page.entries().isEmpty() ? null : page.entries().getFirst();
                     wrapped = entry == null ? List.of() : font.split(Component.literal(entry.raw()), Math.min(420, width - 32));
-                    notice = entry == null ? "No matching records in this source" : "";
+                    notice = entry == null ? "No matching records in this filter" : "";
                 }
                 tick();
             }));
@@ -87,14 +102,15 @@ public final class TranscriptScreen extends Screen {
         previous.active = !pending && offset > 0;
         next.active = !pending && offset + 1L < total;
         source.active = !pending && !sources.isEmpty();
-        if (!sources.isEmpty()) source.setMessage(Component.literal(font.plainSubstrByWidth(
+        channel.setMessage(Component.literal("Channel: " + (CHANNELS[channelIndex] == null ? "ALL" : CHANNELS[channelIndex])));
+        source.setMessage(Component.literal(sourceIndex < 0 ? "All sources (click to filter)" : font.plainSubstrByWidth(
             "Source " + (sourceIndex + 1) + "/" + sources.size() + ": " + sources.get(sourceIndex).label(), source.getWidth() - 12)));
     }
 
     @Override public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
         if (entry != null) {
             int lines = wrapped.size();
-            int visible = Math.max(1, (height - 185) / 12);
+            int visible = Math.max(1, (height - 221) / 12);
             scroll = Math.max(0, Math.min(Math.max(0, lines - visible), scroll - (int) Math.signum(vertical) * 3));
         }
         return true;
@@ -106,21 +122,26 @@ public final class TranscriptScreen extends Screen {
         graphics.drawCenteredString(font, title, width / 2, 10, 0xFFE5E7EB);
         if (entry != null) {
             graphics.drawString(font, "Record " + (offset + 1) + "/" + total + " | Source line " + entry.sourceLine()
-                + " | Clock " + (entry.clock() == null ? "unknown" : entry.clock()), left, 83, 0xFF93C5FD);
+                + " | Clock " + (entry.clock() == null ? "unknown" : entry.clock()), left, 109, 0xFF93C5FD);
             graphics.drawString(font, "Channel: " + entry.channel() + " | Speaker: "
-                + (entry.observedSpeaker() == null ? "unresolved" : entry.observedSpeaker()), left, 96, 0xFFD1D5DB);
-            graphics.drawString(font, "Date/zone unknown | Source " + entry.sourceId().substring(0, 12) + " | Scroll text", left, 109, 0xFF9CA3AF);
-            int y = 127;
+                + (entry.observedSpeaker() == null ? "unresolved" : entry.observedSpeaker()), left, 122, 0xFFD1D5DB);
+            graphics.drawString(font, "Date/zone unknown | Source " + entry.sourceId().substring(0, 12) + " | Scroll text", left, 135, 0xFF9CA3AF);
+            int y = 164;
             for (int index = scroll; index < wrapped.size() && y + 10 < height - 58; index++, y += 12)
                 graphics.drawString(font, wrapped.get(index), left, y, 0xFFE5E7EB);
-        } else graphics.drawString(font, notice, left, 87, 0xFF9CA3AF);
+        } else {
+            graphics.drawString(font, notice, left, 113, 0xFF9CA3AF);
+            graphics.drawString(font, "Active matching records: " + total, left, 126, 0xFFD1D5DB);
+        }
+        graphics.drawString(font, "Removed for selected source(s): " + removed + " (all text/channels)", left, 148, 0xFF9CA3AF);
     }
 
     @Override public void onClose() { request++; minecraft.setScreen(parent); }
     @Override public Component getNarrationMessage() {
-        if (entry == null) return Component.literal(title.getString() + ". " + notice);
+        if (entry == null) return Component.literal(title.getString() + ". " + notice + ". Active matches " + total
+            + ". Removed for selected source(s), all text/channels: " + removed);
         return Component.literal("Record " + (offset + 1) + " of " + total + ". Source "
-            + sources.get(sourceIndex).label() + ", line " + entry.sourceLine() + ". Channel "
+            + sources.stream().filter(source -> source.id().equals(entry.sourceId())).findFirst().map(ImportSource::label).orElse(entry.sourceId()) + ", line " + entry.sourceLine() + ". Channel "
             + entry.channel() + ". Clock " + (entry.clock() == null ? "unknown" : entry.clock())
             + ". Source fingerprint " + entry.sourceId() + ". Date and timezone unresolved. " + entry.raw());
     }

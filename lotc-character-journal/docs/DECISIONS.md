@@ -6,7 +6,7 @@
 - In-game interface; historical and live capture; compressed log imports.
 - Phase 2 includes **Import all logs**: a user-selected folder, bounded background
   file queue, existing deduplication/privacy/recovery rules, batch progress and
-  per-file outcomes. This is planned; the current importer handles one file at a time.
+  per-file outcomes. The accepted workflow includes preview, a durable dashboard, retry and safe undo.
 - Previous character-database import, preserving source provenance and decisions.
 - Separate persona memory views; observed account/persona information when available.
 - Manual character creation, renaming, notes, and corrections.
@@ -40,7 +40,7 @@
 - Provider selected first; subscription authorization and inference feasibility.
 - Permissibility and exact scope of nearby-character recognition.
 
-## Phase 2 candidate additions — proposals, not accepted requirements
+## Phase 2 additions — accepted by Kat
 
 - Import preview: eligible files, estimated workload and already known sources
   before committing a batch; cancel any expensive preview work safely.
@@ -49,10 +49,11 @@
   retaining uncertainty about dates and timezones.
 - Undo newly added records from a selected batch without touching original log
   files or previously imported data; define provenance/backup behavior first.
-- An opt-in watched log folder after the live-capture/rotation model is verified.
+- An opt-in watched folder for stable finished historical files. Active logs and
+  symlinks stay excluded; live capture/tailing remains the separate Phase 2b slice.
 
-These suggestions do not enable features or expand the current implementation by
-themselves. Character identities, persona memories and AI remain in later phases.
+Kat accepted all these additions for Phase 2. Implementation and actual verification
+are tracked in STATUS.md; an accepted requirement is not itself an enabled feature. Character identities, persona memories and AI remain in later phases.
 
 ## Toolchain
 

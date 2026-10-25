@@ -79,7 +79,7 @@ public final class LogImportService implements AutoCloseable {
         } catch (Exception error) { return CompletableFuture.failedFuture(error); }
         long generation = cancellation.get();
         return submit(() -> {
-            try { return importSnapshot(path, names, generation); }
+            try { return importSnapshot(path, names, generation, null, -1, null); }
             catch (CancellationException cancelled) {
                 publish(ImportView.State.CANCELLED, "Import cancelled; retry resumes committed batches", currentProgress());
                 throw cancelled;
@@ -97,16 +97,82 @@ public final class LogImportService implements AutoCloseable {
         return submit(() -> repository.transcript(sourceId, query, offset, limit));
     }
 
+    public CompletableFuture<TranscriptPage> transcript(String sourceId, String query, Channel channel, int offset, int limit) {
+        return submit(() -> repository.transcript(sourceId, query, channel, offset, limit));
+    }
+
+    public CompletableFuture<Long> removedRecords(String sourceId) { return submit(() -> repository.removedRecords(sourceId)); }
+
+    /** Full validation without changing capture or batch tables. */
+    public CompletableFuture<FilePreview> previewFile(Path path, Set<String> reviewedNames) {
+        final Set<String> names;
+        try { names = validatedNames(reviewedNames); Objects.requireNonNull(path); }
+        catch (Exception error) { return CompletableFuture.failedFuture(error); }
+        long generation = cancellation.get();
+        return submit(() -> {
+            var snapshot = validateSnapshot(path, names, generation, true);
+            ImportProgress known = repository.sources().stream().anyMatch(source -> source.id().equals(snapshot.source().id()))
+                ? repository.progress(snapshot.source().id()) : null;
+            return new FilePreview(path.toAbsolutePath().normalize(), snapshot.source(), snapshot.encodedBytes(),
+                snapshot.bytes().length, known);
+        });
+    }
+
+    /** An approved preview digest must match before even creating a source checkpoint. */
+    public CompletableFuture<ImportProgress> importFileOwned(Path path, Set<String> reviewedNames,
+        String batchId, int ordinal, String expectedSourceId) {
+        final Set<String> names;
+        try {
+            names = validatedNames(reviewedNames);
+            Objects.requireNonNull(path); Objects.requireNonNull(batchId); Objects.requireNonNull(expectedSourceId);
+        } catch (Exception error) { return CompletableFuture.failedFuture(error); }
+        long generation = cancellation.get();
+        return submit(() -> {
+            try { return importSnapshot(path, names, generation, batchId, ordinal, expectedSourceId); }
+            catch (CancellationException cancelled) {
+                publish(ImportView.State.CANCELLED, "Import cancelled; committed checkpoints retained", currentProgress());
+                throw cancelled;
+            } catch (Exception failure) {
+                publish(ImportView.State.FAILED, "Import failed; inspect the batch report", currentProgress());
+                throw failure;
+            }
+        });
+    }
+
+    private static Set<String> validatedNames(Set<String> reviewedNames) {
+        var names = Set.copyOf(reviewedNames);
+        if (names.size() > 200 || names.stream().anyMatch(name -> name.length() > 128))
+            throw new IllegalArgumentException("Use at most 200 reviewed names of 128 characters each");
+        return names;
+    }
+
+    public static String policyFingerprint(Set<String> reviewedNames) {
+        var names = validatedNames(reviewedNames);
+        try {
+            var policy = MessageDigest.getInstance("SHA-256");
+            policy.update("parser-policy-1\n".getBytes(StandardCharsets.UTF_8));
+            for (String name : names.stream().sorted().toList()) {
+                byte[] value = name.getBytes(StandardCharsets.UTF_8);
+                policy.update((value.length + ":").getBytes(StandardCharsets.UTF_8));
+                policy.update(value);
+            }
+            return HexFormat.of().formatHex(policy.digest());
+        } catch (java.security.NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
+    }
+
     public void cancel() { cancellation.incrementAndGet(); }
 
-    private ImportProgress importSnapshot(Path path, Set<String> names, long generation) throws Exception {
+    private ValidatedSnapshot validateSnapshot(Path path, Set<String> names, long generation, boolean noLinks) throws Exception {
         checkCancelled(generation);
-        publish(ImportView.State.VALIDATING, "Validating complete historical log (64 MiB maximum)", null);
         String filename = path.getFileName().toString();
         String lower = filename.toLowerCase(Locale.ROOT);
         boolean gzip = lower.endsWith(".log.gz");
         if (!gzip && !lower.endsWith(".log")) throw new IllegalArgumentException("Choose .log or .log.gz");
+        if (noLinks && Files.isSymbolicLink(path)) throw new IllegalArgumentException("Folder imports exclude links");
+        Path originalPath = path;
         path = path.toRealPath();
+        if (noLinks && !path.equals(originalPath.toAbsolutePath().normalize()))
+            throw new IllegalArgumentException("Folder imports exclude linked paths");
         if (lower.equals("latest.log") || path.getFileName().toString().equalsIgnoreCase("latest.log"))
             throw new IllegalArgumentException("Use a finished historical log, not active latest.log");
         if (!Files.isRegularFile(path)) throw new IllegalArgumentException("Source is not a regular file");
@@ -115,7 +181,7 @@ public final class LogImportService implements AutoCloseable {
         if (before.size() > encodedLimit) throw new IllegalArgumentException("Encoded source exceeds import limit");
         byte[] bytes;
         // Bounded memory avoids persisting even excluded PM/OOC payloads in a temporary snapshot file.
-        try (InputStream input = boundedInput(Files.newInputStream(path), encodedLimit, generation);
+        try (InputStream input = boundedInput(Files.newInputStream(path, java.nio.file.LinkOption.NOFOLLOW_LINKS), encodedLimit, generation);
              InputStream decoded = gzip ? new GZIPInputStream(input) : input;
              var snapshot = new ByteArrayOutputStream()) {
             byte[] buffer = new byte[16 * 1024];
@@ -150,15 +216,21 @@ public final class LogImportService implements AutoCloseable {
         }
         String id = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
         checkCancelled(generation);
-        var policy = MessageDigest.getInstance("SHA-256");
-        policy.update("parser-policy-1\n".getBytes(StandardCharsets.UTF_8));
-        for (String name : names.stream().sorted().toList()) {
-            byte[] value = name.getBytes(StandardCharsets.UTF_8);
-            policy.update((value.length + ":").getBytes(StandardCharsets.UTF_8));
-            policy.update(value);
-        }
-        ImportProgress progress = repository.beginSource(new ImportSource(id, filename, gzip ? "gzip" : "plain",
-            totalLines, HexFormat.of().formatHex(policy.digest())));
+        return new ValidatedSnapshot(new ImportSource(id, filename, gzip ? "gzip" : "plain", totalLines,
+            policyFingerprint(names)), bytes, before.size());
+    }
+
+    private ImportProgress importSnapshot(Path path, Set<String> names, long generation,
+        String batchId, int ordinal, String expectedSourceId) throws Exception {
+        publish(ImportView.State.VALIDATING, "Validating complete historical log (64 MiB maximum)", null);
+        var snapshot = validateSnapshot(path, names, generation, batchId != null);
+        String id = snapshot.source().id();
+        if (expectedSourceId != null && !expectedSourceId.equals(id))
+            throw new IllegalArgumentException("Source changed since preview; preview again");
+        byte[] bytes = snapshot.bytes();
+        long totalLines = snapshot.source().totalLines();
+        checkCancelled(generation);
+        ImportProgress progress = repository.beginSource(snapshot.source());
         if (progress.complete()) {
             publish(ImportView.State.COMPLETE, "Already imported; original classifications retained", progress);
             return progress;
@@ -186,7 +258,7 @@ public final class LogImportService implements AutoCloseable {
                 }
                 if (cursor - expected == batchLines || cursor == totalLines) {
                     checkCancelled(generation);
-                    progress = repository.appendBatch(id, expected, cursor, List.copyOf(entries), excluded, ignored, cursor == totalLines);
+                    progress = append(batchId, ordinal, id, expected, cursor, List.copyOf(entries), excluded, ignored, cursor == totalLines);
                     expected = progress.processedLines();
                     excluded = ignored = 0;
                     entries.clear();
@@ -197,11 +269,19 @@ public final class LogImportService implements AutoCloseable {
         }
         if (!progress.complete()) {
             checkCancelled(generation);
-            progress = repository.appendBatch(id, expected, totalLines, List.of(), 0, 0, true);
+            progress = append(batchId, ordinal, id, expected, totalLines, List.of(), 0, 0, true);
         }
         publish(ImportView.State.COMPLETE, "Import complete; unknown channels require review", progress);
         return progress;
     }
+
+    private ImportProgress append(String batchId, int ordinal, String sourceId, long expected, long next,
+        List<TranscriptLine> entries, long excluded, long ignored, boolean complete) throws Exception {
+        return batchId == null ? repository.appendBatch(sourceId, expected, next, entries, excluded, ignored, complete)
+            : repository.appendBatchOwned(batchId, ordinal, sourceId, expected, next, entries, excluded, ignored, complete);
+    }
+
+    private record ValidatedSnapshot(ImportSource source, byte[] bytes, long encodedBytes) {}
 
     private static BufferedReader reader(byte[] bytes) {
         return new BufferedReader(new InputStreamReader(new ByteArrayInputStream(bytes), StandardCharsets.UTF_8.newDecoder()

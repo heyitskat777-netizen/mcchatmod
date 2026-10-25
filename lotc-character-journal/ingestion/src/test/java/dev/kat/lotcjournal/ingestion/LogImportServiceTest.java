@@ -395,6 +395,56 @@ class LogImportServiceTest {
         } finally { release.countDown(); service.close(); }
     }
 
+    @Test void previewValidatesWithoutWritesAndDoesNotLockSingleFileUi() throws Exception {
+        var repository = new MemoryCapture();
+        Path path = plain("preview.log", chat("Mira waves.") + "\n");
+        try (var service = importer(repository)) {
+            var preview = result(service.previewFile(path, Set.of("Mira")));
+            assertNull(preview.knownProgress());
+            assertEquals(1, preview.source().totalLines());
+            assertEquals(Files.size(path), preview.encodedBytes());
+            assertEquals(0, repository.beginCalls.get());
+            assertTrue(repository.received.isEmpty());
+            assertEquals(ImportView.State.IDLE, service.snapshot().state());
+            var imported = result(service.importFile(path, Set.of("Mira")));
+            var known = result(service.previewFile(path, Set.of("Different")));
+            assertEquals(imported, known.knownProgress());
+            assertEquals(1, repository.beginCalls.get());
+            assertEquals(ImportView.State.COMPLETE, service.snapshot().state());
+        }
+    }
+
+    @Test void changedApprovedSnapshotIsRejectedBeforeCreatingAnyCheckpoint() throws Exception {
+        var repository = new MemoryCapture();
+        Path path = plain("changed-preview.log", chat("Mira waves.") + "\n");
+        try (var service = importer(repository)) {
+            var preview = result(service.previewFile(path, Set.of()));
+            Files.writeString(path, chat("Mira leaves.") + "\n");
+            assertInstanceOf(IllegalArgumentException.class, failure(service.importFileOwned(path, Set.of(),
+                UUID.randomUUID().toString(), 0, preview.source().id())));
+            assertEquals(0, repository.beginCalls.get());
+            assertTrue(repository.received.isEmpty());
+            assertEquals(ImportView.State.FAILED, service.snapshot().state());
+        }
+    }
+
+    @Test void folderPreviewRefusesLinksAndMalformedBytesWithoutStateOrStorageChanges() throws Exception {
+        var repository = new MemoryCapture();
+        Path path = plain("archive.log", chat("Mira waves.") + "\n");
+        Path link = directory.resolve("alias.log");
+        try { Files.createSymbolicLink(link, path); }
+        catch (UnsupportedOperationException | java.io.IOException unavailable) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "Symbolic links unavailable: " + unavailable.getClass().getSimpleName());
+        }
+        try (var service = importer(repository)) {
+            assertInstanceOf(IllegalArgumentException.class, failure(service.previewFile(link, Set.of())));
+            Path broken = Files.write(directory.resolve("broken.log"), new byte[]{(byte) 0xff, '\n'});
+            assertNotNull(failure(service.previewFile(broken, Set.of())));
+            assertEquals(0, repository.beginCalls.get());
+            assertEquals(ImportView.State.IDLE, service.snapshot().state());
+        }
+    }
+
     @FunctionalInterface interface Gate<T> { void run(T value) throws Exception; }
     @FunctionalInterface interface Action { void run() throws Exception; }
 

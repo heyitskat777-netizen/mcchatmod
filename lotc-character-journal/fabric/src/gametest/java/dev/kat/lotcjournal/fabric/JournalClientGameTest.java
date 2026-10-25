@@ -27,6 +27,8 @@ public final class JournalClientGameTest implements FabricClientGameTest {
     private static final String SCREEN_CLASS = "dev.kat.lotcjournal.fabric.JournalScreen";
     private static final String IMPORT_SCREEN = "dev.kat.lotcjournal.fabric.LogImportScreen";
     private static final String TRANSCRIPT_SCREEN = "dev.kat.lotcjournal.fabric.TranscriptScreen";
+    private static final String FOLDER_SCREEN = "dev.kat.lotcjournal.fabric.FolderImportScreen";
+    private static final String DASHBOARD_SCREEN = "dev.kat.lotcjournal.fabric.ImportDashboardScreen";
     private static final int WAIT_TICKS = 400;
 
     @Override public void runTest(ClientGameTestContext context) {
@@ -138,6 +140,7 @@ public final class JournalClientGameTest implements FabricClientGameTest {
                     "Search field must accept actual typed input"));
             });
             exerciseImport(context, report, database);
+            exerciseBatchImport(context, report, database);
             report.stage("layout-save", 30_000, () -> {
                 // The read phase proves that changing the setting still works after a process restart.
                 if (initial) toggle(context, false);
@@ -246,12 +249,122 @@ public final class JournalClientGameTest implements FabricClientGameTest {
             context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("No matching records"), WAIT_TICKS);
             context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("Synthetic Visitor"));
             context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Record 1 of 2"), WAIT_TICKS);
+            context.clickScreenButton("UNKNOWN review");
+            context.waitFor(client -> screenButtonActive(client.screen, "Channel: UNKNOWN")
+                && client.screen.getNarrationMessage().getString().contains("Record 1 of 2"), WAIT_TICKS);
+            context.clickScreenButton("Channel: UNKNOWN");
+            context.waitFor(client -> screenButtonActive(client.screen, "Channel: ALL")
+                && client.screen.getNarrationMessage().getString().contains("Record 1 of 2"), WAIT_TICKS);
             report.screenshot(context.takeScreenshot("lotc-import-transcript-" + report.phase()));
             context.clickScreenButton("Done");
             context.waitFor(client -> isScreen(client.screen, IMPORT_SCREEN), WAIT_TICKS);
             context.clickScreenButton("Done");
             waitForJournal(context);
         });
+    }
+
+    private void exerciseBatchImport(ClientGameTestContext context, SmokeReport report, Path database) throws Exception {
+        Path profile = FabricLoader.getInstance().getGameDir().toAbsolutePath();
+        Path folder = profile.resolve("synthetic-batch"), watched = profile.resolve("synthetic-watch");
+        String unique = "[12:34:56] [Render thread/INFO]: [CHAT] Batch Visitor waves.\n";
+        if (!report.phase().equals("read")) {
+            Files.createDirectories(folder); Files.createDirectories(watched);
+            Files.copy(profile.resolve("synthetic-import.log"), folder.resolve("known.log"));
+            Files.writeString(folder.resolve("new.log"), unique);
+            Files.writeString(folder.resolve("corrupt.log.gz"), "not a gzip archive");
+            Files.writeString(folder.resolve("latest.log"), "active unfinished log");
+        }
+        report.stage("batch-workflow", 90_000, () -> {
+            if (report.phase().equals("read")) {
+                check(sqlCount(database, "SELECT count(*) FROM import_batches WHERE status='UNDONE'") == 1,
+                    "Undone batch must survive process restart");
+                check(sqlCount(database, "SELECT count(*) FROM removed_observations") == 1,
+                    "Removed observations need durable payload-free accounting");
+                check(sqlCount(database, "SELECT count(*) FROM transcript_lines") == 2,
+                    "Restart must retain older records and not resurrect undone batch rows");
+                check(sqlCount(database, "SELECT count(*) FROM watch_settings WHERE enabled=1") == 1,
+                    "Explicit watch opt-in must persist across JVMs");
+            }
+            context.clickScreenButton("Log import");
+            context.waitFor(client -> isScreen(client.screen, IMPORT_SCREEN), WAIT_TICKS);
+            context.clickScreenButton("Import all / dashboard");
+            context.waitFor(client -> isScreen(client.screen, FOLDER_SCREEN), WAIT_TICKS);
+            if (!report.phase().equals("read")) {
+                context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue(folder.toString()));
+                context.clickScreenButton("Preview folder");
+                context.waitFor(client -> screenButtonActive(client.screen, "Confirm Import all")
+                    && client.screen.getNarrationMessage().getString().contains("Preview files 3"), WAIT_TICKS);
+                check(sqlCount(database, "SELECT count(*) FROM import_batches") == 0,
+                    "Preview must not create a durable batch");
+                check(sqlCount(database, "SELECT count(*) FROM transcript_lines") == 2,
+                    "Preview must not write observations");
+                report.screenshot(context.takeScreenshot("lotc-folder-preview-" + report.phase()));
+                context.clickScreenButton("Confirm Import all");
+                context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Batch PARTIAL"), WAIT_TICKS);
+                check(sqlCount(database, "SELECT count(*) FROM transcript_lines") == 3,
+                    "One new record plus two older records must survive corrupt-file isolation");
+                check(sqlCount(database, "SELECT count(*) FROM batch_files WHERE status='DUPLICATE'") == 1,
+                    "Known source must be reported as a duplicate without claiming its records");
+                check(sqlCount(database, "SELECT count(*) FROM batch_files WHERE status='FAILED'") == 1,
+                    "Corrupt archive must fail individually");
+                context.clickScreenButton("Import dashboard");
+                context.waitFor(client -> isScreen(client.screen, DASHBOARD_SCREEN)
+                    && client.screen.getNarrationMessage().getString().contains("PARTIAL"), WAIT_TICKS);
+                context.clickScreenButton("Retry failed");
+                context.waitFor(client -> screenButtonActive(client.screen, "Retry failed")
+                    && client.screen.getNarrationMessage().getString().contains("PARTIAL"), WAIT_TICKS);
+                check(sqlCount(database, "SELECT count(*) FROM transcript_lines") == 3,
+                    "Retrying the unchanged corrupt file must not duplicate successful records");
+                context.clickScreenButton("Undo batch");
+                context.waitFor(client -> screenButtonActive(client.screen, "Confirm undo"), WAIT_TICKS);
+                check(sqlCount(database, "SELECT count(*) FROM transcript_lines") == 3,
+                    "Undo must require explicit confirmation");
+                report.screenshot(context.takeScreenshot("lotc-batch-undo-confirm-" + report.phase()));
+                context.clickScreenButton("Confirm undo");
+                context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("UNDONE"), WAIT_TICKS);
+                check(sqlCount(database, "SELECT count(*) FROM transcript_lines") == 2,
+                    "Undo must remove only the new batch record");
+                check(sqlCount(database, "SELECT count(*) FROM removed_observations") == 1,
+                    "Undo must preserve removed-coordinate accounting");
+                check(Files.readString(folder.resolve("new.log")).equals(unique), "Undo must not modify original files");
+                context.clickScreenButton("Done");
+                context.waitFor(client -> isScreen(client.screen, FOLDER_SCREEN), WAIT_TICKS);
+                context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue(watched.toString()));
+                context.clickScreenButton("Enable folder watch");
+                context.waitFor(client -> screenButtonActive(client.screen, "Confirm folder watch"), WAIT_TICKS);
+                check(sqlCount(database, "SELECT count(*) FROM watch_settings WHERE enabled=1") == 0,
+                    "Watch requires explicit confirmation before persisted opt-in");
+                report.screenshot(context.takeScreenshot("lotc-watch-confirm-" + report.phase()));
+                context.clickScreenButton("Confirm folder watch");
+                context.waitFor(client -> screenButtonActive(client.screen, "Disable folder watch"), WAIT_TICKS);
+                check(sqlCount(database, "SELECT count(*) FROM watch_settings WHERE enabled=1") == 1,
+                    "Watch opt-in must be committed");
+            } else {
+                context.waitFor(client -> screenButtonActive(client.screen, "Disable folder watch"), WAIT_TICKS);
+                context.clickScreenButton("Disable folder watch");
+                context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Folder watch disabled"), WAIT_TICKS);
+                check(sqlCount(database, "SELECT count(*) FROM watch_settings WHERE enabled=1") == 0,
+                    "Watch disable must persist");
+                context.clickScreenButton("Import dashboard");
+                context.waitFor(client -> isScreen(client.screen, DASHBOARD_SCREEN)
+                    && client.screen.getNarrationMessage().getString().contains("UNDONE"), WAIT_TICKS);
+                context.runOnClient(client -> check(!screenButtonActive(client.screen, "Retry failed")
+                    && !screenButtonActive(client.screen, "Undo batch"), "Undone batch must be terminal in UI"));
+                report.screenshot(context.takeScreenshot("lotc-batch-restart-" + report.phase()));
+                context.clickScreenButton("Done");
+                context.waitFor(client -> isScreen(client.screen, FOLDER_SCREEN), WAIT_TICKS);
+            }
+            context.clickScreenButton("Done");
+            context.waitFor(client -> isScreen(client.screen, IMPORT_SCREEN), WAIT_TICKS);
+            context.clickScreenButton("Done"); waitForJournal(context);
+        });
+    }
+
+    private static long sqlCount(Path database, String sql) throws Exception {
+        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database.toUri() + "?mode=ro");
+             var statement = connection.createStatement(); var rows = statement.executeQuery(sql)) {
+            check(rows.next(), "Count query must return a row"); return rows.getLong(1);
+        }
     }
 
     private static void waitForImportComplete(ClientGameTestContext context) {

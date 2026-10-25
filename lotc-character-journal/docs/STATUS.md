@@ -1,14 +1,56 @@
-# Current status — October 24, 2026
+# Current status — October 25, 2026
 
-## Accepted next Phase 2 requirement — Import all logs
+## In progress — accepted Phase 2 import workflow
 
-The user requested folder-wide import as part of Phase 2. It is now included in
-the milestone plan and decisions with bounded queueing, existing source deduplication,
-privacy exclusions, cancellation/recovery, per-file failure isolation and a batch
-report. **It is not implemented or enabled in the current single-file importer.**
-Optional adjacent improvements are recorded separately as proposals in DECISIONS.md;
-they are not silently treated as accepted scope. This update changes documentation
-only; it makes no new runtime or test-pass claim.
+Branch: `feature/import-workflow`, based on `56fbd97`. Kat accepted all proposed
+Phase 2 additions: folder preview and Import all, durable reports/retry, cross-source
+channel filters/UNKNOWN review, batch-owned undo, and opt-in stable finished-folder
+watch. They are now requirements, implemented on this branch. Preview does no writes; approved hashes are rechecked
+before source creation. Durable schema-3 reports preserve policy/names for retry,
+owned observation writes and removal accounting are transactional, and confirmed
+watch opt-in uses two stable scans with durable unchanged-attempt suppression.
+Cross-source/channel filters include an UNKNOWN review view. Phase 2b live capture
+and Phase 2c private real-source acceptance remain unfinished.
+
+Coordinator verification so far (Java/proxy/cache activation recorded below):
+
+```sh
+./gradlew check :fabric:build --rerun-tasks --no-daemon --console=plain
+./gradlew :ingestion:test --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --preflight-only --run-id batch-graphics-1 --timeout 300
+```
+
+The integrated build passed in **46s**, all **30 tasks executed**. Fresh XML records
+**119 tests, 0 failures/errors/skips**: domain 1, application 9, parsing 39,
+ingestion 34, storage 36. The affected ingestion rerun after adding batch PM/OOC
+sentinel assertions passed in **30s** (9 tasks, 2 executed). All **14 Python runner
+contract tests passed**. Package checks verify metadata and six runtime JARs,
+including both new ingestion workflow services. Actual graphics-only preflight
+passed in **74.8s**, exit 0, with fresh report/shutdown/screenshot evidence under
+`fabric/build/client-smoke/evidence/batch-graphics-1/`.
+
+The full five-JVM suite `batch-smoke-1` is running; its development/packaged write/read
+results are **pending**, not inferred from compilation or the older import suite.
+Logs: `/tmp/lotc-batch-integrated-2.log`, `/tmp/lotc-batch-privacy-tests.log`,
+`/tmp/lotc-batch-runner-tests.log`, `/tmp/lotc-batch-graphics.log`,
+`/tmp/lotc-batch-client.log`. New user/modpack testing is still pending; see
+[USER_TEST_BATCH_IMPORT.md](USER_TEST_BATCH_IMPORT.md).
+
+Independent read-only review found no remaining blocker after fixes for preview
+UI state, fail-closed ownership adapters, watcher configuration recovery, exclusive
+admission, durable failed-attempt suppression and compact confirmation layouts.
+Undo is logical removal, not secure erasure; source checkpoints/backups retain
+historical accounting. A watch stop between recording an attempt and dispatch may
+conservatively suppress an unchanged file without creating a batch; explicit
+Preview folder / Import all is the documented recovery path.
+
+Native subagents are available: build owns domain/storage/schema/build changes,
+verification owns batch/watch ingestion services and meaningful tests, and review
+inspects integrity/threading/privacy without edits. The coordinator owns existing
+importer hooks, client UI, documentation and integrated verification. Main remains
+the reviewed baseline. Live capture/reconciliation and real-source acceptance
+remain unfinished Phase 2 work.
 
 ## Current continuation — Phase 1 accepted; Phase 2a import verified, real-log review pending
 

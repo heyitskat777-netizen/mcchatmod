@@ -4,6 +4,8 @@ import com.mojang.blaze3d.platform.InputConstants;
 import dev.kat.lotcjournal.application.JournalService;
 import dev.kat.lotcjournal.storage.SqliteJournalStore;
 import dev.kat.lotcjournal.ingestion.LogImportService;
+import dev.kat.lotcjournal.ingestion.BatchImportService;
+import dev.kat.lotcjournal.ingestion.FolderWatchService;
 import java.nio.file.Path;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
@@ -20,13 +22,17 @@ public final class JournalClient implements ClientModInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger("lotc_journal");
     private JournalService service;
     private LogImportService importer;
+    private BatchImportService batches;
+    private FolderWatchService watcher;
 
     @Override public void onInitializeClient() {
         Path directory = FabricLoader.getInstance().getConfigDir().resolve("lotc-journal");
         SqliteJournalStore store = new SqliteJournalStore(directory.resolve("journal.sqlite"));
         service = new JournalService(store, store);
         importer = new LogImportService(store);
-        service.start().exceptionally(error -> {
+        batches = new BatchImportService(importer, store);
+        watcher = new FolderWatchService(batches, store);
+        service.start().thenCompose(ignored -> watcher.load()).exceptionally(error -> {
             LOGGER.error("Could not initialize local journal", error);
             return null;
         });
@@ -37,10 +43,12 @@ public final class JournalClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (open.consumeClick()) {
                 if (client.screen == null && client.player != null)
-                    client.setScreen(new JournalScreen(service, importer, directory));
+                    client.setScreen(new JournalScreen(service, importer, batches, watcher, directory));
             }
         });
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
+            watcher.close();
+            batches.close();
             importer.close();
             service.close();
         });
