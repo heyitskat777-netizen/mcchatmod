@@ -9,7 +9,7 @@ dependencies {
     mappings loom.officialMojangMappings()
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-    ['domain', 'application', 'storage'].each { module ->
+    ['domain', 'application', 'storage', 'ingestion', 'parsing'].each { module ->
         implementation project(":${module}")
         include project(":${module}")
     }
@@ -61,6 +61,9 @@ tasks.register('verifyPackagedMod') {
                 "META-INF/jars/domain-${project.version}.jar": 'dev/kat/lotcjournal/domain/JournalSettings.class',
                 "META-INF/jars/application-${project.version}.jar": 'dev/kat/lotcjournal/application/JournalService.class',
                 "META-INF/jars/storage-${project.version}.jar": 'dev/kat/lotcjournal/storage/SqliteJournalStore.class',
+                "META-INF/jars/ingestion-${project.version}.jar": ['dev/kat/lotcjournal/ingestion/LogImportService.class',
+                    'dev/kat/lotcjournal/ingestion/BatchImportService.class', 'dev/kat/lotcjournal/ingestion/FolderWatchService.class'],
+                "META-INF/jars/parsing-${project.version}.jar": 'dev/kat/lotcjournal/parsing/LogLineParser.class',
                 "META-INF/jars/sqlite-jdbc-${project.sqlite_version}.jar": 'org/sqlite/JDBC.class'
             ]
             if (bundled.toSet() != expected.keySet().collect { it.toString() }.toSet())
@@ -68,13 +71,14 @@ tasks.register('verifyPackagedMod') {
             expected.each { name, requiredClass ->
                 def entry = archive.getEntry(name.toString())
                 if (entry == null) throw new GradleException("Missing bundled runtime JAR: ${name}")
-                boolean found = false
+                def requiredClasses = requiredClass instanceof List ? requiredClass : [requiredClass]
+                def found = [] as Set
                 new java.util.zip.ZipInputStream(archive.getInputStream(entry)).withCloseable { nested ->
                     for (def item = nested.nextEntry; item != null; item = nested.nextEntry) {
-                        if (item.name == requiredClass) found = true
+                        if (requiredClasses.contains(item.name)) found.add(item.name)
                     }
                 }
-                if (!found) throw new GradleException("${name} is missing ${requiredClass}")
+                if (found.size() != requiredClasses.size()) throw new GradleException("${name} is missing ${requiredClasses - found}")
             }
             archive.entries().each { entry ->
                 if (entry.name.endsWith('.sqlite') || entry.name.endsWith('.db') ||
@@ -82,7 +86,8 @@ tasks.register('verifyPackagedMod') {
                     throw new GradleException("Unexpected test or database content in mod JAR: ${entry.name}")
             }
         }
-        logger.lifecycle("Packaged mod verified: ${artifact.name}; client metadata and four runtime JARs present.")
+        logger.lifecycle("Packaged mod verified: ${artifact.name}; client metadata and six runtime JARs present.")
     }
 }
 
+apply from: rootProject.file('gradle/client-smoke.gradle')

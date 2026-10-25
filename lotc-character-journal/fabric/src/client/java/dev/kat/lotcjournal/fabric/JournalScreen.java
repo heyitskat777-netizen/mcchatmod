@@ -2,6 +2,9 @@ package dev.kat.lotcjournal.fabric;
 
 import dev.kat.lotcjournal.application.JournalService;
 import dev.kat.lotcjournal.application.JournalSnapshot;
+import dev.kat.lotcjournal.ingestion.LogImportService;
+import dev.kat.lotcjournal.ingestion.BatchImportService;
+import dev.kat.lotcjournal.ingestion.FolderWatchService;
 import java.nio.file.Path;
 import java.time.Instant;
 import net.minecraft.client.gui.GuiGraphics;
@@ -15,28 +18,37 @@ import net.fabricmc.loader.api.FabricLoader;
 public final class JournalScreen extends Screen {
     private final JournalService service;
     private final Path directory;
+    private final LogImportService importer;
+    private final BatchImportService batches;
+    private final FolderWatchService watcher;
     private EditBox search;
     private Button layout;
     private Button backup;
+    private Button importLogs;
     private String operation = "";
     private boolean savingLayout;
     private boolean creatingBackup;
     private final String version = FabricLoader.getInstance().getModContainer("lotc_journal")
         .orElseThrow().getMetadata().getVersion().getFriendlyString();
 
-    public JournalScreen(JournalService service, Path directory) {
+    public JournalScreen(JournalService service, LogImportService importer, BatchImportService batches, FolderWatchService watcher, Path directory) {
         super(Component.literal("Character Journal"));
         this.service = service;
         this.directory = directory;
+        this.importer = importer;
+        this.batches = batches; this.watcher = watcher;
     }
 
     @Override protected void init() {
         int panel = Math.min(340, width - 32);
         int left = (width - panel) / 2;
         search = new EditBox(font, left, 55, panel, 20, Component.literal("Search characters"));
-        search.setHint(Component.literal("Search characters — available after import"));
+        search.setHint(Component.literal("Character search — planned with identity tools"));
         search.setMaxLength(120);
         addRenderableWidget(search);
+        importLogs = addRenderableWidget(Button.builder(Component.literal("Log import"), button ->
+            minecraft.setScreen(new LogImportScreen(this, importer, batches, watcher, FabricLoader.getInstance().getGameDir())))
+            .bounds(left, 140, panel, 20).build());
         int y = Math.max(140, height - 76);
         layout = addRenderableWidget(Button.builder(Component.literal("Layout"),
             button -> {
@@ -71,6 +83,7 @@ public final class JournalScreen extends Screen {
         boolean ready = state.status() == JournalSnapshot.Status.READY;
         layout.active = ready && !savingLayout && !creatingBackup;
         backup.active = layout.active;
+        importLogs.active = layout.active;
         layout.setMessage(Component.literal("Layout: " +
             (state.settings().compactLayout() ? "Compact" : "Comfortable")));
     }
@@ -81,12 +94,12 @@ public final class JournalScreen extends Screen {
         graphics.drawCenteredString(font, "Journal " + version + " | MC 1.21.11", width / 2, 36, 0xFF9CA3AF);
         int left = (width - Math.min(340, width - 32)) / 2;
         graphics.drawString(font, search.getValue().isBlank()
-            ? "No characters imported yet." : "Character search is not connected yet.",
+            ? "No character identities created yet." : "Character search is not connected yet.",
             left, 87, 0xFFD1D5DB);
-        graphics.drawString(font, "AI: disabled | Capture: not enabled", left, 103, 0xFF93C5FD);
+        graphics.drawString(font, "AI: disabled | Live capture: not enabled", left, 103, 0xFF93C5FD);
         graphics.drawString(font, service.snapshot().message(), left, 116, 0xFF9CA3AF);
         if (!operation.isBlank())
-            graphics.drawCenteredString(font, operation, width / 2, Math.max(100, height - 94), 0xFFA7F3D0);
+            graphics.drawCenteredString(font, operation, width / 2, 128, 0xFFA7F3D0);
     }
 
     @Override public boolean isPauseScreen() { return false; }

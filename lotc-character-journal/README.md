@@ -6,16 +6,40 @@ actually been verified. It is not the complete character-memory mod yet.
 
 ## Current build
 
-Phase 1 foundation: press **J** in a world to open the journal shell. The key is
-rebindable in Minecraft's normal Controls menu. The shell shows an empty character
-search field, a persisted layout preference, and a backup control. Character
-search is visibly marked unavailable until import is implemented. The layout
-preference is saved now; full compact character rows arrive with the character UI.
+The user has accepted the Phase 1 foundation smoke test. Press **J** in a world
+to open the journal; its key is rebindable in Controls. Layout settings and backup
+creation remain available. Character identity/search is still future work.
+
+The `0.1.0-alpha.4` development build expands **Log import** for finished UTF-8 `.log`
+and `.log.gz` files, background validation, progress/cancellation, restart-safe
+checkpoints, repeat-import deduplication, and a transcript browser with literal
+text search. **Import all / dashboard** adds a read-only folder preview,
+confirmed batch import, durable per-file reports/retry and batch-owned undo.
+Transcript browsing supports All sources, channel filters and UNKNOWN review.
+An explicitly confirmed folder watch handles stable finished archives every 30s;
+it starts disabled and persists your opt-in. See
+[the folder workflow checklist](docs/USER_TEST_BATCH_IMPORT.md), especially the
+undo and watch limits. Check STATUS.md for actual checks on this build.
+
+The transcript is a scrollable conversation with fixed controls, a draggable bar,
+keyboard navigation and bounded 50-message pages. Technical provenance is available
+through Details. The database stores cleaned dialogue without redundant raw logger
+lines. Logger/thread tags, recognized leading RP tags, log clocks and color escapes
+are removed from the payload; quoted markers inside speech remain. Source
+fingerprints, line coordinates, clocks and channel uncertainty remain separate
+metadata. Names remain unresolved unless supplied as
+reviewed observations before import; no character or persona links are created.
 
 Settings live in `config/lotc-journal/journal.sqlite`. Backups are stored in
-`config/lotc-journal/backups/`. The shell does not capture chat, recognize nearby
-players, or call an AI service. The parser prototype is tested separately and is
-not connected to live capture.
+`config/lotc-journal/backups/`. A schema migration creates a verified backup of an existing schema-1, schema-2 or schema-3
+database before upgrading the journal. Undo removes active batch-owned records
+while keeping source checkpoints and payload-free removal accounting; it does not
+restore them on repeat import or erase existing backups. Live capture, log tailing/rotation,
+historical/live overlap reconciliation, nearby recognition, and AI are not enabled.
+See [docs/USER_TEST_DIALOGUE_SCROLL.md](docs/USER_TEST_DIALOGUE_SCROLL.md) before
+upgrading, especially if alpha.3 imports are incomplete.
+See [docs/USER_TEST_IMPORT.md](docs/USER_TEST_IMPORT.md) for historical limits and recognized
+privacy exclusions, and the real-log test still required to advance Phase 2.
 
 ## Start this project in Codex on your computer
 
@@ -56,14 +80,18 @@ To launch a development client:
 ./gradlew :fabric:runClient
 ```
 
-To run the separate client test (requires a working graphical or virtual-display
-environment and your acceptance of Minecraft's EULA):
+To run the isolated automated client smoke suite (requires a working graphical
+or virtual-display environment and your acceptance of Minecraft's EULA):
 
 ```sh
-./gradlew :fabric:runClientGameTest
+python3 scripts/client_smoke.py --eula-accepted
 ```
 
-A build or unit-test pass is not evidence of successful in-game testing.
+It first checks Minecraft graphics, then runs local-world/keybind/UI tests in
+development and packaged-mod profiles, with separate processes for persistence.
+See [docs/CLIENT_SMOKE_TESTS.md](docs/CLIENT_SMOKE_TESTS.md) for setup, isolation,
+timeouts, and evidence. A build or unit-test pass is not evidence of successful
+in-game testing; actual results remain in docs/STATUS.md.
 
 If an environment cannot initialize Loom, verify just the independent core with
 \`./gradlew -PcoreOnly check\`. This does not compile or validate the Minecraft adapter.
@@ -73,10 +101,11 @@ If an environment cannot initialize Loom, verify just the independent core with
 | Module | Owns | Production dependencies |
 | --- | --- | --- |
 | domain | Models and service contracts | None |
-| parsing | Conservative log-format prototype | domain |
-| storage | SQLite initialization, settings, backups | domain, SQLite JDBC |
+| parsing | Conservative channel/name observations | domain |
+| ingestion | Bounded historical-file validation/import worker | domain, parsing |
+| storage | SQLite settings, import checkpoints/transcripts, migrations, backups | domain, SQLite JDBC |
 | application | Background scheduling and immutable UI snapshots | domain |
-| fabric | Minecraft UI, keybind, startup wiring | domain, application, storage, Fabric |
+| fabric | Minecraft UI, keybind, import/transcript screens, startup wiring | domain, application, storage, ingestion, Fabric |
 
 Future identity, encounter, statistics, analysis, and provider modules are added
 as coherent features rather than empty placeholders. The development-agent

@@ -1,4 +1,415 @@
-# Current status — October 24, 2026
+# Current status — October 25, 2026
+
+## Alpha.4 refinement — dialogue-only persistence and scrolling
+
+Branch: `feature/dialogue-transcript`, based on `82884d4`. Kat reports **all alpha.3
+smoke tests OK**. The supplied screenshot identified the need for continuous
+scrolling and removal of logger wrappers from persistent dialogue. This accepts
+the previous smoke checklist; it does not establish measured real-log parser
+accuracy or accept the new alpha.4 refinement before user testing.
+
+Implemented: native conversation scroll pane (wheel, draggable bar, arrows,
+Page Up/Down, Home/End), bounded 50-message pages with wheel/keyboard transitions,
+responsive fixed controls and optional Details. The active transcript schema has
+one cleaned dialogue payload, with no raw logger-line column. Known logging/RP
+wrappers and formatting are stripped; quoted text and unknown bracketed actions
+are preserved. Known system notices/empty chat are ignored and PM/OOC remains
+excluded before/after cleanup. Provenance remains separate and never implies a
+reconstructed date, timezone, character identity or persona.
+
+Schema 4 backs up and validates schema 1/2/3 before migrating. Existing text is
+cleaned with the same injected parser normalizer. Removed noise/privacy records
+adjust imported/excluded/ignored source and owned-file counters atomically;
+processed positions, source IDs, original files and undo ownership stay intact.
+Runtime cleanup failures roll back earlier writes/schema/accounting. Old backups,
+SQLite history and original files may retain raw bytes; no secure-erasure claim.
+Policy 2 blocks incompatible policy-1 partial resumes; finish alpha.3 partial jobs
+before upgrading, or finish them using alpha.3 and its pre-upgrade backup first.
+Completed source IDs/classifications and explicit undo decisions remain stable.
+
+Native tools were available and three agents supplied initial API/design hazards,
+then **all three hit their usage limit before implementation/review completed**.
+The coordinator took over production, tests, migration/UI review and integration;
+no completed independent final review is claimed for this refinement.
+
+Verification so far:
+
+```sh
+./gradlew -PcoreOnly check --no-daemon --console=plain
+./gradlew check :fabric:build --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --run-id dialogue-smoke-1 --timeout 300
+```
+
+Core check passed in **32s** and integrated Fabric/package build passed in **56s**
+(30 tasks: 12 executed, 18 up-to-date). Fresh XML: **142 tests, 0 failures/errors/skips**
+(domain 1, application 9, parsing 56, ingestion 36, storage 40). All **14 runner
+contract tests passed**. Two initial compile errors from the API change were fixed
+(a package-private helper call and a stale raw-field test reference); no assertions
+were weakened. Tests now assert the requested clean-payload behavior instead of
+retaining the explicitly removed raw copy. Existing privacy expectations, including
+ambiguous Whisper as private, remain intact.
+
+The actual five-JVM **`dialogue-smoke-1` passed every phase**:
+
+| Phase | Elapsed | Result |
+| --- | --- | --- |
+| Graphics-only preflight | 83.9s | Passed |
+| Development writer | 98.3s | Passed |
+| Development reader | 90.5s | Passed |
+| Packaged writer | 116.4s | Passed |
+| Packaged reader | 85.6s | Passed |
+
+Each writer has 14 passing assertion stages and each reader 15, including required
+`dialogue-scroll`: 62 synthetic observations, duplicate-looking dialogue at distinct
+coordinates, actual wheel scrolling, End/Home keys, page transitions both ways,
+the final wrapped line of a long message, narrower-window reflow and onscreen fixed
+controls. Source details remain inspectable explicitly. SQL asserts no raw column,
+clean payloads, stable counts and privacy exclusions before/after restart; existing
+batch/retry/undo/watch/backup/keybind/world/shutdown assertions also pass. Screenshots
+were inspected at 854x480 and 640x480, with multiple dialogue messages visible,
+readable clean text, a real scrollbar and reachable footer controls. No runtime
+repair or assertion relaxation was needed. Graphics/audio/Realms warnings remained
+nonfatal only because the required reports, assertions, shutdown and exits passed.
+
+Evidence: `fabric/build/client-smoke/evidence/dialogue-smoke-1/` (JSON, JUnit XML,
+selected logs, PNGs, launch/shutdown witnesses). Logs:
+`/tmp/lotc-dialogue-core-3.log`, `/tmp/lotc-dialogue-integrated-1.log`,
+`/tmp/lotc-dialogue-runner-tests.log`, `/tmp/lotc-dialogue-client-1.log`.
+Actual legacy migration is covered separately by synthetic SQLite tests, including
+multi-chunk cleanup, owned/unowned/undone observations, backup contents, injected
+failure rollback and post-migration undo/restart; fresh client profiles do not
+substitute for those upgrade tests.
+
+GitHub Actions passed both **verify** and the complete **client-smoke** job on
+functional commit `e2f1bfe`: [PR run 40214971685](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40214971685).
+[PR #5](https://github.com/heyitskat777-netizen/mcchatmod/pull/5) builds on merged
+import-workflow PR #4, targets `feature/client-smoke-tests`, and is ready for review.
+Main remains unchanged. A documentation-only follow-up receives its normal CI
+rerun; the successful functional run above identifies its tested commit precisely.
+
+Installable artifact: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.4.jar`,
+14542781 bytes; SHA-256 `8d6be81128ef4a34b19f442344ac032d457da1852a8926d03dce55cdd60695a2`.
+[CI JAR artifact ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40214971685/artifacts/12606823924).
+Install the non-`-sources` JAR. The new alpha.4 user check is still pending:
+[USER_TEST_DIALOGUE_SCROLL.md](USER_TEST_DIALOGUE_SCROLL.md). Kat's acceptance of
+alpha.3 smoke tests is recorded above and does not imply alpha.4 user acceptance.
+
+Live capture/reconciliation and measured private real-source acceptance remain
+unfinished Phase 2 work. The following sections are historical evidence.
+
+## Phase 2a import workflow — automated checks passed; user test pending
+
+Branch: `feature/import-workflow`, based on `56fbd97`. Kat accepted all proposed
+Phase 2 additions: folder preview and Import all, durable reports/retry, cross-source
+channel filters/UNKNOWN review, batch-owned undo, and opt-in stable finished-folder
+watch. They are now requirements, implemented on this branch. Preview does no writes; approved hashes are rechecked
+before source creation. Durable schema-3 reports preserve policy/names for retry,
+owned observation writes and removal accounting are transactional, and confirmed
+watch opt-in uses two stable scans with durable unchanged-attempt suppression.
+Cross-source/channel filters include an UNKNOWN review view. Phase 2b live capture
+and Phase 2c private real-source acceptance remain unfinished.
+
+Coordinator verification (Java/proxy/cache activation recorded below):
+
+```sh
+./gradlew check :fabric:build --rerun-tasks --no-daemon --console=plain
+./gradlew :ingestion:test --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --preflight-only --run-id batch-graphics-1 --timeout 300
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --run-id batch-smoke-1 --timeout 300
+```
+
+The integrated build passed in **46s**, all **30 tasks executed**. Fresh XML records
+**119 tests, 0 failures/errors/skips**: domain 1, application 9, parsing 39,
+ingestion 34, storage 36. The affected ingestion rerun after adding batch PM/OOC
+sentinel assertions passed in **30s** (9 tasks, 2 executed). All **14 Python runner
+contract tests passed**. Package checks verify metadata and six runtime JARs,
+including both new ingestion workflow services. Actual graphics-only preflight
+passed in **74.8s**, exit 0, with fresh report/shutdown/screenshot evidence under
+`fabric/build/client-smoke/evidence/batch-graphics-1/`.
+
+Actual five-JVM suite **`batch-smoke-1` passed all phases**, with a 300-second bound
+per JVM. This is executed client evidence, distinct from compilation:
+
+| Phase | Elapsed | Result |
+| --- | --- | --- |
+| Graphics-only preflight | 74.5s | Passed |
+| Development writer | 93.1s | Passed |
+| Development reader | 71.0s | Passed |
+| Packaged writer | 88.6s | Passed |
+| Packaged reader | 65.3s | Passed |
+
+Fresh evidence (JSON, JUnit XML, screenshots, selected logs, launch/shutdown
+witnesses) is under `fabric/build/client-smoke/evidence/batch-smoke-1/`.
+No automatic runtime repair attempt was needed; all assertions and timeouts stayed
+in place. Existing nonfatal software-graphics/audio/Realms diagnostics did not mask
+failures: all required body, report, shutdown and process-exit assertions passed.
+Writers have 13 assertion stages; readers have 14. The new mandatory batch stage
+asserts preview zero writes, known-source duplication without ownership, corrupt-file
+isolation with PARTIAL status, failed-file retry without duplicate successful rows,
+explicit undo confirmation, older-record preservation, payload-free removed-coordinate
+accounting, original-file preservation, and persisted watch opt-in/disable through
+actual widgets. A separate reader JVM asserts reports/undo/settings after restart.
+Cross-source/channel and UNKNOWN controls are exercised too. All journal workers,
+including batch/watch/clock workers, must stop. Screenshots of preview, transcript
+and both confirmation warnings were visually inspected and readable at the tested
+854x480 / normal GUI size. Screenshots alone are not pass criteria.
+
+GitHub Actions passed both **verify** and **client-smoke**, including all five JVMs
+and selected synthetic evidence uploads, on functional commit `b97a51a`:
+[PR run 40169848197](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40169848197).
+[PR #4](https://github.com/heyitskat777-netizen/mcchatmod/pull/4) stacks on
+`feature/client-smoke-tests`, where historical-import PR #3 has been merged.
+Main remains unchanged. Later documentation commits receive their normal CI rerun;
+the successful run above identifies its tested functional commit precisely.
+Logs: `/tmp/lotc-batch-integrated-2.log`, `/tmp/lotc-batch-privacy-tests.log`,
+`/tmp/lotc-batch-runner-tests.log`, `/tmp/lotc-batch-graphics.log`,
+`/tmp/lotc-batch-client.log`. New user/modpack testing is still pending; see
+[USER_TEST_BATCH_IMPORT.md](USER_TEST_BATCH_IMPORT.md).
+
+Independent read-only review found no remaining blocker after fixes for preview
+UI state, fail-closed ownership adapters, watcher configuration recovery, exclusive
+admission, durable failed-attempt suppression and compact confirmation layouts.
+Undo is logical removal, not secure erasure; source checkpoints/backups retain
+historical accounting. A watch stop between recording an attempt and dispatch may
+conservatively suppress an unchanged file without creating a batch; explicit
+Preview folder / Import all is the documented recovery path.
+
+Native subagents are available: build owns domain/storage/schema/build changes,
+verification owns batch/watch ingestion services and meaningful tests, and review
+inspects integrity/threading/privacy without edits. The coordinator owns existing
+importer hooks, client UI, documentation and integrated verification. Main remains
+the reviewed baseline. Live capture/reconciliation and real-source acceptance
+remain unfinished Phase 2 work.
+
+Current local installable artifact: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.3.jar`,
+14529015 bytes; SHA-256 `ef0073f9cf361753cbacf1c921e245711c4dfaa6770ba51a1565548881155444`.
+Use the non-`-sources` JAR in a copied instance. User testing of this new workflow
+is pending; the earlier accepted Phase 1 report does not cover these additions.
+
+Next unfinished Phase 2 work: live events/tailing, rotation and partial-line handling,
+historical/live overlap reconciliation without text-only deduplication, private
+manually checked real-log samples and measured performance budgets. No persona,
+character identity, encounter or AI functionality is claimed. The remainder is a
+historical verification record and does not override the current branch/results.
+
+## Historical verification — Phase 1 accepted; original single-file importer
+
+The user reports the requested tests completed with no issues: resizing, rebinding,
+layout, backup, and return to normal play all work. This closes the Phase 1 user
+smoke-test gate. The exact tested JAR hash/launcher/mod list was not supplied; do
+not infer those details or general hardware/modpack compatibility beyond the report.
+
+Work continues on `feature/log-import`, based on the smoke-suite branch. The first
+Phase 2 slice is historical `.log`/`.log.gz` import plus transcript review. It adds
+a bounded background importer, content identities, recoverable atomic checkpoints,
+recognized-channel exclusions, literal text search, and schema-1 migration with a
+verified backup. The planned development artifact is `0.1.0-alpha.2`.
+
+Phase 2 remains incomplete: live capture, rotation/tailing, historical/live overlap
+reconciliation, and a manually checked real-log acceptance test remain outstanding.
+No character records/identity merges/persona memories/AI are claimed. See
+[USER_TEST_IMPORT.md](USER_TEST_IMPORT.md) for the new user checklist and limits.
+
+Native build/contracts/storage, parser/test, and read-only review agents worked
+with explicit non-overlapping ownership. Independent review prompted fixes for
+classification-policy changes on partial resume and bounded/cancellable raw gzip
+headers (including skips). Canonical latest.log aliases are also refused. No
+remaining production blocker was reported by independent review.
+
+Coordinator verification:
+
+```sh
+./gradlew check :fabric:build --rerun-tasks --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --run-id import-smoke-1 --timeout 300
+```
+
+Use the Java/proxy/cache activation from the earlier record below. The integrated
+build passed in **52s**, with **all 30 tasks executed**. Fresh JUnit XML confirms
+**93 tests, 0 failures/errors/skips**: domain 1, application 9, parsing 39,
+ingestion 20, storage 24. The **14 Python runner contract tests** also passed.
+The original 18 parser expectations were preserved. New tests cover recognized
+privacy formats, midnight/clock provenance, full validation before writes,
+truncated gzip/UTF-8/partial-line/size bounds, header cancellation, source aliases,
+atomic batch recovery/concurrency, policy conflicts, cancellation/queue shutdown,
+backed-up migration, imported-data backup restoration, search and paging.
+
+The coordinator's actual five-JVM client run **passed all phases**:
+
+| Phase | Elapsed | Result |
+| --- | --- | --- |
+| Graphics-only preflight | 74.2s | Passed |
+| Development writer | 74.5s | Passed |
+| Development reader | 89.5s | Passed |
+| Packaged writer | 75.9s | Passed |
+| Packaged reader | 156.5s | Passed |
+
+The writer exercises the real keybind and Log import controls, imports a synthetic
+source, repeats it with unchanged counts, checks 2 distinct UNKNOWN records at
+lines 1/2 with identical text, 2 recognized PM/OOC exclusions and 1 ignored line,
+then tests transcript paging, no-match/matching text search, source/clock/raw
+provenance and screenshots. The separate reader verifies the original source
+bytes and imported database records before using the UI again. Both original
+journal and import workers must stop. Development and packaged runtimes both
+completed their existing layout/backup/key-rebind/world/shutdown assertions too.
+The writer has 12 required assertion stages; the reader has 13. Screenshots were
+visually inspected and are readable at the tested normal GUI size.
+
+The packaged run loads ingestion and parsing from their nested JARs as well as
+storage/domain/application/SQLite. Package verification now checks all six nested
+runtime JARs. No real RP logs or user database was used in automated tests. Actual
+Phase 1 schema migration is covered with synthetic schema-1 databases and verified
+pre-migration snapshots; the fresh-profile client test does not itself test a real
+user's database migration.
+
+Successful local evidence is under
+`fabric/build/client-smoke/evidence/import-smoke-1/` (JSON, JUnit XML, phase and
+shutdown/launch witnesses, selected logs and PNGs). Core logs:
+`/tmp/lotc-phase2-integrated.log`, `/tmp/lotc-phase2-verification.log`,
+`/tmp/lotc-phase2-runner-tests.log`, `/tmp/lotc-phase2-client.log`.
+Outputs/private data remain ignored and uncommitted. A final wording-only
+clarification labels character search as future identity work; its affected
+Fabric build is checked separately from the full runtime run above.
+
+GitHub Actions also passed both jobs on functional commit `bebd523`:
+[PR run 40151619378](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40151619378).
+This includes actual development/packaged JVMs and evidence uploads, not just
+compilation. Any subsequent documentation/wording commit receives its normal CI
+rerun; this statement identifies the verified functional commit precisely.
+
+Limitations and next work: finish the private real-log checklist in
+[USER_TEST_IMPORT.md](USER_TEST_IMPORT.md), then implement live capture and
+historical/live reconciliation (Phase 2b). Identical decompressed bytes reuse a
+source even across plain/gzip/renames; different newline bytes, overlapping subsets,
+or changed files remain distinct sources. Completed classifications stay frozen;
+partial resumes require the original reviewed-name/policy fingerprint. Recognized
+PM/OOC payloads never reach journal storage; unsupported formats can remain UNKNOWN
+review records, never eligible for analysis. Dates/timezones remain unresolved.
+No live LoTC testing, persona isolation, character identities or AI is claimed.
+
+Current local artifact: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.2.jar`,
+14461590 bytes; SHA-256 `8eacdbb4131a10427dc71c9a07666dd5b4db1f6a9a9b5d17e3d7cff262afa9c4`.
+The final wording-only Fabric build passed in 23s (19 tasks: 6 executed, 13 up-to-date).
+
+The remainder is a historical record of the earlier foundation/smoke-suite work.
+Its pending Phase 1 user-test notes are superseded by the user's acceptance above.
+
+## Client smoke suite — local and GitHub Actions checks passed
+
+Branch: `feature/client-smoke-tests`, stacked on foundation PR #1.
+[Smoke PR #2](https://github.com/heyitskat777-netizen/mcchatmod/pull/2).
+Target remains Fabric / Minecraft **1.21.11** / **Java 21**. Production feature
+logic was unchanged; this expands the test harness, launcher, and CI evidence.
+
+First, before edits, the coordinator re-established cloud graphics using the
+existing real-client test under Xvfb/Mesa: **passed in 1m28s**, with fresh
+screenshot and exit 0. Evidence: `/workspace/smoke-baseline-evidence`.
+
+New coverage uses actual registered J input, synthetic local-world entry, typed
+search text, layout/backup widgets, backup contents/independence, Done, J-to-K
+rebinding, world exit, and worker shutdown. Writer/reader phases use separate
+Minecraft JVMs sharing only their isolated profile, asserting a nondefault saved
+setting in the reader. No direct journal/service construction substitutes for
+those interactions. No live LoTC server or personal profile was used.
+
+### Coordinator results
+
+With the Java activation below, Xvfb :99, `LIBGL_ALWAYS_SOFTWARE=1`,
+`ALSOFT_DRIVERS=null`, and writable XDG cache/config directories:
+
+```sh
+python3 scripts/client_smoke.py --eula-accepted --prepared --run-id cloud-smoke-5 --mode packaged --timeout 300
+python3 scripts/client_smoke.py --eula-accepted --prepared --run-id cloud-smoke-7 --mode development --timeout 300
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+```
+
+| Run | Graphics preflight | Writer JVM | Reader JVM | Result |
+| --- | --- | --- | --- | --- |
+| Packaged, cloud-smoke-5 | 95.6s | 123.6s, PID 30496 | 67.0s, PID 30833 | All passed |
+| Development, cloud-smoke-7 | 75.7s | 65.0s, PID 32838 | 69.0s, PID 33175 | All passed |
+
+Each application report has 11 passing assertion stages, successful body and
+CLIENT_STOPPING witnesses, matching run/mode/phase/profile/PID, and a fresh PNG.
+The actual packaged mod loaded from `fabric/build/libs/`; SQLite loaded from its
+nested processed JAR. The supported Loom production launcher excludes all named
+project outputs and standalone SQLite/core JARs. Launch manifests are validated,
+so development dependencies cannot mask a missing packaged runtime dependency.
+Screenshots were inspected; screenshots alone do not establish success.
+
+**14 Python contract tests passed**, including missing/stale/zero/incomplete
+reports, malformed evidence, failed assertions despite graphics warnings,
+classpath masking, screenshot validity, and a real detached-child timeout. Linux
+subreaper cleanup tracks owned descendants and PID start identity; it does not
+kill arbitrary Java processes. Each JVM has a hard 300-second bound plus bounded
+cleanup. Explicit tick waits and post-action stage duration budgets also apply.
+
+Preparation/compilation passed with
+`./gradlew :fabric:compileGametestJava :fabric:prepareClientSmoke --no-daemon --console=plain`
+(39s, 17 tasks, 4 executed). The coordinator also ran the required integrated
+`./gradlew check :fabric:build --rerun-tasks --no-daemon --console=plain`; it **passed in 56s**, with all **25 tasks executed** and **40 core tests,
+0 failures/errors/skips** confirmed from fresh JUnit XML. Compilation and
+runtime checks are separate evidence.
+
+### Failure history and corrections
+
+- Applied-script Loom imports failed before Java compilation. Resolving public
+  task classes through the installed plugin classloader fixed it.
+- The first production preflight rendered Minecraft but timed out with no test
+  report. Fabric API's production aggregator omits its test modules. Explicitly
+  installing the matching client/server gametest modules fixed harness loading;
+  launch validation now requires those exact additional test-module categories.
+- The next run executed successfully but failed the original mod-count witness;
+  its launch contract was corrected to include the required test modules while
+  still excluding standalone journal dependencies. This was not counted as pass.
+- Development world entry timed out. The runner's small render profile was being
+  reset by Fabric, so the harness now applies it after reset. A thread dump then
+  captured test/server waits in Fabric scheduling. Its documented packet-sync
+  disable option resolved the observed world-entry stall. Real world, key/input,
+  database, and shutdown assertions and deadlines remain intact.
+- Development reader then correctly failed nondefault persistence: Loom's
+  `deleteGameTestRunDir` erased the writer's database. That cleanup is disabled
+  only for runner-managed profiles. Run IDs still create fresh isolated roots;
+  the corrected writer/reader pair passed without changing expectations.
+
+Failed and blocked/skipped phase reports remain under the ignored evidence roots
+`fabric/build/client-smoke/evidence/cloud-smoke-{1,2,3,4,6}/`; they were not
+replaced with passing outcomes. This used diagnosed corrections, not unchanged
+retry loops. No reference expectations or application assertions were weakened.
+
+### CI, artifacts, and remaining scope
+
+GitHub Actions now has an actual `client-smoke` job with Xvfb/Mesa, graphics-only
+preflight excluding the journal, development write/read, and production-JAR
+write/read. Job/step/process deadlines are bounded. It always uploads selected
+JSON, JUnit XML, logs, and PNGs from evidence directories; profiles/worlds,
+databases, Minecraft binaries, credentials, and arbitrary files are excluded.
+The first two workflow versions failed the smoke job while core/build/runner
+checks passed. The corrected complete workflow **passed** on functional commit
+`9ffc3114060754387c6a9f85af62d0a8016d3bb6`: [PR run 40124599154](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40124599154).
+Both verify and client-smoke jobs succeeded, including the default five-JVM
+plan and selected synthetic evidence upload. This is executed CI runtime evidence,
+not just a workflow syntax check. Detailed
+log download was blocked by the environment proxy; a draft domain addition for
+`results-receiver.actions.githubusercontent.com` was saved, not asserted applied.
+
+Local successful evidence: `fabric/build/client-smoke/evidence/cloud-smoke-5/`
+and `cloud-smoke-7/` (including `summary.json`, `junit.xml`, phase reports, shutdown
+and launch witnesses, logs, screenshots). See [CLIENT_SMOKE_TESTS.md](CLIENT_SMOKE_TESTS.md).
+
+The runner is Linux-specific for scoped process cleanup; the mod's platform
+support is unchanged. Actual launcher/modpack compatibility, hardware audio/GPU,
+and a real user judging GUI scales/usability remain user tests. AI/capture/persona
+features remain absent. EULA acceptance was supplied explicitly for this runtime
+and represented by the runner flag/CI invocation.
+
+A six-hour review/continuation cadence was requested. **No scheduling tool was
+available and no recurring task was created.** The reusable prompt is saved in
+[CONTINUE_PROJECT.md](CONTINUE_PROJECT.md); saving a prompt does not schedule it.
+
+The remainder records the earlier foundation verification, before this expanded
+world/keybind/restart/packaged coverage.
 
 ## Phase 1 foundation — automated checks passed; user testing pending
 

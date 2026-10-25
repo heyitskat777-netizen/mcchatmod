@@ -4,7 +4,8 @@ tasks.register('verifyArchitecture') {
     doLast {
         def allowed = [
             domain: [] as Set, parsing: ['domain'] as Set, storage: ['domain'] as Set,
-            application: ['domain'] as Set, fabric: ['domain', 'application', 'storage'] as Set
+            application: ['domain'] as Set, ingestion: ['domain', 'parsing'] as Set,
+            fabric: ['domain', 'application', 'storage', 'ingestion', 'parsing'] as Set
         ]
         def errors = []
         allowed.each { module, dependencies ->
@@ -22,7 +23,7 @@ tasks.register('verifyArchitecture') {
                     }
                     if (module != 'fabric' && ['net.minecraft.', 'net.fabricmc.', 'org.lwjgl.'].any { name.startsWith(it) })
                         errors << "${source.name}: Minecraft dependency outside fabric"
-                    if (module in ['domain', 'application', 'parsing'] &&
+                    if (module in ['domain', 'application', 'parsing', 'ingestion'] &&
                         ['java.sql.', 'org.sqlite.', 'java.net.', 'javax.net.'].any { name.startsWith(it) })
                         errors << "${source.name}: infrastructure dependency in ${module}"
                 }
@@ -47,7 +48,7 @@ tasks.register('verifyArchitecture') {
             }
         }
         if (!errors.empty) throw new GradleException(errors.join('\n'))
-        logger.lifecycle('Architecture checks passed: five modules with explicit dependency boundaries.')
+        logger.lifecycle('Architecture checks passed: six modules with explicit dependency boundaries.')
     }
 }
 

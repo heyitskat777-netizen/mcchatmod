@@ -31,6 +31,11 @@ Target Minecraft 1.21.11, Fabric, Java 21. Do not silently upgrade Minecraft.
 - Run ./gradlew check :fabric:build. For plain logic, use the narrow module tests first.
 - Run ./gradlew :fabric:runClientGameTest only in an environment prepared to launch
   Minecraft, with its EULA accepted by the user. Never call compilation an in-game test.
+- For the isolated graphics/world/keybind/restart/packaged-JAR suite, use
+  `python3 scripts/client_smoke.py --eula-accepted` on Linux after EULA acceptance.
+  The helper supplies required profile/phase properties and validates shutdown and
+  assertion evidence; a raw Gradle task exit alone is not the full suite result.
+  See docs/CLIENT_SMOKE_TESTS.md. Record failed and skipped phases explicitly.
 - Review failures independently where possible. After three unsuccessful repair
   cycles, document the blocker and reassess; do not weaken acceptance criteria.
 - Do not change checked reference expectations just to match implementation.
@@ -52,7 +57,30 @@ Target Minecraft 1.21.11, Fabric, Java 21. Do not silently upgrade Minecraft.
   generated fixtures, screenshots for distribution, or source archives.
 - Use synthetic log samples with realistic formatting.
 - PM, OOC, unknown channels, and other-persona knowledge cannot enter AI analysis.
-- Store original observations separately from interpretations; preserve provenance.
+- Store cleaned dialogue observations separately from interpretations. Strip only
+  recognized leading transport/formatting decorations; preserve speaker wording,
+  emotes, punctuation, unknown bracketed actions and quoted markers inside speech.
+  Keep source coordinates, content identities and clock metadata separately. Never
+  persist the redundant raw logger line in current transcript tables.
+- Use the same injected dialogue normalizer for import and backed-up migration.
+  Check privacy before and after recognized wrapper cleanup. Migration removal of
+  known system/empty/private records must adjust source and owned-file counters
+  atomically without moving cursors, changing source IDs or breaking undo.
+- Historical import identity hashes exact decompressed bytes. Keep observations,
+  counters and cursor checkpoints atomic. Preserve repeated text at different
+  source coordinates; never deduplicate observations by text alone.
+- Partial import resumes are bound to a versioned parser/reviewed-name policy.
+  Bump the policy version and test incompatibility when classification changes;
+  do not silently mix policies or reclassify completed sources on repeat import.
+- Folder previews validate without writes; confirmation is bound to the approved
+  digest. Exclude symlinks, nested folders and active logs from bulk/watch discovery.
+- Batch ownership is attached atomically only to newly inserted observations. Undo
+  must preserve older data and original files, record payload-free removed coordinates,
+  and remain terminal. Cumulative source counters include accounted removed records;
+  active transcript counts do not. Never silently restore removed records on repeats.
+- Folder watch requires persisted explicit opt-in, stable finished-file checks and
+  bounded polling. It is separate from live capture; interrupted batches do not resume
+  automatically. Safe diagnostics contain codes, never private payload/exception text.
 - Identity merges require user confirmation and must be reversible.
 - AI defaults off. Never silently fall back to a paid provider.
 - Never run unattended tests against the live LoTC server.

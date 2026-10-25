@@ -89,17 +89,78 @@ The shell is usable in the target installation and has no known loading, keybind
 
 ## Phase 2 — Reliable historical and live capture
 
+Implementation is delivered in reviewable slices while retaining the full Phase 2
+exit criterion below:
+
+- **2a — Historical import and review:** finished `.log`/`.log.gz` validation,
+  content identities, atomic checkpoints, cancellation/restart recovery, recognized
+  channel exclusions, source-traceable transcript search/paging, and an **Import all
+  logs** folder queue. The single-file importer is implemented; the folder queue
+  now includes the implemented preview/dashboard/filter/undo/watch workflow.
+  Alpha.3 smoke tests were accepted by Kat. The alpha.4 refinement adds a native
+  scrollable dialogue conversation and backed-up cleanup of existing payloads;
+  new refinement user testing is separate from alpha.3 acceptance.
+- **2b — Live capture and reconciliation:** shared normalized observations, live
+  events or tailing, rotation/partial-line handling, and overlapping historical/live
+  provenance without collapsing repeated emotes.
+- **2c — Real-source acceptance:** manually checked private examples, unexplained
+  count differences resolved, and measured import/capture performance budgets.
+
+Completing 2a does not mark live capture or the entire Phase 2 complete.
+
 **Deliverables**
 
 Historical log and supported archive import, live chat capture, channel filtering, timestamp provenance, source locations, import progress, and a transcript inspector. Unrecognized formats go to a local diagnostic/review path rather than being confidently attributed.
 
 Historical logs and live events share a normalized message representation. Reconcile overlapping sources without collapsing genuine repeated emotes merely because their text matches.
 
+**Import all logs — accepted addition**
+
+- Let the user select a log folder and queue supported finished `.log`/`.log.gz`
+  files. Default to that folder only; do not scan unrelated directories or silently
+  follow directory symlinks. Nested-folder selection can be added explicitly later.
+- Reuse existing per-file validation, classification policy, source identities and
+  atomic checkpoints. Skip active `latest.log` and its resolved aliases. Recognize
+  exact already-imported sources without inserting duplicate observations.
+- Process files through bounded background discovery/queues. Show whole-batch and
+  current-file progress, plus imported, already imported, excluded, unknown, skipped
+  and failed outcomes with their units distinguished (files versus observations).
+- A corrupt/unreadable/oversized file must fail individually with an actionable
+  status; continue eligible independent files. Do not mark the batch fully passed
+  if a file failed, and do not roll back unrelated successful imports.
+- Cancellation stops further queue work and preserves committed checkpoints. A
+  user-initiated repeat resumes eligible partial sources under their original
+  policy and leaves completed sources unchanged. Restart must not silently launch
+  filesystem scanning or resume a queue without user intent.
+- Report the batch outcome and per-file failures without copying private chat text
+  into diagnostics or changing source files.
+
+**Accepted import workflow additions**
+
+- Validate a read-only folder preview before confirmation, showing eligible files,
+  encoded/decompressed workload and known sources without importing records.
+- Persist batch/per-file progress, safe error codes and reviewed-name policy;
+  provide explicit retry for failed/interrupted files after restart.
+- Browse across sources and filter channels, including a review-only UNKNOWN queue.
+- Confirm undo of only records newly inserted by a selected batch. Preserve original
+  files, older imports and source checkpoint provenance. Keep payload-free removal
+  accounting; repeating a completed source must not silently restore undone rows.
+- Offer a persisted, explicit opt-in folder watch for finished stable archives only.
+  Require two unchanged scans; exclude active latest.log, links and nested folders.
+  This is not live chat capture and does not close Phase 2b.
+
 **Developer verification**
 
 Test repeat import, interrupted import, log rotation, truncated files, partial lines, midnight, multipart messages, and restart recovery. Stable source identities and saved positions make processing repeatable. Clock and timezone uncertainty remains visible.
 
 Check exclusions before storage according to the chosen policy and again before any later AI context construction. Uncertain channel classification is ineligible for AI until resolved.
+
+For Import all, use synthetic mixed folders containing plain/gzip duplicates,
+distinct repeated lines, a corrupt archive, an oversized file, an active log,
+directory/symlink entries and an incomplete prior source. Verify bounded queues,
+per-file failure isolation, cancellation/restart/repeat behavior, stable counts,
+and identical privacy exclusions to single-file import. Include actual UI smoke
+coverage for folder selection, batch progress and the final report.
 
 **Kat's test — one known log and a 30–60 minute play session**
 
@@ -237,5 +298,7 @@ The initial release is one client-side mod with a local database. A local model 
 
 Cloud synchronization, a server plugin, a standalone desktop app, multi-version support, and automatic nearby-player recognition are not prerequisites for the first release. Revisit them as independent milestones if requested.
 
-Development has started with Phase 0 discovery and the Phase 1 foundation. STATUS.md records the verified implementation state; later phases and user verification remain pending.
+Phase 1's user smoke test has been accepted; historical import is the current
+Phase 2a slice. STATUS.md records exact implementation and verification results;
+live capture, real-source acceptance, and later phases remain pending.
 
