@@ -27,7 +27,7 @@ public final class JournalClient implements ClientModInitializer {
 
     @Override public void onInitializeClient() {
         Path directory = FabricLoader.getInstance().getConfigDir().resolve("lotc-journal");
-        SqliteJournalStore store = new SqliteJournalStore(directory.resolve("journal.sqlite"));
+        SqliteJournalStore store = new SqliteJournalStore(directory.resolve("journal.sqlite"), new dev.kat.lotcjournal.parsing.DialogueTextNormalizer());
         service = new JournalService(store, store);
         importer = new LogImportService(store);
         batches = new BatchImportService(importer, store);

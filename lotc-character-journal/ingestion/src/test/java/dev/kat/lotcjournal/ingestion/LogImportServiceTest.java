@@ -67,7 +67,7 @@ class LogImportServiceTest {
             assertEquals(ImportView.State.COMPLETE, service.snapshot().state());
             var page = result(service.transcript(progress.sourceId(), "", 0, 200));
             assertEquals(List.of(2L, 5L, 6L), page.entries().stream().map(TranscriptLine::sourceLine).toList());
-            assertEquals(repeated, page.entries().getFirst().raw());
+            assertEquals("Mira waves.", page.entries().getFirst().text());
             assertEquals("23:59:59", page.entries().getFirst().clock());
             assertEquals("Mira", page.entries().getFirst().observedSpeaker());
             assertEquals(Channel.UNKNOWN, page.entries().get(1).channel());
@@ -75,7 +75,7 @@ class LogImportServiceTest {
             assertFalse(page.entries().get(1).channel().eligibleForAnalysis());
             assertEquals(page.entries().getFirst().text(), page.entries().getLast().text());
             assertNotEquals(page.entries().getFirst().sourceLine(), page.entries().getLast().sourceLine());
-            assertTrue(repository.received.stream().noneMatch(line -> line.raw().contains("sentinel")),
+            assertTrue(repository.received.stream().noneMatch(line -> line.text().contains("sentinel")),
                 "Private/OOC payloads must not reach even a repository batch argument");
             assertTrue(repository.threads.stream().allMatch("lotc-journal-import"::equals));
         }
@@ -110,7 +110,7 @@ class LogImportServiceTest {
             assertNotEquals(lf.sourceId(), crlf.sourceId());
             assertEquals(1, crlf.processedLines());
             var line = result(service.transcript(crlf.sourceId(), "", 0, 20)).entries().getFirst();
-            assertEquals(body, line.raw());
+            assertEquals("Mira waves.", line.text());
             assertEquals(1, line.sourceLine());
         }
     }
@@ -123,7 +123,7 @@ class LogImportServiceTest {
             result(service.importFile(plain("midnight.log", first + "\n" + second + "\n"), Set.of()));
             assertEquals(List.of("23:59:59", "00:00:00"), repository.received.stream().map(TranscriptLine::clock).toList());
             assertEquals(List.of(1L, 2L), repository.received.stream().map(TranscriptLine::sourceLine).toList());
-            assertEquals(List.of(first, second), repository.received.stream().map(TranscriptLine::raw).toList());
+            assertEquals(List.of("Mira waves.", "Mira waves."), repository.received.stream().map(TranscriptLine::text).toList());
         }
     }
 
@@ -442,6 +442,38 @@ class LogImportServiceTest {
             assertNotNull(failure(service.previewFile(broken, Set.of())));
             assertEquals(0, repository.beginCalls.get());
             assertEquals(ImportView.State.IDLE, service.snapshot().state());
+        }
+    }
+
+    @Test void storesOnlyDialogueWhileKeepingCoordinatesAndIgnoringPluginNoise() throws Exception {
+        var repository = new MemoryCapture();
+        String dialogue = "Synthetic Speaker: \"The [CHAT] mark stays in this quotation.\"";
+        String content = chat("§a[Quiet] " + dialogue) + "\n" + chat("[Quiet] " + dialogue) + "\n"
+            + chat("[Replay Mod] recording started") + "\n" + chat("[Aviary] delivery notice") + "\n"
+            + chat("   ") + "\n" + chat("[Quiet][PM] PRIVATE_SENTINEL") + "\n";
+        Path path = plain("dialogue.log", content);
+        try (var service = importer(repository)) {
+            var progress = result(service.importFile(path, Set.of()));
+            assertEquals(6, progress.processedLines());
+            assertEquals(2, progress.importedLines()); assertEquals(3, progress.ignoredLines()); assertEquals(1, progress.excludedLines());
+            assertEquals(List.of(dialogue, dialogue), repository.received.stream().map(TranscriptLine::text).toList());
+            assertEquals(List.of(1L, 2L), repository.received.stream().map(TranscriptLine::sourceLine).toList());
+            assertEquals(content, Files.readString(path));
+            assertTrue(repository.received.stream().allMatch(line -> line.channel() == Channel.UNKNOWN));
+        }
+    }
+
+    @Test void newDialoguePolicyRefusesToResumeLegacyPartialSources() throws Exception {
+        var repository = new MemoryCapture();
+        Path path = plain("old-policy.log", chat("Mira waves.") + "\n");
+        String id = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)));
+        String oldPolicy = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+            .digest("parser-policy-1\n".getBytes(StandardCharsets.UTF_8)));
+        repository.beginSource(new ImportSource(id, "old-policy.log", "plain", 1, oldPolicy));
+        try (var service = importer(repository)) {
+            assertNotEquals(oldPolicy, LogImportService.policyFingerprint(Set.of()));
+            assertInstanceOf(IllegalArgumentException.class, failure(service.importFile(path, Set.of())));
+            assertEquals(0, repository.progress(id).processedLines()); assertTrue(repository.received.isEmpty());
         }
     }
 

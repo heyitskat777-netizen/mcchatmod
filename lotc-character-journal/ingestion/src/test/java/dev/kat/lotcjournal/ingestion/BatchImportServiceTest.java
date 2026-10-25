@@ -51,7 +51,7 @@ class BatchImportServiceTest {
             assertEquals(1, f.store.transcript(null, "", 0, 200).total());
             assertEquals(2, f.store.progress(f.store.sources().getFirst().id()).excludedLines());
             assertTrue(f.store.transcript(null, "", 0, 200).entries().stream()
-                .noneMatch(line -> line.raw().contains("SENTINEL")),
+                .noneMatch(line -> line.text().contains("SENTINEL")),
                 "Folder import must exclude PM/OOC before persistent transcript storage");
             assertEquals(1, done(f.service.unknownRecords(report.summary().id())));
             assertEquals("PARTIAL", done(f.service.retry(report.summary().id())).summary().status());
@@ -189,7 +189,7 @@ class BatchImportServiceTest {
         final BatchImportService service;
         Fixture(Path directory) throws Exception { this(directory, null, null); }
         Fixture(Path directory, Hook captureHook, Hook batchHook) throws Exception {
-            store = new SqliteJournalStore(directory.resolve("journal.sqlite")); store.initialize();
+            store = new SqliteJournalStore(directory.resolve("journal.sqlite"), new dev.kat.lotcjournal.parsing.DialogueTextNormalizer()); store.initialize();
             var capture = proxy(CaptureRepository.class, store, captureHook);
             repository = proxy(BatchRepository.class, store, batchHook);
             importer = new LogImportService(capture, 2, 1024 * 1024, 65536, 4);

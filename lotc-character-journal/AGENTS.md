@@ -57,7 +57,15 @@ Target Minecraft 1.21.11, Fabric, Java 21. Do not silently upgrade Minecraft.
   generated fixtures, screenshots for distribution, or source archives.
 - Use synthetic log samples with realistic formatting.
 - PM, OOC, unknown channels, and other-persona knowledge cannot enter AI analysis.
-- Store original observations separately from interpretations; preserve provenance.
+- Store cleaned dialogue observations separately from interpretations. Strip only
+  recognized leading transport/formatting decorations; preserve speaker wording,
+  emotes, punctuation, unknown bracketed actions and quoted markers inside speech.
+  Keep source coordinates, content identities and clock metadata separately. Never
+  persist the redundant raw logger line in current transcript tables.
+- Use the same injected dialogue normalizer for import and backed-up migration.
+  Check privacy before and after recognized wrapper cleanup. Migration removal of
+  known system/empty/private records must adjust source and owned-file counters
+  atomically without moving cursors, changing source IDs or breaking undo.
 - Historical import identity hashes exact decompressed bytes. Keep observations,
   counters and cursor checkpoints atomic. Preserve repeated text at different
   source coordinates; never deduplicate observations by text alone.

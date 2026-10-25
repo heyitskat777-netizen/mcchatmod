@@ -150,7 +150,7 @@ public final class LogImportService implements AutoCloseable {
         var names = validatedNames(reviewedNames);
         try {
             var policy = MessageDigest.getInstance("SHA-256");
-            policy.update("parser-policy-1\n".getBytes(StandardCharsets.UTF_8));
+            policy.update("parser-policy-2\n".getBytes(StandardCharsets.UTF_8));
             for (String name : names.stream().sorted().toList()) {
                 byte[] value = name.getBytes(StandardCharsets.UTF_8);
                 policy.update((value.length + ":").getBytes(StandardCharsets.UTF_8));
@@ -253,7 +253,8 @@ public final class LogImportService implements AutoCloseable {
                 else {
                     var observation = parsed.orElseThrow();
                     if (observation.channel() == Channel.PRIVATE_MESSAGE || observation.channel() == Channel.OOC) excluded++;
-                    else entries.add(new TranscriptLine(id, cursor, observation.clock().format(DateTimeFormatter.ofPattern("HH:mm:ss")), raw,
+                    else if (observation.channel() == Channel.SYSTEM) ignored++;
+                    else entries.add(new TranscriptLine(id, cursor, observation.clock().format(DateTimeFormatter.ofPattern("HH:mm:ss")),
                         observation.text(), observation.channel(), observation.observedSpeaker().orElse(null)));
                 }
                 if (cursor - expected == batchLines || cursor == totalLines) {

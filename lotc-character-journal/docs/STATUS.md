@@ -1,5 +1,103 @@
 # Current status — October 25, 2026
 
+## Alpha.4 refinement — dialogue-only persistence and scrolling
+
+Branch: `feature/dialogue-transcript`, based on `82884d4`. Kat reports **all alpha.3
+smoke tests OK**. The supplied screenshot identified the need for continuous
+scrolling and removal of logger wrappers from persistent dialogue. This accepts
+the previous smoke checklist; it does not establish measured real-log parser
+accuracy or accept the new alpha.4 refinement before user testing.
+
+Implemented: native conversation scroll pane (wheel, draggable bar, arrows,
+Page Up/Down, Home/End), bounded 50-message pages with wheel/keyboard transitions,
+responsive fixed controls and optional Details. The active transcript schema has
+one cleaned dialogue payload, with no raw logger-line column. Known logging/RP
+wrappers and formatting are stripped; quoted text and unknown bracketed actions
+are preserved. Known system notices/empty chat are ignored and PM/OOC remains
+excluded before/after cleanup. Provenance remains separate and never implies a
+reconstructed date, timezone, character identity or persona.
+
+Schema 4 backs up and validates schema 1/2/3 before migrating. Existing text is
+cleaned with the same injected parser normalizer. Removed noise/privacy records
+adjust imported/excluded/ignored source and owned-file counters atomically;
+processed positions, source IDs, original files and undo ownership stay intact.
+Runtime cleanup failures roll back earlier writes/schema/accounting. Old backups,
+SQLite history and original files may retain raw bytes; no secure-erasure claim.
+Policy 2 blocks incompatible policy-1 partial resumes; finish alpha.3 partial jobs
+before upgrading, or finish them using alpha.3 and its pre-upgrade backup first.
+Completed source IDs/classifications and explicit undo decisions remain stable.
+
+Native tools were available and three agents supplied initial API/design hazards,
+then **all three hit their usage limit before implementation/review completed**.
+The coordinator took over production, tests, migration/UI review and integration;
+no completed independent final review is claimed for this refinement.
+
+Verification so far:
+
+```sh
+./gradlew -PcoreOnly check --no-daemon --console=plain
+./gradlew check :fabric:build --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --run-id dialogue-smoke-1 --timeout 300
+```
+
+Core check passed in **32s** and integrated Fabric/package build passed in **56s**
+(30 tasks: 12 executed, 18 up-to-date). Fresh XML: **142 tests, 0 failures/errors/skips**
+(domain 1, application 9, parsing 56, ingestion 36, storage 40). All **14 runner
+contract tests passed**. Two initial compile errors from the API change were fixed
+(a package-private helper call and a stale raw-field test reference); no assertions
+were weakened. Tests now assert the requested clean-payload behavior instead of
+retaining the explicitly removed raw copy. Existing privacy expectations, including
+ambiguous Whisper as private, remain intact.
+
+The actual five-JVM **`dialogue-smoke-1` passed every phase**:
+
+| Phase | Elapsed | Result |
+| --- | --- | --- |
+| Graphics-only preflight | 83.9s | Passed |
+| Development writer | 98.3s | Passed |
+| Development reader | 90.5s | Passed |
+| Packaged writer | 116.4s | Passed |
+| Packaged reader | 85.6s | Passed |
+
+Each writer has 14 passing assertion stages and each reader 15, including required
+`dialogue-scroll`: 62 synthetic observations, duplicate-looking dialogue at distinct
+coordinates, actual wheel scrolling, End/Home keys, page transitions both ways,
+the final wrapped line of a long message, narrower-window reflow and onscreen fixed
+controls. Source details remain inspectable explicitly. SQL asserts no raw column,
+clean payloads, stable counts and privacy exclusions before/after restart; existing
+batch/retry/undo/watch/backup/keybind/world/shutdown assertions also pass. Screenshots
+were inspected at 854x480 and 640x480, with multiple dialogue messages visible,
+readable clean text, a real scrollbar and reachable footer controls. No runtime
+repair or assertion relaxation was needed. Graphics/audio/Realms warnings remained
+nonfatal only because the required reports, assertions, shutdown and exits passed.
+
+Evidence: `fabric/build/client-smoke/evidence/dialogue-smoke-1/` (JSON, JUnit XML,
+selected logs, PNGs, launch/shutdown witnesses). Logs:
+`/tmp/lotc-dialogue-core-3.log`, `/tmp/lotc-dialogue-integrated-1.log`,
+`/tmp/lotc-dialogue-runner-tests.log`, `/tmp/lotc-dialogue-client-1.log`.
+Actual legacy migration is covered separately by synthetic SQLite tests, including
+multi-chunk cleanup, owned/unowned/undone observations, backup contents, injected
+failure rollback and post-migration undo/restart; fresh client profiles do not
+substitute for those upgrade tests.
+
+GitHub Actions passed both **verify** and the complete **client-smoke** job on
+functional commit `e2f1bfe`: [PR run 40214971685](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40214971685).
+[PR #5](https://github.com/heyitskat777-netizen/mcchatmod/pull/5) builds on merged
+import-workflow PR #4, targets `feature/client-smoke-tests`, and is ready for review.
+Main remains unchanged. A documentation-only follow-up receives its normal CI
+rerun; the successful functional run above identifies its tested commit precisely.
+
+Installable artifact: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.4.jar`,
+14542781 bytes; SHA-256 `8d6be81128ef4a34b19f442344ac032d457da1852a8926d03dce55cdd60695a2`.
+[CI JAR artifact ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40214971685/artifacts/12606823924).
+Install the non-`-sources` JAR. The new alpha.4 user check is still pending:
+[USER_TEST_DIALOGUE_SCROLL.md](USER_TEST_DIALOGUE_SCROLL.md). Kat's acceptance of
+alpha.3 smoke tests is recorded above and does not imply alpha.4 user acceptance.
+
+Live capture/reconciliation and measured private real-source acceptance remain
+unfinished Phase 2 work. The following sections are historical evidence.
+
 ## Phase 2a import workflow — automated checks passed; user test pending
 
 Branch: `feature/import-workflow`, based on `56fbd97`. Kat accepted all proposed

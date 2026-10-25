@@ -18,7 +18,7 @@ class BatchRepositoryTest {
     @TempDir Path directory;
 
     private SqliteJournalStore store() throws Exception {
-        var store = new SqliteJournalStore(directory.resolve("journal.sqlite"));
+        var store = new SqliteJournalStore(directory.resolve("journal.sqlite"), new dev.kat.lotcjournal.parsing.DialogueTextNormalizer());
         store.initialize();
         return store;
     }
@@ -29,7 +29,7 @@ class BatchRepositoryTest {
                 "PENDING", null, 0, 0, 0, 0, 0)));
     }
     private static TranscriptLine line(long coordinate, Channel channel) {
-        return new TranscriptLine(SOURCE, coordinate, "12:34:56", "synthetic raw " + coordinate, "synthetic text", channel, null);
+        return new TranscriptLine(SOURCE, coordinate, "12:34:56", "synthetic text", channel, null);
     }
     private static void start(SqliteJournalStore store, BatchPlan plan) throws Exception {
         store.createBatch(plan);
@@ -49,7 +49,7 @@ class BatchRepositoryTest {
         store.appendBatchOwned(first.id(), 0, SOURCE, 1, 3, List.of(line(2, Channel.ROLEPLAY)), 1, 0, false);
         complete(store, first);
         var second = plan(SOURCE); start(store, second);
-        store.appendBatchOwned(second.id(), 0, SOURCE, 3, 4, List.of(line(4, Channel.SYSTEM)), 0, 0, true);
+        store.appendBatchOwned(second.id(), 0, SOURCE, 3, 4, List.of(line(4, Channel.ROLEPLAY)), 0, 0, true);
         complete(store, second);
         var before = store.progress(SOURCE);
         assertEquals(1, store.undoBatch(first.id()));
@@ -61,7 +61,7 @@ class BatchRepositoryTest {
         assertEquals(1, store.batchFiles(first.id()).getFirst().added());
         assertEquals(before, store.beginSource(new ImportSource(SOURCE, "again.log.gz", "gzip", 4)));
         assertEquals(2, store.transcript(SOURCE, null, 0, 20).total(), "Repeat import cannot silently recreate explicitly removed observations");
-        var restarted = new SqliteJournalStore(directory.resolve("journal.sqlite")); restarted.initialize();
+        var restarted = new SqliteJournalStore(directory.resolve("journal.sqlite"), new dev.kat.lotcjournal.parsing.DialogueTextNormalizer()); restarted.initialize();
         assertEquals(1, restarted.removedRecords(null));
         assertEquals(2, restarted.transcript(null, null, 0, 20).total());
     }
@@ -114,7 +114,7 @@ class BatchRepositoryTest {
         var plan = plan(null); start(store, plan);
         store.initialize();
         assertEquals("RUNNING", store.batchSummary(plan.id()).status());
-        var restarted = new SqliteJournalStore(directory.resolve("journal.sqlite")); restarted.initialize();
+        var restarted = new SqliteJournalStore(directory.resolve("journal.sqlite"), new dev.kat.lotcjournal.parsing.DialogueTextNormalizer()); restarted.initialize();
         assertEquals("INTERRUPTED", restarted.batchSummary(plan.id()).status());
         assertEquals("INTERRUPTED", restarted.batchFiles(plan.id()).getFirst().status());
         assertEquals(Set.of("Synthetic Name"), restarted.batchPlan(plan.id()).reviewedNames());
@@ -126,7 +126,7 @@ class BatchRepositoryTest {
         assertEquals(WatchSettings.defaults(), store.watchSettings());
         var settings = new WatchSettings(directory.toString(), true, Set.of("Synthetic Name", "Unicode λ"));
         store.saveWatchSettings(settings);
-        var restarted = new SqliteJournalStore(directory.resolve("journal.sqlite")); restarted.initialize();
+        var restarted = new SqliteJournalStore(directory.resolve("journal.sqlite"), new dev.kat.lotcjournal.parsing.DialogueTextNormalizer()); restarted.initialize();
         assertEquals(settings, restarted.watchSettings());
         restarted.saveWatchSettings(new WatchSettings(directory.toString(), false, settings.reviewedNames()));
         assertFalse(restarted.watchSettings().enabled());
@@ -150,9 +150,9 @@ class BatchRepositoryTest {
         Path path = directory.resolve("journal.sqlite");
         try (var connection = DriverManager.getConnection("jdbc:sqlite:" + path); var sql = connection.createStatement()) {
             for (String table : List.of("observation_owners", "removed_observations", "batch_files", "import_batches", "watch_settings", "watch_attempts")) sql.execute("DROP TABLE " + table);
-            sql.execute("PRAGMA user_version=2");
+            LegacyJournalFixtures.transcript(connection, 2);
         }
-        var migrated = new SqliteJournalStore(path); migrated.initialize();
+        var migrated = new SqliteJournalStore(path, new dev.kat.lotcjournal.parsing.DialogueTextNormalizer()); migrated.initialize();
         assertTrue(migrated.load().compactLayout()); assertEquals(1, migrated.transcript(SOURCE, null, 0, 20).total());
         Path backup;
         try (var backups = Files.list(directory.resolve("backups"))) { var paths = backups.toList(); assertEquals(1, paths.size()); backup = paths.getFirst(); }
@@ -183,12 +183,12 @@ class BatchRepositoryTest {
         String path = directory.resolve("synthetic.log").toString(), stamp = "b".repeat(64), changed = "c".repeat(64);
         assertFalse(store.watchAttempted(path, stamp));
         store.recordWatchAttempt(path, stamp, "FAILED");
-        var restarted = new SqliteJournalStore(directory.resolve("journal.sqlite")); restarted.initialize();
+        var restarted = new SqliteJournalStore(directory.resolve("journal.sqlite"), new dev.kat.lotcjournal.parsing.DialogueTextNormalizer()); restarted.initialize();
         assertTrue(restarted.watchAttempted(path, stamp));
         assertFalse(restarted.watchAttempted(path, changed));
         restarted.recordWatchAttempt(path, changed, "ATTEMPTED");
         assertTrue(restarted.watchAttempted(path, changed));
-        var again = new SqliteJournalStore(directory.resolve("journal.sqlite")); again.initialize();
+        var again = new SqliteJournalStore(directory.resolve("journal.sqlite"), new dev.kat.lotcjournal.parsing.DialogueTextNormalizer()); again.initialize();
         assertTrue(again.watchAttempted(path, changed), "Interrupted auto-attempt must require explicit retry or changed file");
         assertThrows(IllegalArgumentException.class, () -> again.recordWatchAttempt(path, changed, "Exception with synthetic raw text"));
     }
@@ -207,7 +207,7 @@ class BatchRepositoryTest {
         try (var connection = DriverManager.getConnection("jdbc:sqlite:" + directory.resolve("journal.sqlite")); var sql = connection.createStatement()) { sql.execute("DROP TRIGGER synthetic_undo_failure"); }
         assertEquals(1, store.undoBatch(plan.id())); assertEquals(0, store.unknownRecords(plan.id()));
         Path backup = store.createBackup(directory.resolve("backups/undone.sqlite"));
-        var restored = new SqliteJournalStore(backup); restored.initialize();
+        var restored = new SqliteJournalStore(backup, new dev.kat.lotcjournal.parsing.DialogueTextNormalizer()); restored.initialize();
         assertEquals(0, restored.transcript(SOURCE, null, 0, 20).total()); assertEquals(1, restored.removedRecords(SOURCE));
         assertEquals("UNDONE", restored.batchSummary(plan.id()).status());
     }

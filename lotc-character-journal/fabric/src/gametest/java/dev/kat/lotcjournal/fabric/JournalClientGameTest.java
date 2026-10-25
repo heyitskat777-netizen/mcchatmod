@@ -16,6 +16,7 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.AbstractScrollArea;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
@@ -191,9 +192,11 @@ public final class JournalClientGameTest implements FabricClientGameTest {
     }
 
     private void exerciseImport(ClientGameTestContext context, SmokeReport report, Path database) throws Exception {
-        String raw = "[23:59:59] [Render thread/INFO]: [System] [CHAT] §aSynthetic Visitor§r waves.";
-        String fixture = raw + "\n" + raw + "\n"
-            + "[00:00:00] [Render thread/INFO]: [CHAT] [PM] IMPORT_PRIVATE_SENTINEL\n"
+        String raw = "[23:59:59] [Render thread/INFO]: [System] [CHAT][Quiet] §aSynthetic Visitor§r waves.";
+        var content = new StringBuilder(raw + "\n" + raw + "\n");
+        for (int index = 3; index <= 62; index++) content.append("[23:59:59] [Render thread/INFO]: [System] [CHAT][Quiet] ")
+            .append(dialogue(index)).append('\n');
+        String fixture = content + "[00:00:00] [Render thread/INFO]: [CHAT] [PM] IMPORT_PRIVATE_SENTINEL\n"
             + "[00:00:01] [Render thread/INFO]: [CHAT] [OOC]IMPORT_OOC_SENTINEL\n"
             + "synthetic non-chat diagnostic\n";
         byte[] bytes = fixture.getBytes(StandardCharsets.UTF_8);
@@ -229,32 +232,64 @@ public final class JournalClientGameTest implements FabricClientGameTest {
             verifyImported(database, sourceId, raw);
             context.clickScreenButton("View transcripts");
             context.waitFor(client -> isScreen(client.screen, TRANSCRIPT_SCREEN)
-                && client.screen.getNarrationMessage().getString().contains("Record 1 of 2"), WAIT_TICKS);
-            context.runOnClient(client -> {
-                String narration = client.screen.getNarrationMessage().getString();
-                check(narration.contains("line 1.") && narration.contains("Channel UNKNOWN"),
-                    "Transcript must expose source coordinate and unresolved channel");
-                check(narration.contains("Date and timezone unresolved"), "UI must not invent a date or timezone");
-                check(screenButtonActive(client.screen, "Next") && !screenButtonActive(client.screen, "Previous"),
-                    "Transcript must start at the first source observation");
+                && client.screen.getNarrationMessage().getString().contains("Messages 1 to 50 of 62"), WAIT_TICKS);
+            report.stage("dialogue-scroll", 60_000, () -> {
+                context.runOnClient(client -> {
+                    String narration = client.screen.getNarrationMessage().getString();
+                    check(narration.indexOf("Synthetic Visitor waves.") != narration.lastIndexOf("Synthetic Visitor waves."),
+                        "Two distinct repeated observations must be visible together in the conversation");
+                    check(!narration.contains("Render thread") && !narration.contains("[Quiet]") && !narration.contains("Source fingerprint"),
+                        "Default conversation must contain cleaned dialogue without logger or diagnostic prefixes");
+                    check(scrollPane(client.screen).maxScrollAmount() > 0, "Dialogue needs a real scrollable viewport");
+                    check(screenButtonActive(client.screen, "Next") && !screenButtonActive(client.screen, "Previous"), "First bounded page needs next-page navigation");
+                });
+                context.getInput().setCursorPos(context.computeOnClient(client -> client.getWindow().getWidth() / 2.0),
+                    context.computeOnClient(client -> client.getWindow().getHeight() * 0.65));
+                context.getInput().scroll(-4);
+                context.waitFor(client -> scrollPane(client.screen).scrollAmount() > 0, WAIT_TICKS);
+                context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+                context.getInput().pressKey(GLFW.GLFW_KEY_END);
+                context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("dialogue 50"), WAIT_TICKS);
+                context.getInput().scroll(-1);
+                context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Messages 51 to 62 of 62"), WAIT_TICKS);
+                context.runOnClient(client -> check(!screenButtonActive(client.screen, "Next") && screenButtonActive(client.screen, "Previous"), "Last page must have correct bounds"));
+                context.getInput().setCursorPos(context.computeOnClient(client -> client.getWindow().getWidth() / 2.0),
+                    context.computeOnClient(client -> client.getWindow().getHeight() * 0.65));
+                context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+                context.getInput().pressKey(GLFW.GLFW_KEY_END);
+                context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("FINAL_DIALOGUE_MARKER"), WAIT_TICKS);
+                report.screenshot(context.takeScreenshot("lotc-dialogue-bottom-" + report.phase()));
+                context.getInput().pressKey(GLFW.GLFW_KEY_HOME);
+                context.getInput().scroll(1);
+                context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Messages 1 to 50 of 62"), WAIT_TICKS);
+                context.getInput().resizeWindow(640, 480);
+                context.waitFor(client -> client.screen.width == 320 && client.screen.height == 240, WAIT_TICKS);
+                context.runOnClient(client -> {
+                    check(client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast)
+                        .allMatch(button -> button.getY() >= 0 && button.getBottom() <= client.screen.height), "All controls must remain onscreen after resizing");
+                    check(scrollPane(client.screen).getBottom() < client.screen.height - 24, "Scrollable dialogue must not overlap fixed footer");
+                });
+                report.screenshot(context.takeScreenshot("lotc-dialogue-small-" + report.phase()));
+                context.getInput().resizeWindow(854, 480);
+                context.waitFor(client -> client.screen.width == 427 && client.screen.height == 240, WAIT_TICKS);
             });
-            context.clickScreenButton("Next");
-            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Record 2 of 2"), WAIT_TICKS);
-            context.runOnClient(client -> check(client.screen.getNarrationMessage().getString().contains("line 2.")
-                && !screenButtonActive(client.screen, "Next") && screenButtonActive(client.screen, "Previous"),
-                "Repeated text must navigate to a distinct second source coordinate"));
-            context.clickScreenButton("Previous");
-            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Record 1 of 2"), WAIT_TICKS);
+            context.getInput().setCursorPos(context.computeOnClient(client -> client.getWindow().getWidth() / 2.0),
+                context.computeOnClient(client -> client.getWindow().getHeight() * 0.65));
+            context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT); context.getInput().pressKey(GLFW.GLFW_KEY_HOME);
+            context.clickScreenButton("Details");
+            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("line 1")
+                && client.screen.getNarrationMessage().getString().contains("Date and timezone unresolved"), WAIT_TICKS);
+            context.clickScreenButton("Hide details");
             context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("NO_SYNTHETIC_MATCH"));
             context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("No matching records"), WAIT_TICKS);
             context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("Synthetic Visitor"));
-            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Record 1 of 2"), WAIT_TICKS);
+            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Messages 1 to 50 of 62"), WAIT_TICKS);
             context.clickScreenButton("UNKNOWN review");
             context.waitFor(client -> screenButtonActive(client.screen, "Channel: UNKNOWN")
-                && client.screen.getNarrationMessage().getString().contains("Record 1 of 2"), WAIT_TICKS);
+                && client.screen.getNarrationMessage().getString().contains("Messages 1 to 50 of 62"), WAIT_TICKS);
             context.clickScreenButton("Channel: UNKNOWN");
             context.waitFor(client -> screenButtonActive(client.screen, "Channel: ALL")
-                && client.screen.getNarrationMessage().getString().contains("Record 1 of 2"), WAIT_TICKS);
+                && client.screen.getNarrationMessage().getString().contains("Messages 1 to 50 of 62"), WAIT_TICKS);
             report.screenshot(context.takeScreenshot("lotc-import-transcript-" + report.phase()));
             context.clickScreenButton("Done");
             context.waitFor(client -> isScreen(client.screen, IMPORT_SCREEN), WAIT_TICKS);
@@ -280,7 +315,7 @@ public final class JournalClientGameTest implements FabricClientGameTest {
                     "Undone batch must survive process restart");
                 check(sqlCount(database, "SELECT count(*) FROM removed_observations") == 1,
                     "Removed observations need durable payload-free accounting");
-                check(sqlCount(database, "SELECT count(*) FROM transcript_lines") == 2,
+                check(sqlCount(database, "SELECT count(*) FROM transcript_lines") == 62,
                     "Restart must retain older records and not resurrect undone batch rows");
                 check(sqlCount(database, "SELECT count(*) FROM watch_settings WHERE enabled=1") == 1,
                     "Explicit watch opt-in must persist across JVMs");
@@ -296,12 +331,12 @@ public final class JournalClientGameTest implements FabricClientGameTest {
                     && client.screen.getNarrationMessage().getString().contains("Preview files 3"), WAIT_TICKS);
                 check(sqlCount(database, "SELECT count(*) FROM import_batches") == 0,
                     "Preview must not create a durable batch");
-                check(sqlCount(database, "SELECT count(*) FROM transcript_lines") == 2,
+                check(sqlCount(database, "SELECT count(*) FROM transcript_lines") == 62,
                     "Preview must not write observations");
                 report.screenshot(context.takeScreenshot("lotc-folder-preview-" + report.phase()));
                 context.clickScreenButton("Confirm Import all");
                 context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Batch PARTIAL"), WAIT_TICKS);
-                check(sqlCount(database, "SELECT count(*) FROM transcript_lines") == 3,
+                check(sqlCount(database, "SELECT count(*) FROM transcript_lines") == 63,
                     "One new record plus two older records must survive corrupt-file isolation");
                 check(sqlCount(database, "SELECT count(*) FROM batch_files WHERE status='DUPLICATE'") == 1,
                     "Known source must be reported as a duplicate without claiming its records");
@@ -313,16 +348,16 @@ public final class JournalClientGameTest implements FabricClientGameTest {
                 context.clickScreenButton("Retry failed");
                 context.waitFor(client -> screenButtonActive(client.screen, "Retry failed")
                     && client.screen.getNarrationMessage().getString().contains("PARTIAL"), WAIT_TICKS);
-                check(sqlCount(database, "SELECT count(*) FROM transcript_lines") == 3,
+                check(sqlCount(database, "SELECT count(*) FROM transcript_lines") == 63,
                     "Retrying the unchanged corrupt file must not duplicate successful records");
                 context.clickScreenButton("Undo batch");
                 context.waitFor(client -> screenButtonActive(client.screen, "Confirm undo"), WAIT_TICKS);
-                check(sqlCount(database, "SELECT count(*) FROM transcript_lines") == 3,
+                check(sqlCount(database, "SELECT count(*) FROM transcript_lines") == 63,
                     "Undo must require explicit confirmation");
                 report.screenshot(context.takeScreenshot("lotc-batch-undo-confirm-" + report.phase()));
                 context.clickScreenButton("Confirm undo");
                 context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("UNDONE"), WAIT_TICKS);
-                check(sqlCount(database, "SELECT count(*) FROM transcript_lines") == 2,
+                check(sqlCount(database, "SELECT count(*) FROM transcript_lines") == 62,
                     "Undo must remove only the new batch record");
                 check(sqlCount(database, "SELECT count(*) FROM removed_observations") == 1,
                     "Undo must preserve removed-coordinate accounting");
@@ -375,12 +410,16 @@ public final class JournalClientGameTest implements FabricClientGameTest {
 
     private static void verifyImported(Path database, String sourceId, String raw) throws Exception {
         try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database.toUri() + "?mode=ro")) {
+            try (var statement = connection.createStatement(); var result = statement.executeQuery(
+                "SELECT count(*) FROM pragma_table_info('transcript_lines') WHERE name='raw'")) {
+                check(result.getLong(1) == 0, "Persistent database must have no raw logger-line column");
+            }
             try (var query = connection.prepareStatement("SELECT * FROM capture_sources WHERE id=?")) {
                 query.setString(1, sourceId);
                 try (var source = query.executeQuery()) {
                     check(source.next(), "Import source checkpoint must exist");
-                    check(source.getLong("total_lines") == 5 && source.getLong("processed_lines") == 5
-                        && source.getLong("imported_lines") == 2 && source.getLong("excluded_lines") == 2
+                    check(source.getLong("total_lines") == 65 && source.getLong("processed_lines") == 65
+                        && source.getLong("imported_lines") == 62 && source.getLong("excluded_lines") == 2
                         && source.getLong("ignored_lines") == 1 && source.getInt("complete") == 1,
                         "Import counters and completion checkpoint must survive repeat import/restart");
                     check(!source.next(), "Content identity must identify one source");
@@ -389,9 +428,9 @@ public final class JournalClientGameTest implements FabricClientGameTest {
             try (var query = connection.prepareStatement("SELECT * FROM transcript_lines WHERE source_id=? ORDER BY source_line")) {
                 query.setString(1, sourceId);
                 try (var rows = query.executeQuery()) {
-                    for (int coordinate = 1; coordinate <= 2; coordinate++) {
+                    for (int coordinate = 1; coordinate <= 62; coordinate++) {
                         check(rows.next() && rows.getLong("source_line") == coordinate, "Repeated observations need distinct coordinates");
-                        check(raw.equals(rows.getString("raw")), "Transcript must retain original observed bytes as UTF-8 text");
+                        check(dialogue(coordinate).equals(rows.getString("text")), "Database must contain cleaned dialogue and preserve genuine repeated coordinates");
                         check("23:59:59".equals(rows.getString("clock")), "Original clock must remain unchanged");
                         check("UNKNOWN".equals(rows.getString("channel")) && rows.getString("observed_speaker") == null,
                             "Unreviewed names must stay unresolved and ineligible for AI");
@@ -400,10 +439,21 @@ public final class JournalClientGameTest implements FabricClientGameTest {
                 }
             }
             try (var query = connection.createStatement();
-                 var rows = query.executeQuery("SELECT count(*) FROM transcript_lines WHERE raw LIKE '%IMPORT_PRIVATE_SENTINEL%' OR raw LIKE '%IMPORT_OOC_SENTINEL%'")) {
+                 var rows = query.executeQuery("SELECT count(*) FROM transcript_lines WHERE text LIKE '%IMPORT_PRIVATE_SENTINEL%' OR text LIKE '%IMPORT_OOC_SENTINEL%'")) {
                 check(rows.next() && rows.getInt(1) == 0, "PM/OOC payloads must never enter stored transcripts");
             }
         }
+    }
+
+    private static String dialogue(int coordinate) {
+        if (coordinate <= 2) return "Synthetic Visitor waves.";
+        if (coordinate == 62) return "Synthetic Visitor says: \"" + "A longer synthetic sentence. ".repeat(40)
+            + "The [CHAT] mark inside speech stays. FINAL_DIALOGUE_MARKER.\"";
+        return "Synthetic Visitor says dialogue " + coordinate + ".";
+    }
+    private static AbstractScrollArea scrollPane(Screen screen) {
+        return screen.children().stream().filter(AbstractScrollArea.class::isInstance).map(AbstractScrollArea.class::cast).findFirst()
+            .orElseThrow(() -> new AssertionError("Native dialogue scroll pane is missing"));
     }
 
     private static boolean isScreen(Screen screen, String name) {
