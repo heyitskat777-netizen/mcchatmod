@@ -94,3 +94,17 @@ confirmation warnings. All `lotc-journal-*` workers must stop on shutdown.
 Unit tests separately exercise stable-file watch polling, bounded/cancelled work,
 content changes, retries and transactional storage invariants. These are not a
 substitute for the executed client stage or private real-log acceptance.
+
+## Dialogue scroll and schema-4 refinement
+
+The mandatory `dialogue-scroll` stage uses 62 synthetic dialogue observations,
+including identical lines and a long final message. It asserts multiple messages
+on screen, actual mouse-wheel movement, End/Home keys, crossing the 50-message page
+boundary in both directions, reaching the final wrapped line, a narrower window,
+fixed controls, and optional source details. SQL asserts cleaned dialogue with no
+raw column, excluded private payloads and stable source coordinates/counts on repeat
+import/restart. These explicit requirements replace the old one-record UI navigation
+expectations because the user requested a scrollable conversation. Privacy gates
+and runner exit/report/shutdown requirements are preserved. Schema-1/2/3 migration,
+cleanup failure rollback and ownership/undo accounting are tested separately using
+synthetic SQLite fixtures; a fresh client profile is not a legacy migration test.

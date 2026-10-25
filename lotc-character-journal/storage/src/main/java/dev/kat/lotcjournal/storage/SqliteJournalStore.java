@@ -7,6 +7,8 @@ import dev.kat.lotcjournal.domain.BatchRepository;
 import dev.kat.lotcjournal.domain.BatchSummary;
 import dev.kat.lotcjournal.domain.CaptureRepository;
 import dev.kat.lotcjournal.domain.Channel;
+import dev.kat.lotcjournal.domain.DialogueNormalizer;
+import dev.kat.lotcjournal.domain.DialogueCleanup;
 import dev.kat.lotcjournal.domain.ImportProgress;
 import dev.kat.lotcjournal.domain.ImportSource;
 import dev.kat.lotcjournal.domain.JournalSettings;
@@ -34,7 +36,7 @@ import java.time.Instant;
 
 /** SQLite adapter. Callers use short-lived connections only on journal/import worker threads. */
 public final class SqliteJournalStore implements SettingsRepository, BackupService, CaptureRepository, BatchRepository {
-    private static final int SCHEMA_VERSION = 3;
+    private static final int SCHEMA_VERSION = 4;
     private static final String SETTINGS_SQL = "CREATE TABLE journal_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)";
     private static final String SOURCES_SQL = """
         CREATE TABLE capture_sources (
@@ -119,7 +121,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
           attempted_at TEXT NOT NULL
         )
         """;
-    private static final String TRANSCRIPT_SQL = """
+    private static final String LEGACY_TRANSCRIPT_SQL = """
         CREATE TABLE transcript_lines (
           source_id TEXT NOT NULL REFERENCES capture_sources(id),
           source_line INTEGER NOT NULL CHECK(typeof(source_line)='integer' AND source_line>0),
@@ -131,10 +133,15 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
           PRIMARY KEY(source_id,source_line)
         )
         """;
+    private static final String TRANSCRIPT_SQL = LEGACY_TRANSCRIPT_SQL.replace(
+        "  raw TEXT NOT NULL CHECK(length(raw)<=65536),\n", "");
     private final Path database;
     private boolean startupRecovered;
+    private final DialogueNormalizer normalizer;
 
-    public SqliteJournalStore(Path database) { this.database = database.toAbsolutePath(); }
+    public SqliteJournalStore(Path database, DialogueNormalizer normalizer) {
+        this.database = database.toAbsolutePath(); this.normalizer = Objects.requireNonNull(normalizer);
+    }
 
     private Connection open() throws SQLException {
         Connection connection = DriverManager.getConnection("jdbc:sqlite:" + database);
@@ -167,11 +174,11 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                     statement.execute("INSERT INTO journal_settings VALUES ('compact_layout','false')");
                     createCaptureSchema(connection);
                     createWorkflowSchema(connection);
-                    statement.execute("PRAGMA user_version=3");
+                    statement.execute("PRAGMA user_version=4");
                     validateSchema(connection, SCHEMA_VERSION);
                     verifyIntegrity(connection);
                     connection.commit();
-                } catch (SQLException error) {
+                } catch (SQLException | RuntimeException error) {
                     connection.rollback();
                     throw error;
                 } finally { connection.setAutoCommit(true); }
@@ -180,7 +187,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 verifyIntegrity(connection);
                 // No schema or WAL mutation until a complete, owned old-version snapshot exists.
                 Path backup = createBackup(database.getParent().resolve("backups").resolve(
-                    database.getFileName() + "-pre-schema3-" + UUID.randomUUID() + ".sqlite"));
+                    database.getFileName() + "-pre-schema4-" + UUID.randomUUID() + ".sqlite"));
                 try (var saved = DriverManager.getConnection("jdbc:sqlite:" + backup)) {
                     validateSchema(saved, version);
                     verifyIntegrity(saved);
@@ -188,12 +195,13 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 connection.setAutoCommit(false);
                 try {
                     if (version == 1) createCaptureSchema(connection);
-                    createWorkflowSchema(connection);
-                    statement.execute("PRAGMA user_version=3");
+                    if (version < 3) createWorkflowSchema(connection);
+                    if (version >= 2) migrateDialogue(connection);
+                    statement.execute("PRAGMA user_version=4");
                     validateSchema(connection, SCHEMA_VERSION);
                     verifyIntegrity(connection);
                     connection.commit();
-                } catch (SQLException error) {
+                } catch (SQLException | RuntimeException error) {
                     connection.rollback();
                     throw error;
                 } finally { connection.setAutoCommit(true); }
@@ -231,6 +239,54 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
         }
     }
 
+    /** Keyset chunks bound memory; deleting a row cannot invalidate a live scan cursor. */
+    private void migrateDialogue(Connection connection) throws SQLException {
+        String lastSource = ""; long lastLine = 0;
+        while (true) {
+            var chunk = new ArrayList<LegacyDialogue>();
+            try (var query = connection.prepareStatement("""
+                SELECT t.*,o.batch_id,o.file_ordinal FROM transcript_lines t
+                LEFT JOIN observation_owners o ON o.source_id=t.source_id AND o.source_line=t.source_line
+                WHERE t.source_id>? OR (t.source_id=? AND t.source_line>?)
+                ORDER BY t.source_id,t.source_line LIMIT 100
+                """)) {
+                query.setString(1, lastSource); query.setString(2, lastSource); query.setLong(3, lastLine);
+                try (var row = query.executeQuery()) {
+                    while (row.next()) chunk.add(new LegacyDialogue(row.getString("source_id"), row.getLong("source_line"),
+                        row.getString("text"), Channel.valueOf(row.getString("channel")), row.getString("batch_id"), row.getInt("file_ordinal")));
+                }
+            }
+            if (chunk.isEmpty()) break;
+            for (var line : chunk) {
+                var cleaned = normalizer.clean(line.text(), line.channel());
+                if (cleaned.disposition() == DialogueCleanup.Disposition.DIALOGUE) {
+                    try (var update = connection.prepareStatement("UPDATE transcript_lines SET text=? WHERE source_id=? AND source_line=?")) {
+                        update.setString(1, cleaned.text()); update.setString(2, line.sourceId()); update.setLong(3, line.line()); update.executeUpdate();
+                    }
+                } else {
+                    String counter = cleaned.disposition() == DialogueCleanup.Disposition.EXCLUDED ? "excluded" : "ignored";
+                    if (line.batchId() != null) {
+                        try (var update = connection.prepareStatement("UPDATE batch_files SET added=added-1," + counter + "=" + counter + "+1 WHERE batch_id=? AND ordinal=? AND added>0")) {
+                            update.setString(1, line.batchId()); update.setInt(2, line.ordinal());
+                            if (update.executeUpdate() != 1) throw new SQLException("Invalid legacy ownership contribution");
+                        }
+                    }
+                    try (var update = connection.prepareStatement("UPDATE capture_sources SET imported_lines=imported_lines-1," + counter + "_lines=" + counter + "_lines+1 WHERE id=? AND imported_lines>0")) {
+                        update.setString(1, line.sourceId());
+                        if (update.executeUpdate() != 1) throw new SQLException("Invalid legacy source contribution");
+                    }
+                    try (var delete = connection.prepareStatement("DELETE FROM transcript_lines WHERE source_id=? AND source_line=?")) {
+                        delete.setString(1, line.sourceId()); delete.setLong(2, line.line());
+                        if (delete.executeUpdate() != 1) throw new SQLException("Legacy dialogue changed during migration");
+                    }
+                }
+                lastSource = line.sourceId(); lastLine = line.line();
+            }
+        }
+        try (var statement = connection.createStatement()) { statement.execute("ALTER TABLE transcript_lines DROP COLUMN raw"); }
+    }
+    private record LegacyDialogue(String sourceId, long line, String text, Channel channel, String batchId, int ordinal) {}
+
     private static void verifyIntegrity(Connection connection) throws SQLException {
         try (var statement = connection.createStatement(); var result = statement.executeQuery("PRAGMA quick_check")) {
             if (!result.next() || !"ok".equals(result.getString(1)) || result.next())
@@ -246,7 +302,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
         try (var statement = connection.createStatement()) {
             var expected = new java.util.HashMap<String, String>();
             expected.put("journal_settings", SETTINGS_SQL);
-            if (version >= 2) { expected.put("capture_sources", SOURCES_SQL); expected.put("transcript_lines", TRANSCRIPT_SQL); }
+            if (version >= 2) { expected.put("capture_sources", SOURCES_SQL); expected.put("transcript_lines", version < 4 ? LEGACY_TRANSCRIPT_SQL : TRANSCRIPT_SQL); }
             if (version >= 3) {
                 expected.put("import_batches", BATCHES_SQL); expected.put("batch_files", BATCH_FILES_SQL);
                 expected.put("observation_owners", OWNERS_SQL); expected.put("removed_observations", REMOVED_SQL);
@@ -282,7 +338,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 }
             }
         }
-        if (version >= 2) validateCaptureData(connection, version >= 3);
+        if (version >= 2) validateCaptureData(connection, version >= 3, version >= 4);
         if (version >= 3) validateWorkflowData(connection);
     }
 
@@ -303,7 +359,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
         return normalized.toString();
     }
 
-    private static void validateCaptureData(Connection connection, boolean withRemoved) throws SQLException {
+    private void validateCaptureData(Connection connection, boolean withRemoved, boolean dialogueOnly) throws SQLException {
         try (var statement = connection.createStatement(); var sources = statement.executeQuery(
             "SELECT s.*, (SELECT count(*) FROM transcript_lines t WHERE t.source_id=s.id)"
                 + (withRemoved ? "+(SELECT count(*) FROM removed_observations r WHERE r.source_id=s.id)" : "")
@@ -324,8 +380,21 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
             "SELECT t.*, s.processed_lines FROM transcript_lines t JOIN capture_sources s ON s.id=t.source_id")) {
             while (lines.next()) {
                 try {
-                    var line = readLine(lines);
-                    if (line.sourceLine() > lines.getLong("processed_lines")) throw new SQLException("Transcript beyond saved checkpoint");
+                    long coordinate = lines.getLong("source_line");
+                    if (coordinate < 1 || coordinate > lines.getLong("processed_lines")) throw new SQLException("Transcript beyond saved checkpoint");
+                    if (dialogueOnly) {
+                        var line = readLine(lines);
+                        var cleaned = normalizer.clean(line.text(), line.channel());
+                        if (cleaned.disposition() != DialogueCleanup.Disposition.DIALOGUE || !line.text().equals(cleaned.text()))
+                            throw new SQLException("Stored dialogue is not canonical");
+                    } else {
+                        requireSourceId(lines.getString("source_id"));
+                        String text = lines.getString("text"), raw = lines.getString("raw");
+                        Channel channel = Channel.valueOf(lines.getString("channel"));
+                        if (text == null || raw == null || text.length() > 65536 || raw.length() > 65536
+                            || channel == Channel.PRIVATE_MESSAGE || channel == Channel.OOC)
+                            throw new SQLException("Invalid legacy transcript");
+                    }
                 } catch (IllegalArgumentException invalid) { throw new SQLException("Invalid stored transcript", invalid); }
             }
         }
@@ -343,7 +412,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
 
     private static TranscriptLine readLine(ResultSet row) throws SQLException {
         return new TranscriptLine(row.getString("source_id"), row.getLong("source_line"), row.getString("clock"),
-            row.getString("raw"), row.getString("text"), Channel.valueOf(row.getString("channel")), row.getString("observed_speaker"));
+            row.getString("text"), Channel.valueOf(row.getString("channel")), row.getString("observed_speaker"));
     }
 
     @Override public JournalSettings load() throws SQLException {
@@ -433,6 +502,9 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
             throw new IllegalArgumentException("Invalid import batch accounting");
         long previous = expectedProcessed;
         for (var line : entries) {
+            var canonical = normalizer.clean(line.text(), line.channel());
+            if (canonical.disposition() != DialogueCleanup.Disposition.DIALOGUE || !line.text().equals(canonical.text()))
+                throw new IllegalArgumentException("Only canonical dialogue may be appended");
             if (!sourceId.equals(line.sourceId()) || line.sourceLine() <= previous || line.sourceLine() > nextProcessed
                 || line.channel() == Channel.OOC || line.channel() == Channel.PRIVATE_MESSAGE)
                 throw new IllegalArgumentException("Invalid import batch coordinates or channel");
@@ -494,17 +566,16 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                     if (update.executeUpdate() != 1) throw new SQLException("Concurrent import checkpoint changed");
                 }
                 try (var insert = connection.prepareStatement("""
-                    INSERT INTO transcript_lines(source_id,source_line,clock,raw,text,channel,observed_speaker)
-                    VALUES (?,?,?,?,?,?,?)
+                    INSERT INTO transcript_lines(source_id,source_line,clock,text,channel,observed_speaker)
+                    VALUES (?,?,?,?,?,?)
                     """)) {
                     for (var line : entries) {
                         insert.setString(1, sourceId);
                         insert.setLong(2, line.sourceLine());
                         insert.setString(3, line.clock());
-                        insert.setString(4, line.raw());
-                        insert.setString(5, line.text());
-                        insert.setString(6, line.channel().name());
-                        insert.setString(7, line.observedSpeaker());
+                        insert.setString(4, line.text());
+                        insert.setString(5, line.channel().name());
+                        insert.setString(6, line.observedSpeaker());
                         insert.addBatch();
                     }
                     insert.executeBatch();

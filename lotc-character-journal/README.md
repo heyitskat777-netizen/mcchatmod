@@ -10,7 +10,7 @@ The user has accepted the Phase 1 foundation smoke test. Press **J** in a world
 to open the journal; its key is rebindable in Controls. Layout settings and backup
 creation remain available. Character identity/search is still future work.
 
-The `0.1.0-alpha.3` development build expands **Log import** for finished UTF-8 `.log`
+The `0.1.0-alpha.4` development build expands **Log import** for finished UTF-8 `.log`
 and `.log.gz` files, background validation, progress/cancellation, restart-safe
 checkpoints, repeat-import deduplication, and a transcript browser with literal
 text search. **Import all / dashboard** adds a read-only folder preview,
@@ -21,12 +21,17 @@ it starts disabled and persists your opt-in. See
 [the folder workflow checklist](docs/USER_TEST_BATCH_IMPORT.md), especially the
 undo and watch limits. Check STATUS.md for actual checks on this build.
 
-Each record retains its source fingerprint, original line/text,
-log clock, and channel uncertainty. Names remain unresolved unless supplied as
+The transcript is a scrollable conversation with fixed controls, a draggable bar,
+keyboard navigation and bounded 50-message pages. Technical provenance is available
+through Details. The database stores cleaned dialogue without redundant raw logger
+lines. Logger/thread tags, recognized leading RP tags, log clocks and color escapes
+are removed from the payload; quoted markers inside speech remain. Source
+fingerprints, line coordinates, clocks and channel uncertainty remain separate
+metadata. Names remain unresolved unless supplied as
 reviewed observations before import; no character or persona links are created.
 
 Settings live in `config/lotc-journal/journal.sqlite`. Backups are stored in
-`config/lotc-journal/backups/`. A schema migration creates a verified backup of an existing schema-1 or schema-2
+`config/lotc-journal/backups/`. A schema migration creates a verified backup of an existing schema-1, schema-2 or schema-3
 database before adding the new tables. Undo removes active batch-owned records
 while keeping source checkpoints and payload-free removal accounting; it does not
 restore them on repeat import or erase existing backups. Live capture, log tailing/rotation,

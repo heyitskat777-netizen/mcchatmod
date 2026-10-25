@@ -1,5 +1,66 @@
 # Current status — October 25, 2026
 
+## Alpha.4 refinement — dialogue-only persistence and scrolling
+
+Branch: `feature/dialogue-transcript`, based on `82884d4`. Kat reports **all alpha.3
+smoke tests OK**. The supplied screenshot identified the need for continuous
+scrolling and removal of logger wrappers from persistent dialogue. This accepts
+the previous smoke checklist; it does not establish measured real-log parser
+accuracy or accept the new alpha.4 refinement before user testing.
+
+Implemented: native conversation scroll pane (wheel, draggable bar, arrows,
+Page Up/Down, Home/End), bounded 50-message pages with wheel/keyboard transitions,
+responsive fixed controls and optional Details. The active transcript schema has
+one cleaned dialogue payload, with no raw logger-line column. Known logging/RP
+wrappers and formatting are stripped; quoted text and unknown bracketed actions
+are preserved. Known system notices/empty chat are ignored and PM/OOC remains
+excluded before/after cleanup. Provenance remains separate and never implies a
+reconstructed date, timezone, character identity or persona.
+
+Schema 4 backs up and validates schema 1/2/3 before migrating. Existing text is
+cleaned with the same injected parser normalizer. Removed noise/privacy records
+adjust imported/excluded/ignored source and owned-file counters atomically;
+processed positions, source IDs, original files and undo ownership stay intact.
+Runtime cleanup failures roll back earlier writes/schema/accounting. Old backups,
+SQLite history and original files may retain raw bytes; no secure-erasure claim.
+Policy 2 blocks incompatible policy-1 partial resumes; finish alpha.3 partial jobs
+before upgrading, or finish them using alpha.3 and its pre-upgrade backup first.
+Completed source IDs/classifications and explicit undo decisions remain stable.
+
+Native tools were available and three agents supplied initial API/design hazards,
+then **all three hit their usage limit before implementation/review completed**.
+The coordinator took over production, tests, migration/UI review and integration;
+no completed independent final review is claimed for this refinement.
+
+Verification so far:
+
+```sh
+./gradlew -PcoreOnly check --no-daemon --console=plain
+./gradlew check :fabric:build --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --run-id dialogue-smoke-1 --timeout 300
+```
+
+Core check passed in **32s** and integrated Fabric/package build passed in **56s**
+(30 tasks: 12 executed, 18 up-to-date). Fresh XML: **142 tests, 0 failures/errors/skips**
+(domain 1, application 9, parsing 56, ingestion 36, storage 40). All **14 runner
+contract tests passed**. Two initial compile errors from the API change were fixed
+(a package-private helper call and a stale raw-field test reference); no assertions
+were weakened. Tests now assert the requested clean-payload behavior instead of
+retaining the explicitly removed raw copy. Existing privacy expectations, including
+ambiguous Whisper as private, remain intact.
+
+The five-JVM `dialogue-smoke-1` run is **in progress**; compilation is not an in-game
+pass. It adds mandatory actual wheel/key/page-boundary/long-message/resize assertions
+and SQL checks for dialogue-only payloads/no raw column. Runtime results, screenshots,
+artifact identity and PR readiness will be recorded after execution. See
+[USER_TEST_DIALOGUE_SCROLL.md](USER_TEST_DIALOGUE_SCROLL.md) for the new user check. Logs:
+`/tmp/lotc-dialogue-core-3.log`, `/tmp/lotc-dialogue-integrated-1.log`,
+`/tmp/lotc-dialogue-runner-tests.log`, `/tmp/lotc-dialogue-client-1.log`.
+
+Live capture/reconciliation and measured private real-source acceptance remain
+unfinished Phase 2 work. The following sections are historical evidence.
+
 ## Phase 2a import workflow — automated checks passed; user test pending
 
 Branch: `feature/import-workflow`, based on `56fbd97`. Kat accepted all proposed

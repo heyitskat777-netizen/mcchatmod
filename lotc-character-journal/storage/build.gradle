@@ -1,2 +1,6 @@
-dependencies { api project(':domain'); implementation "org.xerial:sqlite-jdbc:${rootProject.sqlite_version}" }
+dependencies {
+    api project(':domain')
+    implementation "org.xerial:sqlite-jdbc:${rootProject.sqlite_version}"
+    testImplementation project(':parsing')
+}
 

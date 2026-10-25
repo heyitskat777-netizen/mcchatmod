@@ -55,6 +55,25 @@
 Kat accepted all these additions for Phase 2. Implementation and actual verification
 are tracked in STATUS.md; an accepted requirement is not itself an enabled feature. Character identities, persona memories and AI remain in later phases.
 
+## Accepted transcript refinement
+
+Kat accepted all alpha.3 smoke tests and requested a scrollable conversation and
+persistent dialogue without log wrappers. Alpha.4 uses a native scroll pane with
+bounded pages, fixed controls and optional technical Details. Schema 4 removes the
+redundant raw-line column and cleans existing text through the same injected parser
+normalizer used for imports, after a verified schema-1/2/3 backup. Source IDs,
+coordinates, clocks, policy history, ownership and undo remain separate metadata.
+Recognized PM/OOC is excluded; known system notices and blank chat are ignored.
+Unknown bracketed actions and quoted markers inside dialogue are preserved.
+
+Parser policy 2 refuses to resume policy-1 partial imports. Finish incomplete
+alpha.3 imports before upgrading, or use the pre-upgrade backup with alpha.3 to
+finish them, then upgrade again. Completed-source identities/classifications stay
+frozen; cleanup does not silently re-import removed records. Migration reclassifies
+removed non-dialogue observations into excluded/ignored counters atomically, keeping
+processed positions fixed. Existing backups/original log files can retain raw bytes;
+this is not a secure-erasure feature.
+
 ## Toolchain
 
 - Java 21 target and runtime.

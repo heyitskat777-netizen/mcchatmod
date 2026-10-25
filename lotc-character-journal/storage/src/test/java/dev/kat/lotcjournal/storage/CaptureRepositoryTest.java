@@ -18,14 +18,13 @@ class CaptureRepositoryTest {
     @TempDir Path directory;
 
     private SqliteJournalStore create(String name) throws Exception {
-        var store = new SqliteJournalStore(directory.resolve(name));
+        var store = new SqliteJournalStore(directory.resolve(name), new dev.kat.lotcjournal.parsing.DialogueTextNormalizer());
         store.initialize();
         return store;
     }
 
     private static TranscriptLine line(long coordinate, String text) {
-        return new TranscriptLine(ID, coordinate, "23:59:59", "synthetic raw " + text,
-            text, Channel.ROLEPLAY, "Synthetic Speaker");
+        return new TranscriptLine(ID, coordinate, "23:59:59", text, Channel.ROLEPLAY, "Synthetic Speaker");
     }
 
     private Path versionOne(String name) throws Exception {
@@ -40,7 +39,7 @@ class CaptureRepositoryTest {
 
     @Test void migrationBacksUpOwnedVersionOneBeforeCreatingCaptureTables() throws Exception {
         Path path = versionOne("owned.sqlite");
-        var store = new SqliteJournalStore(path);
+        var store = new SqliteJournalStore(path, new dev.kat.lotcjournal.parsing.DialogueTextNormalizer());
         store.initialize();
         assertTrue(store.load().compactLayout());
         assertEquals(List.of(), store.sources());
@@ -61,7 +60,7 @@ class CaptureRepositoryTest {
         try (var files = Files.list(directory.resolve("backups"))) { assertEquals(1, files.count(), "No repeated migration backup"); }
         Path restored = directory.resolve("restored-v1.sqlite");
         Files.copy(backups.getFirst(), restored);
-        var replacement = new SqliteJournalStore(restored);
+        var replacement = new SqliteJournalStore(restored, new dev.kat.lotcjournal.parsing.DialogueTextNormalizer());
         replacement.initialize();
         assertTrue(replacement.load().compactLayout());
     }
@@ -70,7 +69,7 @@ class CaptureRepositoryTest {
         Path path = versionOne("owned.sqlite");
         byte[] original = Files.readAllBytes(path);
         Files.writeString(directory.resolve("backups"), "synthetic obstruction");
-        assertThrows(java.nio.file.FileAlreadyExistsException.class, () -> new SqliteJournalStore(path).initialize());
+        assertThrows(java.nio.file.FileAlreadyExistsException.class, () -> new SqliteJournalStore(path, new dev.kat.lotcjournal.parsing.DialogueTextNormalizer()).initialize());
         assertArrayEquals(original, Files.readAllBytes(path));
     }
 
@@ -82,7 +81,7 @@ class CaptureRepositoryTest {
             statement.execute("PRAGMA user_version=2");
         }
         byte[] original = Files.readAllBytes(path);
-        assertThrows(SQLException.class, () -> new SqliteJournalStore(path).initialize());
+        assertThrows(SQLException.class, () -> new SqliteJournalStore(path, new dev.kat.lotcjournal.parsing.DialogueTextNormalizer()).initialize());
         assertArrayEquals(original, Files.readAllBytes(path));
         assertFalse(Files.exists(directory.resolve("backups")));
     }
@@ -132,7 +131,7 @@ class CaptureRepositoryTest {
         var first = store.appendBatch(ID, 0, 2, List.of(line(1, "same words")), 1, 0, false);
         assertEquals(2, first.processedLines());
         assertEquals(1, first.importedLines());
-        var reopened = new SqliteJournalStore(directory.resolve("journal.sqlite"));
+        var reopened = new SqliteJournalStore(directory.resolve("journal.sqlite"), new dev.kat.lotcjournal.parsing.DialogueTextNormalizer());
         reopened.initialize();
         assertEquals(first, reopened.progress(ID));
         reopened.appendBatch(ID, 2, 4, List.of(line(3, "same words")), 0, 1, true);
@@ -140,7 +139,7 @@ class CaptureRepositoryTest {
         assertEquals(2, page.total());
         assertEquals(List.of(1L, 3L), page.entries().stream().map(TranscriptLine::sourceLine).toList());
         assertEquals("23:59:59", page.entries().getFirst().clock());
-        assertEquals("synthetic raw same words", page.entries().getFirst().raw());
+        assertEquals("same words", page.entries().getFirst().text());
         assertTrue(reopened.progress(ID).complete());
     }
 
@@ -188,7 +187,7 @@ class CaptureRepositoryTest {
         assertEquals(0, store.transcript(ID, null, 0, 20).total());
         try (var connection = DriverManager.getConnection("jdbc:sqlite:" + directory.resolve("journal.sqlite"));
              var statement = connection.createStatement()) { statement.execute("DROP TRIGGER synthetic_failure"); }
-        var reopened = new SqliteJournalStore(directory.resolve("journal.sqlite"));
+        var reopened = new SqliteJournalStore(directory.resolve("journal.sqlite"), new dev.kat.lotcjournal.parsing.DialogueTextNormalizer());
         reopened.initialize();
         assertEquals(2, reopened.appendBatch(ID, 0, 2, List.of(line(1, "first"), line(2, "second")), 0, 0, true).importedLines());
     }
@@ -205,7 +204,7 @@ class CaptureRepositoryTest {
 
     @Test void excludedMessagesNeverEnterTranscriptAndSqlAlsoRejectsThem() throws Exception {
         for (var channel : List.of(Channel.OOC, Channel.PRIVATE_MESSAGE))
-            assertThrows(IllegalArgumentException.class, () -> new TranscriptLine(ID, 1, null, "synthetic excluded", "synthetic excluded", channel, null));
+            assertThrows(IllegalArgumentException.class, () -> new TranscriptLine(ID, 1, null, "synthetic excluded", channel, null));
         var store = create("journal.sqlite");
         store.beginSource(new ImportSource(ID, "synthetic.log", "plain", 2));
         store.appendBatch(ID, 0, 2, List.of(), 2, 0, true);
@@ -230,7 +229,7 @@ class CaptureRepositoryTest {
         assertThrows(IllegalArgumentException.class, () -> store.transcript(null, "", -1, 20));
         assertThrows(IllegalArgumentException.class, () -> store.transcript(null, "", 0, 201));
         Path backup = store.createBackup(directory.resolve("backups/imported.sqlite"));
-        var restored = new SqliteJournalStore(backup);
+        var restored = new SqliteJournalStore(backup, new dev.kat.lotcjournal.parsing.DialogueTextNormalizer());
         restored.initialize();
         assertEquals(store.progress(ID), restored.progress(ID));
         assertEquals(store.sources(), restored.sources());

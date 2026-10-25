@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class SqliteJournalStoreTest {
     @TempDir Path directory;
-    private SqliteJournalStore store(String file) { return new SqliteJournalStore(directory.resolve(file)); }
+    private SqliteJournalStore store(String file) { return new SqliteJournalStore(directory.resolve(file), new dev.kat.lotcjournal.parsing.DialogueTextNormalizer()); }
 
     @Test void restartPreservesSettingsAndInitializationIsIdempotent() throws Exception {
         var first = store("journal.sqlite");
@@ -31,7 +31,7 @@ class SqliteJournalStoreTest {
         original.save(new JournalSettings(false));
         Path restored = directory.resolve("restored.sqlite");
         Files.copy(backup, restored);
-        var replacement = new SqliteJournalStore(restored);
+        var replacement = new SqliteJournalStore(restored, new dev.kat.lotcjournal.parsing.DialogueTextNormalizer());
         replacement.initialize();
         assertTrue(replacement.load().compactLayout());
         assertFalse(original.load().compactLayout());
@@ -51,7 +51,7 @@ class SqliteJournalStoreTest {
         Path path = directory.resolve("future.sqlite");
         try (var c = DriverManager.getConnection("jdbc:sqlite:" + path);
              var s = c.createStatement()) { s.execute("PRAGMA user_version=999"); }
-        assertThrows(java.sql.SQLException.class, () -> new SqliteJournalStore(path).initialize());
+        assertThrows(java.sql.SQLException.class, () -> new SqliteJournalStore(path, new dev.kat.lotcjournal.parsing.DialogueTextNormalizer()).initialize());
         try (var c = DriverManager.getConnection("jdbc:sqlite:" + path);
              var s = c.createStatement(); var r = s.executeQuery("PRAGMA user_version")) {
             assertEquals(999, r.getInt(1));
@@ -62,14 +62,14 @@ class SqliteJournalStoreTest {
         Path path = directory.resolve("legacy.sqlite");
         try (var c = DriverManager.getConnection("jdbc:sqlite:" + path);
              var s = c.createStatement()) { s.execute("CREATE TABLE messages (raw TEXT)"); }
-        assertThrows(java.sql.SQLException.class, () -> new SqliteJournalStore(path).initialize());
+        assertThrows(java.sql.SQLException.class, () -> new SqliteJournalStore(path, new dev.kat.lotcjournal.parsing.DialogueTextNormalizer()).initialize());
     }
 
     @Test void corruptedDatabaseIsNotReplaced() throws Exception {
         Path path = directory.resolve("broken.sqlite");
         byte[] content = "not a database".getBytes(java.nio.charset.StandardCharsets.UTF_8);
         Files.write(path, content);
-        assertThrows(java.sql.SQLException.class, () -> new SqliteJournalStore(path).initialize());
+        assertThrows(java.sql.SQLException.class, () -> new SqliteJournalStore(path, new dev.kat.lotcjournal.parsing.DialogueTextNormalizer()).initialize());
         assertArrayEquals(content, Files.readAllBytes(path));
     }
 
@@ -82,7 +82,7 @@ class SqliteJournalStoreTest {
             statement.execute("PRAGMA user_version=1");
         }
         byte[] original = Files.readAllBytes(path);
-        assertThrows(java.sql.SQLException.class, () -> new SqliteJournalStore(path).initialize());
+        assertThrows(java.sql.SQLException.class, () -> new SqliteJournalStore(path, new dev.kat.lotcjournal.parsing.DialogueTextNormalizer()).initialize());
         assertArrayEquals(original, Files.readAllBytes(path));
     }
 
@@ -95,7 +95,7 @@ class SqliteJournalStoreTest {
             statement.execute("PRAGMA user_version=1");
         }
         byte[] original = Files.readAllBytes(path);
-        assertThrows(java.sql.SQLException.class, () -> new SqliteJournalStore(path).initialize());
+        assertThrows(java.sql.SQLException.class, () -> new SqliteJournalStore(path, new dev.kat.lotcjournal.parsing.DialogueTextNormalizer()).initialize());
         assertArrayEquals(original, Files.readAllBytes(path));
     }
 
@@ -130,7 +130,7 @@ class SqliteJournalStoreTest {
         byte[] bytes = "synthetic corrupt SQLite source".getBytes(java.nio.charset.StandardCharsets.UTF_8);
         Files.write(database, bytes);
         Path destination = directory.resolve("backups/incomplete.sqlite");
-        var corrupt = new SqliteJournalStore(database);
+        var corrupt = new SqliteJournalStore(database, new dev.kat.lotcjournal.parsing.DialogueTextNormalizer());
         assertThrows(java.sql.SQLException.class, () -> corrupt.createBackup(destination));
         assertFalse(Files.exists(destination), "Failed backup must not be presented as a saved snapshot");
         assertArrayEquals(bytes, Files.readAllBytes(database));
@@ -165,7 +165,7 @@ class SqliteJournalStoreTest {
         } finally {
             release.countDown();
         }
-        var saved = new SqliteJournalStore(target);
+        var saved = new SqliteJournalStore(target, new dev.kat.lotcjournal.parsing.DialogueTextNormalizer());
         saved.initialize();
         assertTrue(saved.load().compactLayout());
         original.save(new JournalSettings(false));
