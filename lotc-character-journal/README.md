@@ -32,11 +32,13 @@ reviewed observations before import; no character or persona links are created.
 
 Settings live in `config/lotc-journal/journal.sqlite`. Backups are stored in
 `config/lotc-journal/backups/`. A schema migration creates a verified backup of an existing schema-1, schema-2 or schema-3
-database before adding the new tables. Undo removes active batch-owned records
+database before upgrading the journal. Undo removes active batch-owned records
 while keeping source checkpoints and payload-free removal accounting; it does not
 restore them on repeat import or erase existing backups. Live capture, log tailing/rotation,
 historical/live overlap reconciliation, nearby recognition, and AI are not enabled.
-See [docs/USER_TEST_IMPORT.md](docs/USER_TEST_IMPORT.md) for limits, recognized
+See [docs/USER_TEST_DIALOGUE_SCROLL.md](docs/USER_TEST_DIALOGUE_SCROLL.md) before
+upgrading, especially if alpha.3 imports are incomplete.
+See [docs/USER_TEST_IMPORT.md](docs/USER_TEST_IMPORT.md) for historical limits and recognized
 privacy exclusions, and the real-log test still required to advance Phase 2.
 
 ## Start this project in Codex on your computer

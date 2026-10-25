@@ -13,8 +13,8 @@ keep a journal backup before trying migration or undo with valuable data.
    finish, the duplicate should add no records, and the corrupt file should fail
    independently. Retry failed should preserve successful records and counts.
 3. Open View transcripts. Cycle All sources / individual sources and channels;
-   try UNKNOWN review and literal search. Check original source line/clock/raw
-   text. Uncertain channels remain review-only; no date, timezone or character
+   try UNKNOWN review and literal search. Check cleaned dialogue and source
+   line/clock in Details (alpha.4 no longer stores a raw logger copy). Uncertain channels remain review-only; no date, timezone or character
    identity is invented. Check PM/OOC exclusions privately against the source.
 4. Restart and inspect saved reports. A cancelled/interrupted batch must wait for
    an explicit retry; it must not silently start scanning. Changed approved files
