@@ -4,6 +4,9 @@
 
 - Fabric and Minecraft 1.21.11.
 - In-game interface; historical and live capture; compressed log imports.
+- Phase 2 includes **Import all logs**: a user-selected folder, bounded background
+  file queue, existing deduplication/privacy/recovery rules, batch progress and
+  per-file outcomes. This is planned; the current importer handles one file at a time.
 - Previous character-database import, preserving source provenance and decisions.
 - Separate persona memory views; observed account/persona information when available.
 - Manual character creation, renaming, notes, and corrections.
@@ -36,6 +39,20 @@
 - Performance budgets measured against real imports.
 - Provider selected first; subscription authorization and inference feasibility.
 - Permissibility and exact scope of nearby-character recognition.
+
+## Phase 2 candidate additions — proposals, not accepted requirements
+
+- Import preview: eligible files, estimated workload and already known sources
+  before committing a batch; cancel any expensive preview work safely.
+- A durable import dashboard with per-file errors and retry-failed controls.
+- Transcript filters across sources/channels and review-only unknown formats,
+  retaining uncertainty about dates and timezones.
+- Undo newly added records from a selected batch without touching original log
+  files or previously imported data; define provenance/backup behavior first.
+- An opt-in watched log folder after the live-capture/rotation model is verified.
+
+These suggestions do not enable features or expand the current implementation by
+themselves. Character identities, persona memories and AI remain in later phases.
 
 ## Toolchain
 

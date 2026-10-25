@@ -1,5 +1,15 @@
 # Current status — October 24, 2026
 
+## Accepted next Phase 2 requirement — Import all logs
+
+The user requested folder-wide import as part of Phase 2. It is now included in
+the milestone plan and decisions with bounded queueing, existing source deduplication,
+privacy exclusions, cancellation/recovery, per-file failure isolation and a batch
+report. **It is not implemented or enabled in the current single-file importer.**
+Optional adjacent improvements are recorded separately as proposals in DECISIONS.md;
+they are not silently treated as accepted scope. This update changes documentation
+only; it makes no new runtime or test-pass claim.
+
 ## Current continuation — Phase 1 accepted; Phase 2a import verified, real-log review pending
 
 The user reports the requested tests completed with no issues: resizing, rebinding,
