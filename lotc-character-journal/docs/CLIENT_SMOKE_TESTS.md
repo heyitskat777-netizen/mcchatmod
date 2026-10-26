@@ -146,3 +146,14 @@ restricted memory screen. Reader JVMs verify persisted decisions before mutation
 The shutdown witness checks live and identity workers as well as prior journal I/O.
 Actual subprocess kill/halt recovery, queue/disk/rotation faults and persona SQL
 isolation are core tests; screenshots or successful compilation do not replace them.
+
+## Alpha.8 character browsing regression
+
+`character-browser` is mandatory in writers/readers for development and installed
+JARs. It creates without immediately choosing a persona, returns to visible saved
+rows, searches alias/no-result/clear states, opens the non-first saved UUID, keeps
+an edited draft through 640x480 resize, saves and activates that exact persona,
+then reopens/filters/selects another character and checks no duplicate identities
+or personas were created. Reader JVMs reuse persisted records. Existing Assign and
+persona memory assertions follow. Lossless full-size/escaped alias form handling
+is separately covered by application tests. Native schema and parser policy stay 8/4.

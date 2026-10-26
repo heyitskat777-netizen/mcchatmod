@@ -1,5 +1,73 @@
 # Current status — October 26, 2026
 
+## Alpha.8 — visible character browser and native database scope
+
+Branch `feature/character-browser`, based on `209a31d` (alpha.7). Kat reports live
+recording seems OK, but saved characters cannot be reviewed/listed and Use as
+persona stays gray, blocking message-assignment testing. This records limited
+live-recording user acceptance; persona user acceptance remains pending this fix.
+
+Root cause: IdentityScreen hid saved rows behind a selector also named New
+character, reset its index on every load/reopen/resize, and could race two save
+refresh callbacks. The alpha.7 create→immediate persona smoke did not exercise
+reopening existing characters. Alpha.8 replaces it with a visible searchable,
+paged saved-character list and a separate detail editor keyed by immutable UUID.
+Saved rows open labeled name/alias/account/notes fields with persona activation
+available. New/dirty drafts explain the required explicit Save. Drafts survive
+resize; one tokened list refresh preserves previous results on errors and exposes
+Refresh / retry. Selecting/saving never relies on a changing filtered row index.
+
+Review also found valid 200×96 aliases could be truncated by the old 4096-character
+field, and literal semicolons/backslashes were not round-tripped. The bounded
+40,000-character lossless escaped form preserves those native domain values and
+rejects malformed edits without persisting partial data.
+
+Kat **withdraws the unrelated previous-database importer requirement**. No format
+clarification is pending; prior alpha.7 references below are historical and
+superseded. AGENTS/DECISIONS/MILESTONES/README/checklists now require one mod-created
+`config/lotc-journal/journal.sqlite`. This already contains imported historical
+and live observations, characters, aliases, personas, favorites and assignments.
+Schema **8** and parser policy **4** stay unchanged: no reset, replacement database
+or new schema migration is needed, and existing native records are preserved.
+Historical .log/.log.gz imports populate the same archive; identity confirmation
+remains explicit. Native schema upgrade tests/backups stay; the obsolete external
+legacy discovery document is removed.
+
+Native agents were available: build changed only the version to alpha.8 and
+confirmed same-DB/schema/package preservation; verification added four meaningful
+application alias-integrity cases and proposed real reopen/selection regressions;
+review independently inspected the actual browser/editor/alias changes and found
+no blocking issue. Coordinator owns UI/client assertions/docs and integrated runs.
+No agent ran shared Gradle checks or committed files.
+
+Coordinator verification:
+
+```sh
+./gradlew check :fabric:build --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --run-id character-browser-1 --timeout 300
+```
+
+Integrated check/build **passed in 1m18s**, 30 tasks (18 executed/12 up-to-date).
+Fresh XML: **257 tests, 0 failures/errors/skips** — domain 4, application 16,
+parsing 116, ingestion 56, storage 65. All **14 Python runner tests passed** in
+1.142s. Full-size alias sets, delimiter/backslash/Unicode and whitespace preservation,
+invalid encodings and explicit replacement/clearing are covered by the new cases.
+Toolchain/metadata and all six packaged runtime JAR checks passed. No failed
+compile or repair cycle is claimed at this point.
+
+Actual five-JVM `character-browser-1` is **running**, not yet a runtime pass.
+Mandatory `character-browser` creates/saves without immediately using a persona,
+returns to visible rows, filters by shared alias and empty query, opens the second
+saved UUID, resizes an edited draft at 640x480, saves/activates that exact persona,
+reopens/filters the first character and checks repeated activation creates no extra
+identities/personas. Reader JVMs reuse saved records, followed by unchanged actual
+Assign/memory-scope assertions. Existing live capture/privacy/journal-reimport/
+favorites/import/undo/watch/keybind/backup/shutdown gates remain mandatory.
+Logs: `/tmp/lotc-browser-integrated-1.log`, `/tmp/lotc-browser-runner-tests.log`,
+`/tmp/lotc-browser-client-1.log`. New user checklist:
+[USER_TEST_CHARACTER_BROWSER.md](USER_TEST_CHARACTER_BROWSER.md).
+
 ## Alpha.7 — individual selection, live capture and manual identities/personas
 
 Branch `feature/live-capture`, based on `f906858` (alpha.6). Kat reports the favorite

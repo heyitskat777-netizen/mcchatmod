@@ -434,26 +434,16 @@ public final class JournalClientGameTest implements FabricClientGameTest {
             check(Arrays.equals(originalJournal,Files.readAllBytes(selectedJournal)),"Journal format import must leave selected original untouched");
             context.clickScreenButton("Done");waitForJournal(context);
         });
+        exerciseCharacterBrowser(context,report,database);
         report.stage("identity-personas",60_000,()->{
             context.runOnClient(client -> search(client.screen).setValue(""));
             if(report.phase().equals("read")) {
                 check(sqlCount(database,"SELECT count(*) FROM character_identities")==2,"Manual identities must survive restart");
                 check(sqlCount(database,"SELECT count(*) FROM personas")==2,"Distinct persona choices must survive restart");
                 check(sqlCount(database,"SELECT count(*) FROM memory_assignments")==2,"Explicit memory assignments must survive restart");
-            } else {
-                context.clickScreenButton("Characters");
-                context.waitFor(client -> isScreen(client.screen,"dev.kat.lotcjournal.fabric.IdentityScreen"),WAIT_TICKS);
-                for(String label:List.of("Synthetic Persona A","Synthetic Persona B")) {
-                    context.clickScreenButton("New character");
-                    context.runOnClient(client -> {var fields=editBoxes(client.screen);fields.get(1).setValue(label);fields.get(2).setValue("Shared Alias");fields.get(4).setValue("Synthetic manual archive note");});
-                    context.clickScreenButton("Save character");
-                    context.waitFor(client -> screenButtonActive(client.screen,"Use as persona"),WAIT_TICKS);
-                    context.clickScreenButton("Use as persona");
-                    context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Persona selected"),WAIT_TICKS);
-                }
-                check(sqlCount(database,"SELECT count(*) FROM character_identities")==2,"Shared aliases must not silently merge distinct identities");
-                context.clickScreenButton("Done");waitForJournal(context);
             }
+            check(sqlCount(database,"SELECT count(*) FROM character_identities")==2,"Saved character selection must not create extra identities");
+            check(sqlCount(database,"SELECT count(*) FROM personas")==2,"Reusing saved characters must reuse existing personas");
             context.clickScreenButton("View transcripts");
             context.waitFor(client -> isScreen(client.screen,TRANSCRIPT_SCREEN),WAIT_TICKS);
             context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("Synthetic Visitor waves."));
@@ -486,6 +476,84 @@ public final class JournalClientGameTest implements FabricClientGameTest {
             context.clickScreenButton("Done");context.clickScreenButton("Done");waitForJournal(context);
         });
     }
+    private void exerciseCharacterBrowser(ClientGameTestContext context,SmokeReport report,Path database) throws Exception {
+        report.stage("character-browser",60_000,()->{
+            context.runOnClient(client -> search(client.screen).setValue(""));
+            context.clickScreenButton("Characters");
+            waitForCharacterList(context,report.phase().equals("read")?2:0);
+            if(!report.phase().equals("read")) {
+                for(String label:List.of("Synthetic Persona A","Synthetic Persona B")) {
+                    context.clickScreenButton("New character");
+                    context.waitFor(client -> isScreen(client.screen,"dev.kat.lotcjournal.fabric.CharacterDetailScreen"),WAIT_TICKS);
+                    context.runOnClient(client -> {
+                        check(!screenButtonActive(client.screen,"Use as persona"),"Unsaved draft must explain why persona activation is unavailable");
+                        var fields=editBoxes(client.screen);check(fields.size()==4,"Character detail needs clearly identified editable fields");
+                        fields.get(0).setValue(label);fields.get(1).setValue("Shared Alias;Literal\\;Alias;Path\\\\Alias");fields.get(3).setValue("Synthetic manual archive note");
+                    });
+                    context.clickScreenButton("Save character");
+                    context.waitFor(client -> screenButtonActive(client.screen,"Use as persona"),WAIT_TICKS);
+                    context.clickScreenButton("Done");waitForCharacterList(context,label.endsWith("A")?1:2);
+                }
+                check(sqlCount(database,"SELECT count(*) FROM personas")==0,"Saving alone must not silently choose a persona");
+            }
+            report.screenshot(context.takeScreenshot("lotc-character-list-"+report.phase()));
+            context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("Shared Alias"));waitForCharacterList(context,2);
+            context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("NO_SYNTHETIC_CHARACTER_MATCH"));waitForCharacterList(context,0);
+            context.clickScreenButton("Clear search");waitForCharacterList(context,2);
+            String secondId=sqlText(database,"SELECT id FROM character_identities WHERE name='Synthetic Persona B'");
+            openCharacter(context,"Synthetic Persona B",secondId);
+            context.runOnClient(client -> {
+                check(screenButtonActive(client.screen,"Use as persona"),"Existing non-first character must be usable after list selection");
+                check(editBoxes(client.screen).get(1).getValue().contains("Literal\\;Alias"),"Literal semicolon alias must survive opening saved details");
+                var notes=editBoxes(client.screen).get(3);notes.setValue(notes.getValue()+" "+report.phase());
+            });
+            context.waitFor(client -> !screenButtonActive(client.screen,"Use as persona"),WAIT_TICKS);
+            List<String> draft=context.computeOnClient(client -> editBoxes(client.screen).stream().map(EditBox::getValue).toList());
+            context.getInput().resizeWindow(640,480);
+            context.waitFor(client -> client.screen.width==320&&client.screen.height==240,WAIT_TICKS);
+            context.runOnClient(client -> {
+                check(client.screen.getNarrationMessage().getString().contains(secondId),"Resize must keep exact selected UUID");
+                check(editBoxes(client.screen).stream().map(EditBox::getValue).toList().equals(draft),"Resize must preserve the full draft, aliases and notes");
+                check(!screenButtonActive(client.screen,"Use as persona"),"Dirty saved draft needs explicit save, not an accidental different character");
+                check(client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).allMatch(button -> button.getY()>=0&&button.getBottom()<=client.screen.height),"Detail controls must stay onscreen");
+            });
+            report.screenshot(context.takeScreenshot("lotc-character-detail-small-"+report.phase()));
+            context.getInput().resizeWindow(854,480);
+            context.waitFor(client -> client.screen.width==427&&client.screen.height==240,WAIT_TICKS);
+            context.clickScreenButton("Save character");context.waitFor(client -> screenButtonActive(client.screen,"Use as persona"),WAIT_TICKS);
+            context.clickScreenButton("Use as persona");
+            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Persona selected"),WAIT_TICKS);
+            check(secondId.equals(sqlText(database,"SELECT p.identity_id FROM personas p JOIN identity_state s ON s.active_persona=p.id WHERE s.id=1")),"Use as persona must activate the selected second character, not the first list row");
+            check(draft.get(3).equals(sqlText(database,"SELECT notes FROM character_identities WHERE id='"+secondId+"'")),"Saved draft must update only its exact UUID");
+            context.clickScreenButton("Done");waitForCharacterList(context,2);
+            context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("Synthetic Persona A"));waitForCharacterList(context,1);
+            String firstId=sqlText(database,"SELECT id FROM character_identities WHERE name='Synthetic Persona A'");
+            openCharacter(context,"Synthetic Persona A",firstId);
+            context.clickScreenButton("Use as persona");context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Persona selected"),WAIT_TICKS);
+            check(firstId.equals(sqlText(database,"SELECT p.identity_id FROM personas p JOIN identity_state s ON s.active_persona=p.id WHERE s.id=1")),"Filtered saved selection must activate its own persona");
+            context.clickScreenButton("Done");waitForCharacterList(context,1);
+            context.clickScreenButton("Done");waitForJournal(context);
+            context.clickScreenButton("Characters");waitForCharacterList(context,2);
+            openCharacter(context,"Synthetic Persona B",secondId);
+            context.runOnClient(client -> check(screenButtonActive(client.screen,"Use as persona"),"Reopening saved detail after leaving the browser must not reset it to an unsaved New character"));
+            check(sqlCount(database,"SELECT count(*) FROM character_identities")==2,"Browsing, editing and reusing personas must not duplicate identities");
+            check(sqlCount(database,"SELECT count(*) FROM personas")==2,"Repeated Use as persona must reuse existing persona records");
+            context.clickScreenButton("Done");waitForCharacterList(context,2);context.clickScreenButton("Done");waitForJournal(context);
+        });
+    }
+    private static void waitForCharacterList(ClientGameTestContext context,int count) {
+        context.waitFor(client -> isScreen(client.screen,"dev.kat.lotcjournal.fabric.IdentityScreen")
+            && client.screen.getNarrationMessage().getString().contains(". "+count+" saved characters.")
+            && screenButtonActive(client.screen,"Refresh / retry"),WAIT_TICKS);
+    }
+    private static void openCharacter(ClientGameTestContext context,String name,String id) {
+        String label=context.computeOnClient(client -> client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast)
+            .map(button -> button.getMessage().getString()).filter(text -> text.contains(name+" #"+id.substring(0,8))).findFirst().orElseThrow(()->new AssertionError("Saved character row must be visible")));
+        context.clickScreenButton(label);
+        context.waitFor(client -> isScreen(client.screen,"dev.kat.lotcjournal.fabric.CharacterDetailScreen")
+            && client.screen.getNarrationMessage().getString().contains(id),WAIT_TICKS);
+    }
+
     private static String sqlText(Path database,String sql) throws Exception {
         try(var c=DriverManager.getConnection("jdbc:sqlite:"+database.toUri()+"?mode=ro");var q=c.createStatement();var r=q.executeQuery(sql)){check(r.next(),"Expected metadata row");return r.getString(1);}
     }

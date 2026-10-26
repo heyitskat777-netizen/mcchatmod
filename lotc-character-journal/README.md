@@ -10,7 +10,7 @@ The user has accepted the Phase 1 foundation smoke test. Press **J** in a world
 to open the journal; its key is rebindable in Controls. Layout settings and backup
 creation remain available. Characters now supports explicit names, aliases and notes; persona memories require manual message assignment.
 
-The `0.1.0-alpha.7` development build expands **Log import** for finished UTF-8 `.log`
+The `0.1.0-alpha.8` development build expands **Log import** for finished UTF-8 `.log`
 and `.log.gz` files, background validation, progress/cancellation, restart-safe
 checkpoints, repeat-import deduplication, and a transcript browser with literal
 text search. **Import all / dashboard** adds a read-only folder preview,
@@ -56,19 +56,28 @@ Only acknowledged forced writes receive the crash-recovery guarantee; messages
 still in memory when the process dies can be lost. See the actual verification
 limits and restore behavior in STATUS.md.
 
-**Characters** manages manual archive names/aliases/notes/account observations.
+**Characters** shows a searchable, paged list of saved characters. Click a row to
+review its name, aliases, notes and account observation. **New character** opens a
+separate draft; Save character persists it. **Use as persona** is available for a
+saved, unchanged character; unsaved drafts/edits explain why saving is required.
+Closing/reopening, search and resizing retain the exact saved identity and drafts.
+Aliases support escaped semicolons/backslashes and the full native field bounds.
 **Use as persona** creates/selects a persona; **Assign** on an individually selected
 message asks for its owning persona, identity or unassigned choice, and whether it
 is a reference or speaker attribution. **Persona memories** shows only explicit
 assignments. Shared archive Transcripts remains separate. Review identity links
 supports explicit confirmation and persistent undo; duplicate names/aliases never
-merge automatically. The old character-database importer needs its actual schema.
+merge automatically. Everything uses the mod-created `config/lotc-journal/journal.sqlite`: `.log` and
+`.log.gz` imports and live recording populate its dialogue archive; character
+records and confirmed assignments use the same database. Existing records remain
+in place. An unrelated old-database importer is no longer planned.
 
 Native `.lotc-chat.jsonl` repeat imports reuse event IDs. Ordinary `.log` overlaps
 with live events remain separate when their identity cannot be proved; genuine
 repeated text is not discarded. Nearby recognition, scenes, AI and favorite-driven
 extraction remain future work.
-See [docs/USER_TEST_LIVE_PERSONAS.md](docs/USER_TEST_LIVE_PERSONAS.md) for alpha.7
+See [docs/USER_TEST_CHARACTER_BROWSER.md](docs/USER_TEST_CHARACTER_BROWSER.md) for alpha.8
+and [docs/USER_TEST_LIVE_PERSONAS.md](docs/USER_TEST_LIVE_PERSONAS.md) for alpha.7
 and the policy-4 partial-import upgrade requirement.
 See [docs/USER_TEST_ROLEPLAY_FILTER.md](docs/USER_TEST_ROLEPLAY_FILTER.md) before
 upgrading, especially if alpha.4 imports are incomplete.

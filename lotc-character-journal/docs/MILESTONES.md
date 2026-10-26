@@ -14,7 +14,7 @@ Suggested test durations below are observation windows, not development estimate
 ## Requirements carried forward
 
 - Import historical logs and compressed archives; ingest new dialogue during play.
-- Import the previous character database and confirmed corrections after inspecting its actual format.
+- Populate the single mod-created journal.sqlite through supported historical log imports and live recording; review characters and confirmed corrections in the same database.
 - Separate account observations, character identities, names, aliases, and knowledge held by each of your personas.
 - Allow manual records, annotations, identity corrections, scene edits, and participant corrections.
 - AI can suggest aliases, scene refinements, summaries, relationship changes, and unfinished business. Linking or merging identities requires confirmation.
@@ -43,7 +43,7 @@ Suggested test durations below are observation windows, not development estimate
 **Deliverables**
 
 - Confirm the exact Minecraft version, loader, Java requirements, operating system, launcher, and existing mod list.
-- Inspect representative real logs and the current prior-database schema before designing import mappings.
+- Inspect representative real logs and validate the native mod database/import contracts.
 - Establish a small manually checked sample set: ordinary conversation, crowded room, persona switch, midnight rollover, multipart emote, duplicate-looking messages, ambiguous alias, PM, and OOC.
 - Document module responsibilities and allowed dependencies. Keep Minecraft integration, persistence, and provider-specific code outside the domain logic.
 - Prototype only the uncertain integrations needed to establish feasibility: chat metadata and subscription authorization, if selected.
@@ -51,7 +51,7 @@ Suggested test durations below are observation windows, not development estimate
 
 **Developer verification**
 
-Each sample has expected channel, speaker observation, timing confidence, and source location. Unknown information stays unknown. No previous-database identity or schema is assumed from conversation descriptions.
+Each sample has expected channel, speaker observation, timing confidence, and source location. Unknown information stays unknown. Native source observations stay separate from confirmed identity decisions.
 
 Subscription access is a feasibility check, not a dependency of the journal. An unavailable connection is recorded clearly and does not silently select another billing method.
 
@@ -209,15 +209,17 @@ The reviewed sample has no unexplained missing or duplicated eligible messages. 
 Alpha.7 implements **3a — manual identities and persona assignments**: archive
 names/aliases/notes/account observations, explicit persona selection, per-message
 confirmation/unassigned, isolated memory views and reversible link overlays.
-**3b — previous-database import** remains pending inspection of its actual schema.
+**3b — character browsing and review** adds a visible searchable/paged list, saved
+character detail/editing, and reliable persona activation after reopen/search/resize.
+The unrelated previous-database importer was withdrawn by Kat; it is not a blocker.
 **3c — private multi-persona acceptance** requires Kat's user checks. Do not mark
-all Phase 3 complete merely because 3a's automated tests pass. Live capture leaves
+all Phase 3 complete merely because automated tests pass. Live capture leaves
 knowledge unassigned until explicitly reviewed; selecting a persona is not proof
 that every archived or received event belongs to that persona.
 
 **Deliverables**
 
-Character pages, manual notes, account observations, aliases, persona selection, reversible identity decisions, and the prior-database importer with a dry-run report. Back up before applying an existing-database import or schema migration.
+Character list/detail pages, manual notes, account observations, aliases, persona selection and reversible identity decisions in the single native mod database. Historical log imports and live recording populate that same archive. Preserve existing native records and back up before native schema migrations; an unrelated old-database importer is out of scope.
 
 Future favorites, scene participants and extracted records must use these identity
 contracts. The user can explicitly tie a bookmark/record to a specific identity;
@@ -233,7 +235,7 @@ Test identical names belonging to different characters, multiple personas on one
 
 **Kat's test — two of your personas and several known characters**
 
-Switch personas, inspect which memories appear, deliberately make a wrong identity link, undo it, and verify the affected history. Inspect the legacy import's corrections and unresolved conflicts.
+Switch personas, inspect which memories appear, deliberately make a wrong identity link, undo it, and verify the affected history. Review saved characters after reopening, searching and resizing; verify imported dialogue and character assignments share the native database.
 
 **Exit criterion**
 

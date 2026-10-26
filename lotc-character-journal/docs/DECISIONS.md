@@ -7,7 +7,7 @@
 - Phase 2 includes **Import all logs**: a user-selected folder, bounded background
   file queue, existing deduplication/privacy/recovery rules, batch progress and
   per-file outcomes. The accepted workflow includes preview, a durable dashboard, retry and safe undo.
-- Previous character-database import, preserving source provenance and decisions.
+- One mod-created journal.sqlite for imported logs, live observations, characters, favorites and persona memories; no unrelated old-database importer.
 - Separate persona memory views; observed account/persona information when available.
 - Manual character creation, renaming, notes, and corrections.
 - AI-suggested aliases, with confirmation required for identity linking/merging.
@@ -149,9 +149,27 @@ durable daily journals and a manual identity/persona slice are implemented; see
 STATUS.md for actual checks. Persona notes in the shared archive are administrative
 metadata, not automatically shared persona knowledge. Memory searches/favorites
 are restricted to explicit owning-persona assignments. No account/persona link is
-inferred from operational notices. Prior database format remains unknown.
+inferred from operational notices. The then-pending previous-database importer
+was withdrawn by Kat in the character-browser follow-up below.
 
 Comma-titled persona replies now belong to policy 4. Older partial jobs must finish
 under their original policy. Backed-up schema 8 migration cleans uncertain legacy
 noise and retains previously proven roleplay/undo/source identities. Exact wording
 alone cannot safely discard every historically mislabeled server notice.
+
+## Character browser and native database — accepted October 26
+
+Kat reports live recording seems OK, but cannot review/list saved characters and
+Use as persona stays disabled. Alpha.8 adds a visible searchable/paged list and a
+separate saved-character editor, preserves exact UUID/drafts across refresh/resize,
+and enables persona activation only for a persisted, unchanged record. This fixes
+an existing discoverability/selection bug; the earlier create-and-immediately-use
+smoke did not prove reopening a saved character worked.
+
+Kat explicitly withdraws the previous-database importer requirement. It is removed
+from active milestones and no schema/file clarification is pending. The native
+schema 8 already stores all mod data in config/lotc-journal/journal.sqlite; retain
+it and its records. Historical .log/.log.gz import and live recording populate the
+same dialogue archive, with manual character records and explicit identity/persona
+confirmation alongside it. No reset or replacement database is needed. Native
+schema migrations/backups remain necessary and distinct from a legacy importer.

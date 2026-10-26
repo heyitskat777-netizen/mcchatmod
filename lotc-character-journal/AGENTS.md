@@ -100,7 +100,10 @@ Target Minecraft 1.21.11, Fabric, Java 21. Do not silently upgrade Minecraft.
 - Identity merges require user confirmation and must be reversible.
 - AI defaults off. Never silently fall back to a paid provider.
 - Never run unattended tests against the live LoTC server.
-- Do not overwrite the previous chat database. Import it read-only in a later phase.
+- Use the mod-created `config/lotc-journal/journal.sqlite` as the single native
+  database for imports, live observations, characters, favorites and persona memories.
+  Preserve its records and native schema-upgrade backups. An unrelated legacy
+  character-database importer is out of scope at Kat's request.
 
 Do not claim missing features are implemented. User testing is a distinct status.
 

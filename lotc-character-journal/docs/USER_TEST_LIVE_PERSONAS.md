@@ -45,7 +45,7 @@ completed sources remain stable. The game does not need any AI provider.
     chat. Copy both owned journals and the database for profile recovery. Do not
     test a restore against your sole working copy or while Minecraft is running.
 
-The previous character-database importer needs the real format/schema; do not
-assume the current module has imported it. Scenes, participant/location grouping,
+The unrelated previous-database importer was withdrawn in alpha.8. Imports,
+characters and memories use the same native journal.sqlite; no old format is needed. Scenes, participant/location grouping,
 AI and item/name/task generation remain later milestones. Report build/version,
 source/line IDs and expected result without publishing private dialogue.
