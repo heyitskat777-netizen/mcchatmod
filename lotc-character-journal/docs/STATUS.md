@@ -1,4 +1,169 @@
-# Current status — October 25, 2026
+# Current status — October 26, 2026
+
+## Alpha.7 — individual selection, live capture and manual identities/personas
+
+Branch `feature/live-capture`, based on `f906858` (alpha.6). Kat reports the favorite
+selection looks like the whole log and authorizes continuing Phases 2b and 3.
+Main remains the reviewed baseline. Alpha.6 acceptance is **qualified by this UI
+finding**, not recorded as an unqualified user pass.
+
+Native delegation: build agent implemented new live domain/ingestion and initial
+schema 7, then handed SqliteJournalStore to the coordinator for additive schema 8.
+Verification agent supplied 32 new tests, including real child-process death and
+restart. Review agent independently checked row coordinates, durability, privacy,
+threading, imports and identity isolation without edits. Verification/review agents
+then reached usage limits; coordinator owns remaining fixes, final integration,
+client assertions and verification. No completed independent final approval of all
+coordinator follow-ups is claimed.
+
+Implemented scope:
+
+- Individual-message row highlighting, neutral pane border, selected-message status
+  and no implicit first-row selection. Static inspection found coordinate inversion
+  correct; the old test only clicked the first row, so it could not establish
+  arbitrary-row behavior. New real-input regression clicks a wrapped third message
+  after scrolling and checks exact selected coordinate and favorite SQL state.
+- Automatic received CHAT and non-overlay GAME capture on world connection, with
+  persisted pause/resume, bounded startup/worker queues and visible pending/saved/
+  error/overflow state. No outbound commands, action bars or canceled packets are
+  claimed captured. Filtering precedes any payload persistence.
+- Stable session/sequence observations in the same transcript/favorites database,
+  explicitly separate from immutable historical content-hash sources. Dated
+  `<gameDir>/lotc-journal/live/<date>/<session>-<segment>.lotc-chat.jsonl` authority
+  files and readable `.chat.txt` views. Force precedes SQLite commit and SAVED
+  acknowledgment. Restart replays forced events idempotently; incomplete owned
+  tails are repaired and incomplete headers quarantined, never unrelated files.
+- Date/size rotation, strict UTF-8/versioned records, concurrent-root ownership,
+  per-message disk/queue failures, derived-view rebuild, and read-only explicit
+  import of a complete closed **single-segment** journal through Log import.
+  Rotated multi-segment sessions recover automatically from their owned root;
+  selecting one arbitrary rotated segment is not a supported standalone import.
+- Character CRUD (name/aliases/notes/manual account observation), explicit owning
+  persona creation/selection, message identity/reference vs speaker confirmation,
+  unassigned/skip, clearing/reassigning, persistent audit coordinates, and reversible
+  merge overlays with persisted decision review/undo. Shared archive administration
+  is visibly separate from persona memories. Memory views require exact persona
+  assignments and preserve source dialogue/favorites. Capture does not silently
+  attribute all dialogue to the selected persona; new memories remain explicitly
+  assigned. AI, scenes and extraction remain disabled/unimplemented.
+- A screenshot exposed comma-title persona notices missing from the exact template.
+  Policy **4** recognizes those unattributed replies and preserves quoted/proven RP.
+  Schema **8** verifies/backups older schemas, cleans uncertain older notices with
+  favorite cascade and source/ownership accounting, and adds live/identity tables.
+  Existing ROLEPLAY rows are deliberately not forcibly deleted from wording alone.
+  The screenshot alone does not prove their original stored classification.
+
+Upgrade: finish alpha.5/alpha.6 **partial policy-3** jobs with their matching old mod
+before installing alpha.7, or use its matching pre-upgrade backup first. Completed
+source identity/policy/undo remains stable. Older backups and originals retain
+prior bytes. Backups are SQLite snapshots: retaining newer authoritative live
+journals while restoring an older database replays newer forced chat events. Copy
+both owned journal and database directories for a full profile recovery plan.
+
+Milestone limits: Phase 2b's live recording/replay is implemented; ambiguous overlap
+with ordinary historical `.log` files remains distinct provenance, not a claimed
+exact cross-format deduplication. Native event IDs reconcile native journal repeats;
+text/time equality never collapses repeated emotes. Private-source accuracy and
+measured real-play performance remain Phase 2c. Phase 3's manual identity/persona
+slice is implemented; the **previous-database importer is pending its actual
+schema/file**. A clarification is pending; no prior format or automatic merge is
+invented. Future exports/statistics/AI must use the same persona boundary when
+implemented; no absent analysis feature is claimed tested.
+
+Coordinator commands:
+
+```sh
+./gradlew -PcoreOnly check --no-daemon --console=plain
+./gradlew check :fabric:build --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --run-id live-persona-smoke-1 --timeout 300
+```
+
+The first core attempt failed compilation because a new child-JVM test referenced
+SQLite's runtime-only driver at compile time. It was corrected to discover the
+runtime class location with Class.forName; no production dependency or assertion
+was weakened. Integrated pass 2 succeeded in **2m18s**. Following narrow titled-name
+and invalid-user-import refinements, integrated pass 3 succeeded in **1m59s**.
+Fresh XML: **253 tests, 0 failures/errors/skips** — domain 4, application 12,
+parsing 116, ingestion 56, storage 65. All **14 Python runner tests passed** in
+1.282s. New cases include two real forcibly killed/halted JVM/restart scenarios,
+force-before-SQL replay, acknowledged receipt persistence, repeated events, Unicode,
+partial tails/headers, view rebuild, concurrent ownership, rollover/queue/disk
+failure, privacy before disk, genuine old-schema backup/cleanup and strict persona
+isolation/merge reversal/assignment rollback. These prove process-crash behavior;
+power-loss or drive-controller guarantees are not inferred.
+
+The final integrated check/build passed in **1m40s** (30 tasks: 8 executed, 22
+up-to-date). The initial five-JVM `live-persona-smoke-1` attempt is recorded below, followed by
+the complete passing repaired run. Mandatory stages now include arbitrary-row selection, live startup,
+native CHAT/GAME + overlay/privacy exclusions, paused restart, closed-format UI
+reimport, character/persona UI, explicit two-message assignments and persona memory
+views, while retaining prior import/undo/watch/scroll/backup/keybind/world/shutdown
+assertions. Identity and live worker termination are included in shutdown witnesses.
+First runtime attempt **failed** in development reader (128.5s), reproduced both
+locally and in GitHub Actions run 40381310444. Preflight (145.4s) and development
+writer (150.3s, 20 assertion stages) passed; packaged phases were not attempted
+after the reader failure. The old SQL RP assertion counted all stored sources,
+including the writer's three valid live RP events, while still expecting the 52
+historical fixture rows. The visible historical query was already correct.
+Repair cycle 1 scopes the SQL counts to that exact historical source, retains
+52 RP / 10 UNKNOWN expectations, and leaves the separate exact-three-live-event
+assertions intact. This is a test-scope repair, not an ignored application failure
+or reduced criterion. Failed evidence remains under `live-persona-smoke-1`.
+Repair check/build passed in **38s** (30 tasks: 3 executed, 27 up-to-date).
+Fresh local **`live-persona-smoke-2` passed all five phases**, exit 0, no timeouts
+or report errors, with body-completion and successful worker/shutdown witnesses:
+
+| Local phase | Elapsed | Result |
+| --- | --- | --- |
+| Graphics preflight | 152.3s | Passed |
+| Development writer | 175.6s | Passed |
+| Development reader | 158.6s | Passed |
+| Packaged writer | 149.3s | Passed |
+| Packaged reader | 129.6s | Passed |
+
+Writers passed **20 assertion stages**, readers **21**. Evidence is preserved in
+`fabric/build/client-smoke/evidence/live-persona-smoke-2/` (JSON/XML/screenshots,
+safe logs, launch and shutdown witnesses). Existing software-renderer/audio/Realms
+warnings were nonfatal only because every mandatory assertion, witness and exit
+passed. No timeout or assertion was relaxed. Actual row-selection and normal main-screen screenshots
+were inspected: only the intended third wrapped message is highlighted/starred,
+with adjacent rows and fixed controls separate. User/modpack acceptance is pending.
+
+GitHub Actions **passed verify and the complete five-JVM client suite** on repaired
+functional commit `cd7ffc5`:
+[run 40382340353](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40382340353).
+
+| CI phase | Elapsed | Result |
+| --- | --- | --- |
+| Graphics preflight | 40.9s | Passed |
+| Development writer | 45.2s | Passed |
+| Development reader | 42.3s | Passed |
+| Packaged writer | 51.9s | Passed |
+| Packaged reader | 41.6s | Passed |
+
+No assertion/timeout was reduced. First failed run is preserved; one runtime
+repair cycle addressed source scoping. Native CHAT/GAME capture, privacy/overlay
+exclusions before both file formats, exact event-ID journal reimport, explicit
+character/persona UI and restricted memory views all passed the runtime gates.
+These are isolated local-world tests, not unattended LoTC server or real-modpack
+accuracy evidence.
+
+[PR #8](https://github.com/heyitskat777-netizen/mcchatmod/pull/8) stacks on favorites
+PR #7 and is ready for review; main remains unchanged. A documentation-only final
+commit receives its normal CI rerun; the successful functional commit/run above
+is identified precisely. Alpha.7
+[CI installable artifact ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40382340353/artifacts/12679930033).
+Install the non-`-sources` JAR. Local artifact:
+`fabric/build/libs/lotc-character-journal-0.1.0-alpha.7.jar`, 14,637,604 bytes;
+SHA-256 `9bfea22c60a93dde7048a959394cfa2e00e20dd607ab1d75cb957503bf37133e`.
+CI evidence includes screenshots/logs/JSON/XML. Direct cloud artifact retrieval was
+blocked by the blob host (403); CI's phase logs and preserved local evidence were
+available for verification. Logs: `/tmp/lotc-live-core-1.log`,
+`/tmp/lotc-live-integrated-2.log`, `/tmp/lotc-live-integrated-3.log`,
+`/tmp/lotc-live-integrated-final.log`, `/tmp/lotc-live-runner-tests.log`,
+`/tmp/lotc-live-client-1.log`, `/tmp/lotc-live-client-2.log`. User checklist:
+[USER_TEST_LIVE_PERSONAS.md](USER_TEST_LIVE_PERSONAS.md).
 
 ## Alpha.6 — favorites, transcript access and accepted next milestones
 

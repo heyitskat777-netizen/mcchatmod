@@ -1,6 +1,7 @@
 package dev.kat.lotcjournal.fabric;
 
 import dev.kat.lotcjournal.domain.Channel;
+import dev.kat.lotcjournal.application.IdentityService;
 import dev.kat.lotcjournal.domain.MessageReference;
 import java.util.Set;
 import dev.kat.lotcjournal.domain.ImportSource;
@@ -27,6 +28,8 @@ public final class TranscriptScreen extends Screen {
     private static final int PAGE_SIZE = 50;
     private static final Channel[] CHANNELS = {null, Channel.ROLEPLAY, Channel.UNKNOWN};
     private final Screen parent;
+    private final IdentityService identities;
+    private final String personaId;
     private final LogImportService importer;
     private final List<ImportSource> sources;
     private int sourceIndex = -1, channelIndex, offset;
@@ -36,12 +39,16 @@ public final class TranscriptScreen extends Screen {
     private Set<MessageReference> favorites = Set.of();
     private MessageReference selected;
     private List<TranscriptLine> entries = List.of();
-    private Button source, channel, previous, next, detail, favoritesFilter, favorite;
+    private Button source, channel, previous, next, detail, favoritesFilter, favorite, assign;
     private DialoguePane pane;
 
     public TranscriptScreen(Screen parent, LogImportService importer, List<ImportSource> sources) {
-        super(Component.literal("Imported transcripts"));
+        this(parent, importer, sources, null, null);
+    }
+    public TranscriptScreen(Screen parent, LogImportService importer, List<ImportSource> sources, IdentityService identities, String personaId) {
+        super(Component.literal(personaId == null ? "Transcripts — shared archive" : "Persona memories — assigned only"));
         this.parent = parent; this.importer = importer; this.sources = List.copyOf(sources);
+        this.identities = identities; this.personaId = personaId;
     }
     @Override protected void init() {
         int panel = Math.min(600, width - 32), left = (width - panel) / 2;
@@ -51,7 +58,10 @@ public final class TranscriptScreen extends Screen {
         }).bounds(left, 24, panel / 2 - 4, 20).build());
         channel = addRenderableWidget(Button.builder(Component.literal("Channel: ALL"), button -> {
             channelIndex = (channelIndex + 1) % CHANNELS.length; offset = 0; load(false);
-        }).bounds(left + panel / 2 + 4, 24, panel / 2 - 4, 20).build());
+        }).bounds(left + panel / 2 + 4, 24, identities == null ? panel / 2 - 4 : panel / 2 - 70, 20).build());
+        if (identities != null) assign = addRenderableWidget(Button.builder(Component.literal("Assign"), button ->
+            minecraft.setScreen(new MemoryAssignmentScreen(this, identities, selected)))
+            .bounds(left + panel - 62, 24, 62, 20).build());
         var search = new EditBox(font, left, 49, panel - 212, 20, Component.literal("Transcript search"));
         search.setMaxLength(200); search.setHint(Component.literal("Search dialogue")); search.setValue(query);
         search.setResponder(value -> { query = value; offset = 0; load(false); }); addRenderableWidget(search);
@@ -101,15 +111,17 @@ public final class TranscriptScreen extends Screen {
                 if (details) pane.setEntries(entries, pane.anchor(), false);
             }
         }));
-        importer.transcript(sourceId, query, CHANNELS[channelIndex], favoritesOnly, offset, PAGE_SIZE)
-            .whenComplete((page, error) -> minecraft.execute(() -> {
+        var pageRequest = personaId == null
+            ? importer.transcript(sourceId, query, CHANNELS[channelIndex], favoritesOnly, offset, PAGE_SIZE)
+            : identities.transcript(personaId, query, CHANNELS[channelIndex], favoritesOnly, offset, PAGE_SIZE);
+        pageRequest.whenComplete((page, error) -> minecraft.execute(() -> {
                 if (sequence != request) return;
                 pending = false;
                 if (error != null) { total = 0; notice = "Dialogue unavailable; retry when storage is ready"; }
                 else {
                     total = page.total(); entries = page.entries(); favorites = page.favorites();
                     if (entries.stream().noneMatch(entry -> MessageReference.of(entry).equals(selected)))
-                        selected = entries.isEmpty() ? null : MessageReference.of(entries.getFirst());
+                        selected = null;
                     if (entries.isEmpty() && offset > 0 && total > 0) {
                         offset = (int) Math.min(Integer.MAX_VALUE - PAGE_SIZE, ((total - 1) / PAGE_SIZE) * PAGE_SIZE);
                         load(true); return;
@@ -137,23 +149,24 @@ public final class TranscriptScreen extends Screen {
     @Override public void tick() {
         previous.active = !pending && offset > 0;
         next.active = !pending && offset + (long) entries.size() < total && offset <= Integer.MAX_VALUE - PAGE_SIZE;
-        source.active = !pending && !sources.isEmpty(); channel.active = !pending;
+        source.active = !pending && !sources.isEmpty() && personaId == null; channel.active = !pending;
         detail.active = !pending;
         favoritesFilter.active = !pending;
         favoritesFilter.setMessage(Component.literal(favoritesOnly ? "Favorites: Only" : "Favorites: All"));
         favorite.active = !pending && selected != null && pane.selectedVisible();
+        if (assign != null) assign.active = favorite.active;
         favorite.setTooltip(selected == null ? null : Tooltip.create(Component.literal("Selected source "
             + selected.sourceId().substring(0, 12) + ", line " + selected.sourceLine() + ". Click a dialogue message to select it; F or its star toggles favorite.")));
         favorite.setMessage(Component.literal(selected != null && favorites.contains(selected) ? "Unfavorite selected" : "Favorite selected"));
         channel.setMessage(Component.literal("Channel: " + (CHANNELS[channelIndex] == null ? "ALL" : CHANNELS[channelIndex])));
-        source.setMessage(Component.literal(sourceIndex < 0 ? "All sources (click to filter)" : font.plainSubstrByWidth(
+        source.setMessage(Component.literal(personaId != null ? "Persona-scoped memories" : sourceIndex < 0 ? "All sources (click to filter)" : font.plainSubstrByWidth(
             sources.get(sourceIndex).label(), source.getWidth() - 12)));
     }
     @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
         super.render(graphics, mouseX, mouseY, delta);
         graphics.drawCenteredString(font, title, width / 2, 8, 0xFFE5E7EB);
         int panel = Math.min(600, width - 32), left = (width - panel) / 2;
-        String status = pending || entries.isEmpty() || !notice.isBlank() ? notice : "Messages " + (offset + 1) + "–" + (offset + entries.size())
+        String status = pending || entries.isEmpty() || !notice.isBlank() ? notice : (selected == null ? "Click an individual message | " : "Selected message " + selected.sourceLine() + " | ") + "Messages " + (offset + 1) + "–" + (offset + entries.size())
             + " of " + total + " | Scroll or drag the bar";
         graphics.drawString(font, font.plainSubstrByWidth(status, panel), left, 100, 0xFF93C5FD);
     }
@@ -224,12 +237,20 @@ public final class TranscriptScreen extends Screen {
             }
             return result.toString();
         }
+        @Override protected void renderBackground(GuiGraphics graphics) {
+            graphics.fill(getX() - 1, getY() - 1, getRight() + 1, getBottom() + 1, 0xFF66758A);
+            graphics.fill(getX(), getY(), getRight(), getBottom(), 0xFF05080D);
+        }
         @Override protected int getInnerHeight() { return innerHeight; }
         @Override protected double scrollRate() { return 24; }
         @Override protected void renderContents(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
             for (var row : rows) {
                 if (row.y() > scrollAmount() + getHeight() || row.y() + row.height() < scrollAmount()) continue;
                 if (row.entry() < entries.size()) {
+                    boolean chosen = MessageReference.of(entries.get(row.entry())).equals(selected);
+                    graphics.fill(getInnerLeft() - 1, getInnerTop() + row.y() - 2,
+                        getRight() - innerPadding(), getInnerTop() + row.y() + row.height() - 4,
+                        chosen ? 0xFF244B70 : 0xFF101720);
                     int markerY = getInnerTop() + row.y();
                     if (withinContentAreaTopBottom(markerY, markerY + 10)) graphics.drawString(font,
                         favorites.contains(MessageReference.of(entries.get(row.entry()))) ? "[*]" : "[ ]",

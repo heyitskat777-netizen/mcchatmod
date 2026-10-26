@@ -8,6 +8,9 @@ import dev.kat.lotcjournal.domain.BatchSummary;
 import dev.kat.lotcjournal.domain.CaptureRepository;
 import dev.kat.lotcjournal.domain.Channel;
 import dev.kat.lotcjournal.domain.MessageReference;
+import dev.kat.lotcjournal.domain.LiveRepository;
+import dev.kat.lotcjournal.domain.LiveSession;
+import dev.kat.lotcjournal.domain.LiveEvent;
 import dev.kat.lotcjournal.domain.DialogueNormalizer;
 import dev.kat.lotcjournal.domain.DialogueCleanup;
 import dev.kat.lotcjournal.domain.ImportProgress;
@@ -36,8 +39,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 
 /** SQLite adapter. Callers use short-lived connections only on journal/import worker threads. */
-public final class SqliteJournalStore implements SettingsRepository, BackupService, CaptureRepository, BatchRepository {
-    private static final int SCHEMA_VERSION = 6;
+public final class SqliteJournalStore implements SettingsRepository, BackupService, CaptureRepository, BatchRepository, LiveRepository {
+    private static final int SCHEMA_VERSION = 8;
     private static final String SETTINGS_SQL = "CREATE TABLE journal_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)";
     private static final String SOURCES_SQL = """
         CREATE TABLE capture_sources (
@@ -144,6 +147,25 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
           FOREIGN KEY(source_id,source_line) REFERENCES transcript_lines(source_id,source_line) ON DELETE CASCADE
         )
         """;
+    private static final String LIVE_SESSIONS_SQL = """
+        CREATE TABLE live_sessions (
+          source_id TEXT PRIMARY KEY NOT NULL REFERENCES capture_sources(id),
+          started_at TEXT NOT NULL,
+          zone_id TEXT NOT NULL,
+          closed INTEGER NOT NULL DEFAULT 0 CHECK(closed IN (0,1))
+        )
+        """;
+    private static final String LIVE_EVENTS_SQL = """
+        CREATE TABLE live_events (
+          source_id TEXT NOT NULL REFERENCES live_sessions(source_id),
+          sequence INTEGER NOT NULL CHECK(typeof(sequence)='integer' AND sequence>0),
+          received_at TEXT NOT NULL,
+          offset_seconds INTEGER NOT NULL CHECK(typeof(offset_seconds)='integer' AND offset_seconds BETWEEN -64800 AND 64800),
+          kind TEXT NOT NULL CHECK(kind IN ('CHAT','GAME')),
+          fingerprint TEXT NOT NULL CHECK(length(fingerprint)=64 AND fingerprint NOT GLOB '*[^0-9a-f]*'),
+          PRIMARY KEY(source_id,sequence)
+        )
+        """;
     private final Path database;
     private boolean startupRecovered;
     private final DialogueNormalizer normalizer;
@@ -184,7 +206,10 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                     createCaptureSchema(connection);
                     createWorkflowSchema(connection);
                     statement.execute(FAVORITES_SQL);
-                    statement.execute("PRAGMA user_version=6");
+                    statement.execute(LIVE_SESSIONS_SQL);
+                    statement.execute(LIVE_EVENTS_SQL);
+                    IdentitySchema.create(connection);
+                    statement.execute("PRAGMA user_version=8");
                     validateSchema(connection, SCHEMA_VERSION);
                     verifyIntegrity(connection);
                     connection.commit();
@@ -197,7 +222,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 verifyIntegrity(connection);
                 // No schema or WAL mutation until a complete, owned old-version snapshot exists.
                 Path backup = createBackup(database.getParent().resolve("backups").resolve(
-                    database.getFileName() + "-pre-schema6-" + UUID.randomUUID() + ".sqlite"));
+                    database.getFileName() + "-pre-schema8-" + UUID.randomUUID() + ".sqlite"));
                 try (var saved = DriverManager.getConnection("jdbc:sqlite:" + backup)) {
                     validateSchema(saved, version);
                     verifyIntegrity(saved);
@@ -206,9 +231,14 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 try {
                     if (version == 1) createCaptureSchema(connection);
                     if (version < 3) createWorkflowSchema(connection);
-                    if (version >= 2 && version < 5) migrateDialogue(connection, version);
-                    statement.execute(FAVORITES_SQL);
-                    statement.execute("PRAGMA user_version=6");
+                    if (version >= 2 && version < 8) migrateDialogue(connection, version);
+                    if (version < 6) statement.execute(FAVORITES_SQL);
+                    if (version < 7) {
+                        statement.execute(LIVE_SESSIONS_SQL);
+                        statement.execute(LIVE_EVENTS_SQL);
+                    }
+                    IdentitySchema.create(connection);
+                    statement.execute("PRAGMA user_version=8");
                     validateSchema(connection, SCHEMA_VERSION);
                     verifyIntegrity(connection);
                     connection.commit();
@@ -323,6 +353,11 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 expected.put("watch_attempts", WATCH_ATTEMPTS_SQL);
             }
             if (version >= 6) expected.put("message_favorites", FAVORITES_SQL);
+            if (version >= 7) {
+                expected.put("live_sessions", LIVE_SESSIONS_SQL);
+                expected.put("live_events", LIVE_EVENTS_SQL);
+            }
+            if (version >= 8) expected.putAll(IdentitySchema.TABLES);
             int found = 0;
             try (var objects = statement.executeQuery(
                 "SELECT name, type, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'")) {
@@ -352,8 +387,10 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 }
             }
         }
-        if (version >= 2) validateCaptureData(connection, version >= 3, version >= 4, version >= 5);
+        if (version >= 2) validateCaptureData(connection, version >= 3, version >= 4, version >= 8);
         if (version >= 3) validateWorkflowData(connection);
+        if (version >= 7) validateLiveData(connection);
+        if (version >= 8) IdentitySchema.validate(connection);
     }
 
     private static String normalizeSql(String sql) {
@@ -458,12 +495,165 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
         }
     }
 
+    private static void rejectLiveSource(Connection connection, String sourceId) throws SQLException {
+        try (var query = connection.prepareStatement("SELECT 1 FROM live_sessions WHERE source_id=?")) {
+            query.setString(1, sourceId);
+            try (var row = query.executeQuery()) {
+                if (row.next()) throw new SQLException("Live provenance cannot be mutated by historical import");
+            }
+        }
+    }
+
+    @Override public void beginLiveSession(LiveSession session) throws SQLException {
+        Objects.requireNonNull(session);
+        try (var connection = open()) {
+            connection.setAutoCommit(false);
+            try {
+                try (var insert = connection.prepareStatement("INSERT INTO capture_sources(id,label,format,total_lines,policy_fingerprint) VALUES (?,?,'plain',0,?) ON CONFLICT(id) DO NOTHING")) {
+                    insert.setString(1, session.id());
+                    insert.setString(2, "Live " + session.startedAt().atZone(java.time.ZoneId.of(session.zoneId())).toLocalDate() + " " + session.id().substring(0, 12));
+                    insert.setString(3, session.policyFingerprint());
+                    int created = insert.executeUpdate();
+                    if (created == 1) {
+                        try (var live = connection.prepareStatement("INSERT INTO live_sessions(source_id,started_at,zone_id) VALUES (?,?,?)")) {
+                            live.setString(1, session.id()); live.setString(2, session.startedAt().toString()); live.setString(3, session.zoneId()); live.executeUpdate();
+                        }
+                    }
+                }
+                requireLiveSession(connection, session);
+                connection.commit();
+            } catch (SQLException | RuntimeException failure) { connection.rollback(); throw failure; }
+        }
+    }
+
+    private static void requireLiveSession(Connection connection, LiveSession session) throws SQLException {
+        try (var query = connection.prepareStatement("SELECT l.*,s.policy_fingerprint FROM live_sessions l JOIN capture_sources s ON s.id=l.source_id WHERE l.source_id=?")) {
+            query.setString(1, session.id());
+            try (var row = query.executeQuery()) {
+                if (!row.next() || !session.startedAt().toString().equals(row.getString("started_at"))
+                    || !session.zoneId().equals(row.getString("zone_id")) || !session.policyFingerprint().equals(row.getString("policy_fingerprint")))
+                    throw new SQLException("Conflicting live session provenance");
+            }
+        }
+    }
+
+    @Override public boolean appendLiveEvent(LiveSession session, LiveEvent event) throws SQLException {
+        Objects.requireNonNull(session); Objects.requireNonNull(event);
+        if (!session.id().equals(event.sessionId())
+            || java.time.ZoneId.of(session.zoneId()).getRules().getOffset(event.receivedAt()).getTotalSeconds() != event.offsetSeconds())
+            throw new IllegalArgumentException("Conflicting live event provenance");
+        try (var connection = open()) {
+            connection.setAutoCommit(false);
+            try {
+                try (var lock = connection.prepareStatement("UPDATE live_sessions SET closed=closed WHERE source_id=?")) {
+                    lock.setString(1, session.id());
+                    if (lock.executeUpdate() != 1) throw new SQLException("Unknown live session");
+                }
+                requireLiveSession(connection, session);
+                try (var old = connection.prepareStatement("SELECT fingerprint FROM live_events WHERE source_id=? AND sequence=?")) {
+                    old.setString(1, session.id()); old.setLong(2, event.sequence());
+                    try (var row = old.executeQuery()) {
+                        if (row.next()) {
+                            if (!event.fingerprint().equals(row.getString(1))) throw new SQLException("Conflicting live replay receipt");
+                            connection.commit(); return false;
+                        }
+                    }
+                }
+                var canonical = normalizer.clean(event.text(), event.channel());
+                if (canonical.disposition() != DialogueCleanup.Disposition.DIALOGUE || !event.text().equals(canonical.text()))
+                    throw new IllegalArgumentException("Only canonical live dialogue may be persisted");
+                try (var advance = connection.prepareStatement("UPDATE capture_sources SET total_lines=?,processed_lines=?,imported_lines=imported_lines+1 WHERE id=? AND processed_lines=? AND complete=0")) {
+                    advance.setLong(1, event.sequence()); advance.setLong(2, event.sequence()); advance.setString(3, session.id()); advance.setLong(4, event.sequence() - 1);
+                    if (advance.executeUpdate() != 1) throw new SQLException("Live checkpoint is closed or out of sequence");
+                }
+                try (var insert = connection.prepareStatement("INSERT INTO transcript_lines(source_id,source_line,clock,text,channel,observed_speaker) VALUES (?,?,?,?,?,?)")) {
+                    insert.setString(1, session.id()); insert.setLong(2, event.sequence());
+                    insert.setString(3, event.receivedAt().atOffset(java.time.ZoneOffset.ofTotalSeconds(event.offsetSeconds())).toLocalTime().withNano(0).toString());
+                    insert.setString(4, event.text()); insert.setString(5, event.channel().name()); insert.setString(6, event.observedSpeaker()); insert.executeUpdate();
+                }
+                try (var receipt = connection.prepareStatement("INSERT INTO live_events VALUES (?,?,?,?,?,?)")) {
+                    receipt.setString(1, session.id()); receipt.setLong(2, event.sequence()); receipt.setString(3, event.receivedAt().toString());
+                    receipt.setInt(4, event.offsetSeconds()); receipt.setString(5, event.kind().name()); receipt.setString(6, event.fingerprint()); receipt.executeUpdate();
+                }
+                connection.commit(); return true;
+            } catch (SQLException | RuntimeException failure) { connection.rollback(); throw failure; }
+        }
+    }
+
+    @Override public void closeLiveSession(String sessionId) throws SQLException {
+        requireSourceId(sessionId);
+        try (var connection = open()) {
+            connection.setAutoCommit(false);
+            try {
+                try (var update = connection.prepareStatement("UPDATE live_sessions SET closed=1 WHERE source_id=?")) {
+                    update.setString(1, sessionId);
+                    if (update.executeUpdate() != 1) throw new SQLException("Unknown live session");
+                }
+                try (var update = connection.prepareStatement("UPDATE capture_sources SET complete=1 WHERE id=?")) { update.setString(1, sessionId); update.executeUpdate(); }
+                connection.commit();
+            } catch (SQLException | RuntimeException failure) { connection.rollback(); throw failure; }
+        }
+    }
+
+    @Override public boolean livePaused() throws SQLException {
+        try (var connection = open(); var query = connection.createStatement(); var row = query.executeQuery("SELECT value FROM journal_settings WHERE key='live_paused'")) {
+            if (!row.next()) return false;
+            String value = row.getString(1);
+            if (!"true".equals(value) && !"false".equals(value)) throw new SQLException("Invalid live pause setting");
+            return Boolean.parseBoolean(value);
+        }
+    }
+
+    @Override public void saveLivePaused(boolean paused) throws SQLException {
+        try (var connection = open(); var update = connection.prepareStatement("INSERT INTO journal_settings(key,value) VALUES ('live_paused',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")) {
+            update.setString(1, Boolean.toString(paused)); update.executeUpdate();
+        }
+    }
+
+    private static void validateLiveData(Connection connection) throws SQLException {
+        try (var query = connection.createStatement(); var rows = query.executeQuery("SELECT l.*,s.*,(SELECT count(*) FROM live_events e WHERE e.source_id=l.source_id) AS receipts,(SELECT max(sequence) FROM live_events e WHERE e.source_id=l.source_id) AS last_event FROM live_sessions l JOIN capture_sources s ON s.id=l.source_id")) {
+            while (rows.next()) {
+                try {
+                    new LiveSession(rows.getString("source_id"), Instant.parse(rows.getString("started_at")), rows.getString("zone_id"), rows.getString("policy_fingerprint"));
+                    if (rows.getLong("total_lines") != rows.getLong("processed_lines")
+                        || rows.getLong("processed_lines") != rows.getLong("receipts") || rows.getLong("processed_lines") != rows.getLong("last_event")
+                        || rows.getBoolean("closed") != rows.getBoolean("complete") || !"plain".equals(rows.getString("format")))
+                        throw new SQLException("Inconsistent live checkpoint");
+                } catch (RuntimeException invalid) { throw new SQLException("Invalid live session metadata", invalid); }
+            }
+        }
+        try (var query = connection.createStatement(); var rows = query.executeQuery("SELECT e.*,l.zone_id,t.text,t.channel,t.observed_speaker,t.clock FROM live_events e JOIN live_sessions l ON l.source_id=e.source_id LEFT JOIN transcript_lines t ON t.source_id=e.source_id AND t.source_line=e.sequence")) {
+            while (rows.next()) {
+                try {
+                    requireSourceId(rows.getString("fingerprint")); LiveEvent.Kind.valueOf(rows.getString("kind"));
+                    var receivedAt = Instant.parse(rows.getString("received_at"));
+                    if (java.time.ZoneId.of(rows.getString("zone_id")).getRules().getOffset(receivedAt).getTotalSeconds() != rows.getInt("offset_seconds"))
+                        throw new SQLException("Invalid live receipt offset");
+                    // Receipts remain after an explicit payload removal; active payloads
+                    // must still match their acknowledged immutable event and clock.
+                    if (rows.getString("text") != null) {
+                        var event = new LiveEvent(rows.getString("source_id"), rows.getLong("sequence"), receivedAt,
+                            rows.getInt("offset_seconds"), LiveEvent.Kind.valueOf(rows.getString("kind")), rows.getString("text"),
+                            Channel.valueOf(rows.getString("channel")), rows.getString("observed_speaker"));
+                        String clock = receivedAt.atOffset(java.time.ZoneOffset.ofTotalSeconds(event.offsetSeconds())).toLocalTime().withNano(0).toString();
+                        if (!event.fingerprint().equals(rows.getString("fingerprint")) || !clock.equals(rows.getString("clock")))
+                            throw new SQLException("Live observation differs from its durable receipt");
+                    }
+                } catch (RuntimeException invalid) { throw new SQLException("Invalid live event receipt", invalid); }
+            }
+        }
+        try (var query = connection.createStatement(); var rows = query.executeQuery("SELECT value FROM journal_settings WHERE key='live_paused'")) {
+            if (rows.next() && !Set.of("true", "false").contains(rows.getString(1))) throw new SQLException("Invalid live pause setting");
+        }
+    }
+
     @Override public ImportProgress beginSource(ImportSource source) throws SQLException {
         Objects.requireNonNull(source, "source");
         try (var connection = open(); var insert = connection.prepareStatement(
             "INSERT INTO capture_sources(id,label,format,total_lines,policy_fingerprint) VALUES (?,?,?,?,?) ON CONFLICT(id) DO NOTHING")) {
             connection.setAutoCommit(false);
             try {
+                rejectLiveSource(connection, source.id());
                 insert.setString(1, source.id());
                 insert.setString(2, source.label());
                 insert.setString(3, source.format());
@@ -532,6 +722,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
         try (var connection = open()) {
             connection.setAutoCommit(false);
             try {
+                rejectLiveSource(connection, sourceId);
                 BatchFile ownedFile = null;
                 String batchPolicy = null;
                 if (batchId != null) {

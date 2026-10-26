@@ -132,3 +132,17 @@ profiles. Synthetic fixtures and existing privacy/channel/scroll/undo checks rem
 Schema-5 upgrades, restored backups, owned favorite cascade/rollback and filter
 intersections are separately verified by SQLite tests, not inferred from fresh
 client profiles. This build does not capture live chat or create scenes/identities.
+
+## Alpha.7 live/persona stages
+
+Required `message-row-selection` clicks a wrapped third message after real scrolling
+and checks its exact bookmark coordinate. `live-startup` proves automatic start and
+persisted explicit pause. `live-capture` invokes actual Fabric CHAT and non-overlay
+GAME listeners in an isolated world, tests repeated RP, PM/OOC/notices/overlay gates,
+checks both dated file formats, and reimports a closed journal through UI without
+changing original bytes or duplicating event IDs. `identity-personas` creates two
+characters/personas, explicitly assigns two individual messages, and browses the
+restricted memory screen. Reader JVMs verify persisted decisions before mutation.
+The shutdown witness checks live and identity workers as well as prior journal I/O.
+Actual subprocess kill/halt recovery, queue/disk/rotation faults and persona SQL
+isolation are core tests; screenshots or successful compilation do not replace them.

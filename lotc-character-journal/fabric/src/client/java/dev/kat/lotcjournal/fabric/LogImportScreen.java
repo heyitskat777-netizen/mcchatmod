@@ -3,6 +3,8 @@ package dev.kat.lotcjournal.fabric;
 import dev.kat.lotcjournal.domain.ImportSource;
 import dev.kat.lotcjournal.domain.ImportView;
 import dev.kat.lotcjournal.ingestion.LogImportService;
+import dev.kat.lotcjournal.ingestion.LiveCaptureService;
+import dev.kat.lotcjournal.application.IdentityService;
 import dev.kat.lotcjournal.ingestion.BatchImportService;
 import dev.kat.lotcjournal.ingestion.FolderWatchService;
 import java.nio.file.Path;
@@ -20,6 +22,8 @@ public final class LogImportScreen extends Screen {
     private final Screen parent;
     private final LogImportService importer;
     private final Path gameDirectory;
+    private final LiveCaptureService live;
+    private final IdentityService identities;
     private final BatchImportService batches;
     private final FolderWatchService watcher;
     private List<ImportSource> sources = List.of();
@@ -32,7 +36,11 @@ public final class LogImportScreen extends Screen {
     private Button transcript;
 
     public LogImportScreen(Screen parent, LogImportService importer, BatchImportService batches, FolderWatchService watcher, Path gameDirectory) {
-        super(Component.literal("Historical log import"));
+        this(parent, importer, batches, watcher, gameDirectory, null, null);
+    }
+    public LogImportScreen(Screen parent, LogImportService importer, BatchImportService batches, FolderWatchService watcher, Path gameDirectory, LiveCaptureService live, IdentityService identities) {
+        super(Component.literal("Historical / journal import"));
+        this.live = live; this.identities = identities;
         this.parent = parent;
         this.importer = importer;
         this.gameDirectory = gameDirectory;
@@ -43,7 +51,7 @@ public final class LogImportScreen extends Screen {
         int panel = Math.min(360, width - 32), left = (width - panel) / 2;
         var path = new EditBox(font, left, 40, panel, 20, Component.literal("Finished log path"));
         path.setMaxLength(1024);
-        path.setHint(Component.literal("Finished .log or .log.gz path"));
+        path.setHint(Component.literal("Finished .log / .log.gz / .lotc-chat.jsonl"));
         path.setValue(pathValue);
         path.setResponder(value -> pathValue = value);
         addRenderableWidget(path);
@@ -63,7 +71,7 @@ public final class LogImportScreen extends Screen {
             minecraft.setScreen(new FolderImportScreen(this, batches, watcher, gameDirectory)))
             .bounds(left, height - 77, panel, 20).build());
         transcript = addRenderableWidget(Button.builder(Component.literal("View transcripts"), button ->
-            minecraft.setScreen(new TranscriptScreen(this, importer, sources)))
+            minecraft.setScreen(new TranscriptScreen(this, importer, sources, identities, null)))
             .bounds(left, height - 52, panel, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Done"), button -> onClose())
             .bounds(left, height - 27, panel, 20).build());
@@ -73,6 +81,7 @@ public final class LogImportScreen extends Screen {
 
     private void refreshSources() {
         importer.sources().whenComplete((value, error) -> minecraft.execute(() -> {
+            if (minecraft.screen != this) return;
             if (error == null) sources = value;
             else notice = "Sources unavailable; check journal storage status";
             tick();
@@ -82,6 +91,18 @@ public final class LogImportScreen extends Screen {
     private void begin() {
         try {
             Path path = gameDirectory.resolve(Path.of(pathValue.strip())).normalize();
+            if (path.toString().endsWith(".lotc-chat.jsonl")) {
+                if (live == null) { notice = "Open journal import from the main screen"; return; }
+                if (!namesValue.isBlank()) { notice = "Journal format preserves its saved policy; clear reviewed names"; return; }
+                pending = true; notice = "Validating closed single-segment journal"; tick();
+                live.importJournal(path).whenComplete((ignored,error) -> minecraft.execute(() -> {
+                    pending = false;
+                    if (minecraft.screen != this) return;
+                    notice = error == null ? "Journal format import complete" : "Journal import failed: use a complete closed single-segment file";
+                    refreshSources(); tick();
+                }));
+                return;
+            }
             var names = Arrays.stream(namesValue.split(",")).map(String::strip)
                 .filter(value -> !value.isEmpty()).collect(Collectors.toSet());
             pending = true;

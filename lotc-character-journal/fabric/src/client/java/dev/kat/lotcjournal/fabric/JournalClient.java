@@ -2,6 +2,9 @@ package dev.kat.lotcjournal.fabric;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.kat.lotcjournal.application.JournalService;
+import dev.kat.lotcjournal.application.IdentityService;
+import dev.kat.lotcjournal.storage.SqliteIdentityRepository;
+import dev.kat.lotcjournal.ingestion.LiveCaptureService;
 import dev.kat.lotcjournal.storage.SqliteJournalStore;
 import dev.kat.lotcjournal.ingestion.LogImportService;
 import dev.kat.lotcjournal.ingestion.BatchImportService;
@@ -24,6 +27,9 @@ public final class JournalClient implements ClientModInitializer {
     private LogImportService importer;
     private BatchImportService batches;
     private FolderWatchService watcher;
+    private IdentityService identities;
+    private LiveCaptureService live;
+    private LiveChatAdapter liveAdapter;
 
     @Override public void onInitializeClient() {
         Path directory = FabricLoader.getInstance().getConfigDir().resolve("lotc-journal");
@@ -32,8 +38,13 @@ public final class JournalClient implements ClientModInitializer {
         importer = new LogImportService(store);
         batches = new BatchImportService(importer, store);
         watcher = new FolderWatchService(batches, store);
-        service.start().thenCompose(ignored -> watcher.load()).exceptionally(error -> {
-            LOGGER.error("Could not initialize local journal", error);
+        identities = new IdentityService(new SqliteIdentityRepository(directory.resolve("journal.sqlite")));
+        live = new LiveCaptureService(FabricLoader.getInstance().getGameDir().resolve("lotc-journal/live"), store, java.util.Set.of());
+        var ready = service.start().thenCompose(ignored -> watcher.load()).thenCompose(ignored -> live.recover());
+        liveAdapter = new LiveChatAdapter(live, ready);
+        liveAdapter.register();
+        ready.exceptionally(error -> {
+            LOGGER.error("Local journal initialization failed (JOURNAL_STARTUP_FAILED)");
             return null;
         });
         var category = KeyMapping.Category.register(
@@ -43,10 +54,12 @@ public final class JournalClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (open.consumeClick()) {
                 if (client.screen == null && client.player != null)
-                    client.setScreen(new JournalScreen(service, importer, batches, watcher, directory));
+                    client.setScreen(new JournalScreen(service, importer, batches, watcher, directory, identities, live, liveAdapter));
             }
         });
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
+            live.close();
+            identities.close();
             watcher.close();
             batches.close();
             importer.close();

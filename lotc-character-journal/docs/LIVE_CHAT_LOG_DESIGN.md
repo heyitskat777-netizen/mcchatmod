@@ -1,6 +1,7 @@
 # Phase 2b — daily live dialogue journal design
 
-Accepted next milestone, not enabled in alpha.6. Target remains Fabric/Minecraft
+Implemented recording/replay slice in alpha.7; see STATUS.md for actual verification
+and remaining cross-format overlap/user-acceptance limits. Not enabled in alpha.6. Target remains Fabric/Minecraft
 1.21.11 and Java 21. Kat explicitly requests automatic start and per-message saving.
 This design records the public-source review and verification contract; it is not
 proof of crash durability until the implementation and fault tests run.

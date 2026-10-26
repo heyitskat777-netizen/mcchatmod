@@ -89,6 +89,9 @@ Target Minecraft 1.21.11, Fabric, Java 21. Do not silently upgrade Minecraft.
   Persona command replies do not become RP or automatic identity links.
 - Favorites key immutable observation coordinates; never copy dialogue or imply
   identity/analysis eligibility. Deleting a message atomically removes its favorite.
+- Live capture starts automatically when connected, with persisted pause/resume.
+  New persona knowledge stays unassigned until explicitly reviewed; persona
+  selection never silently attributes the shared archive.
 - Live capture must filter before disk, use durable event identity/replay and bounded
   off-thread queues. Daily files are not immutable historical content-hash sources.
 - Scene/extraction suggestions are separate evidence-backed interpretations. Ask
