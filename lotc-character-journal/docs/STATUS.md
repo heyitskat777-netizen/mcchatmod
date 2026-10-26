@@ -94,7 +94,8 @@ isolation/merge reversal/assignment rollback. These prove process-crash behavior
 power-loss or drive-controller guarantees are not inferred.
 
 The final integrated check/build passed in **1m40s** (30 tasks: 8 executed, 22
-up-to-date). The actual five-JVM `live-persona-smoke-1` is **in progress**. Mandatory stages now include arbitrary-row selection, live startup,
+up-to-date). The initial five-JVM `live-persona-smoke-1` attempt is recorded below, followed by
+the complete passing repaired run. Mandatory stages now include arbitrary-row selection, live startup,
 native CHAT/GAME + overlay/privacy exclusions, paused restart, closed-format UI
 reimport, character/persona UI, explicit two-message assignments and persona memory
 views, while retaining prior import/undo/watch/scroll/backup/keybind/world/shutdown
@@ -109,11 +110,59 @@ Repair cycle 1 scopes the SQL counts to that exact historical source, retains
 52 RP / 10 UNKNOWN expectations, and leaves the separate exact-three-live-event
 assertions intact. This is a test-scope repair, not an ignored application failure
 or reduced criterion. Failed evidence remains under `live-persona-smoke-1`.
-The required check/build and full fresh `live-persona-smoke-2` are being rerun;
-runtime is not yet reported as passed. Logs: `/tmp/lotc-live-core-1.log`,
+Repair check/build passed in **38s** (30 tasks: 3 executed, 27 up-to-date).
+Fresh local **`live-persona-smoke-2` passed all five phases**, exit 0, no timeouts
+or report errors, with body-completion and successful worker/shutdown witnesses:
+
+| Local phase | Elapsed | Result |
+| --- | --- | --- |
+| Graphics preflight | 152.3s | Passed |
+| Development writer | 175.6s | Passed |
+| Development reader | 158.6s | Passed |
+| Packaged writer | 149.3s | Passed |
+| Packaged reader | 129.6s | Passed |
+
+Writers passed **20 assertion stages**, readers **21**. Evidence is preserved in
+`fabric/build/client-smoke/evidence/live-persona-smoke-2/` (JSON/XML/screenshots,
+safe logs, launch and shutdown witnesses). Existing software-renderer/audio/Realms
+warnings were nonfatal only because every mandatory assertion, witness and exit
+passed. No timeout or assertion was relaxed. Actual row-selection and normal main-screen screenshots
+were inspected: only the intended third wrapped message is highlighted/starred,
+with adjacent rows and fixed controls separate. User/modpack acceptance is pending.
+
+GitHub Actions **passed verify and the complete five-JVM client suite** on repaired
+functional commit `cd7ffc5`:
+[run 40382340353](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40382340353).
+
+| CI phase | Elapsed | Result |
+| --- | --- | --- |
+| Graphics preflight | 40.9s | Passed |
+| Development writer | 45.2s | Passed |
+| Development reader | 42.3s | Passed |
+| Packaged writer | 51.9s | Passed |
+| Packaged reader | 41.6s | Passed |
+
+No assertion/timeout was reduced. First failed run is preserved; one runtime
+repair cycle addressed source scoping. Native CHAT/GAME capture, privacy/overlay
+exclusions before both file formats, exact event-ID journal reimport, explicit
+character/persona UI and restricted memory views all passed the runtime gates.
+These are isolated local-world tests, not unattended LoTC server or real-modpack
+accuracy evidence.
+
+[PR #8](https://github.com/heyitskat777-netizen/mcchatmod/pull/8) stacks on favorites
+PR #7 and is ready for review; main remains unchanged. A documentation-only final
+commit receives its normal CI rerun; the successful functional commit/run above
+is identified precisely. Alpha.7
+[CI installable artifact ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40382340353/artifacts/12679930033).
+Install the non-`-sources` JAR. Local artifact:
+`fabric/build/libs/lotc-character-journal-0.1.0-alpha.7.jar`, 14,637,604 bytes;
+SHA-256 `9bfea22c60a93dde7048a959394cfa2e00e20dd607ab1d75cb957503bf37133e`.
+CI evidence includes screenshots/logs/JSON/XML. Direct cloud artifact retrieval was
+blocked by the blob host (403); CI's phase logs and preserved local evidence were
+available for verification. Logs: `/tmp/lotc-live-core-1.log`,
 `/tmp/lotc-live-integrated-2.log`, `/tmp/lotc-live-integrated-3.log`,
 `/tmp/lotc-live-integrated-final.log`, `/tmp/lotc-live-runner-tests.log`,
-`/tmp/lotc-live-client-1.log`. User checklist:
+`/tmp/lotc-live-client-1.log`, `/tmp/lotc-live-client-2.log`. User checklist:
 [USER_TEST_LIVE_PERSONAS.md](USER_TEST_LIVE_PERSONAS.md).
 
 ## Alpha.6 — favorites, transcript access and accepted next milestones
