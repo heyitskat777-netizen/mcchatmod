@@ -18,5 +18,12 @@ public interface CaptureRepository {
         if (channel != null) throw new UnsupportedOperationException("Channel filtering is unavailable");
         return transcript(sourceId, query, offset, limit);
     }
+    default TranscriptPage transcript(String sourceId, String query, Channel channel, boolean favoritesOnly, int offset, int limit) throws Exception {
+        if (favoritesOnly) throw new UnsupportedOperationException("Favorites are unavailable");
+        return transcript(sourceId, query, channel, offset, limit);
+    }
+    default void setFavorite(MessageReference message, boolean favorite) throws Exception {
+        throw new UnsupportedOperationException("Favorites are unavailable");
+    }
     default long removedRecords(String sourceId) throws Exception { return 0; }
 }

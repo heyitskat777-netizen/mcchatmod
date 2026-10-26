@@ -28,6 +28,7 @@ class RoleplayPolicyMigrationTest {
     }
     private void markVersionFour() throws Exception {
         try (var connection = DriverManager.getConnection("jdbc:sqlite:" + path()); var sql = connection.createStatement()) {
+            sql.execute("DROP TABLE message_favorites");
             sql.execute("PRAGMA user_version=4");
         }
     }
@@ -72,7 +73,7 @@ class RoleplayPolicyMigrationTest {
         assertEquals(0, scalar(path(), "SELECT count(*) FROM pragma_table_info('transcript_lines') WHERE name='raw'"));
 
         var migrated = new SqliteJournalStore(path(), new DialogueTextNormalizer()); migrated.initialize();
-        assertEquals(5, scalar(path(), "PRAGMA user_version"));
+        assertEquals(6, scalar(path(), "PRAGMA user_version"));
         assertEquals(0, scalar(path(), "SELECT count(*) FROM pragma_table_info('transcript_lines') WHERE name='raw'"));
         var entries = migrated.transcript(SOURCE, null, 0, 20).entries();
         assertEquals(List.of(1L, 4L, 5L, 6L), entries.stream().map(TranscriptLine::sourceLine).toList());
@@ -127,7 +128,7 @@ class RoleplayPolicyMigrationTest {
         byte[] original = Files.readAllBytes(path());
         assertThrows(java.sql.SQLException.class, () -> new SqliteJournalStore(path(), new DialogueTextNormalizer()).initialize());
         assertArrayEquals(original, Files.readAllBytes(path()));
-        assertEquals(5, scalar(path(), "PRAGMA user_version"));
+        assertEquals(6, scalar(path(), "PRAGMA user_version"));
         assertFalse(Files.exists(directory.resolve("backups")), "Only an actual old-version upgrade creates a migration snapshot");
     }
 }

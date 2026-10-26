@@ -99,6 +99,35 @@ remain for review. Parser policy 3 blocks incompatible older partial resumes;
 finish alpha.4 imports before upgrading or use the matching pre-upgrade backup
 and older mod first. Originals/backups remain untouched by filtering.
 
+## Accepted favorites, scenes and live-log additions
+
+Kat reports all tests passed so far and requests:
+
+- Alpha.6: persistent individual-message favorites and a Favorites filter, plus
+  main-screen View transcripts. Favorites are coordinate-based archive bookmarks;
+  they do not confirm a speaker/identity or make UNKNOWN data AI-eligible.
+- Phase 2b next: automatically started daily mod-local live-chat journals with a
+  readable format, per-message saving, crash recovery and a pause setting. This is
+  explicitly requested automatic capture, distinct from opt-in finished-folder
+  watch. Privacy/noise filters run before file or database persistence. Authoritative
+  durable event IDs/checkpoints precede derived readable exports; never text-dedup
+  genuine repeated emotes. It remains disabled until implemented and verified.
+- Phase 3: reversible explicit identity/persona assignment for bookmarks and future
+  extracted records; ask when uncertain and allow unassigned/skip. Existing persona
+  command text is not a confirmed identity source.
+- Phase 4: scene view, continuous-dialogue/location grouping and participant lists.
+  During import review ask about uncertainty; allow skip and durable manual
+  overrides. Missing locations/participants stay unknown, and mentions are not
+  automatically attendees. Review must not block an open database transaction.
+- Phase 6: optional favorite-driven item/name/task proposals, appropriate record
+  types, evidence, user-selected identity and confirmation when uncertain. Preserve
+  manual edits/rejections and avoid duplicate generation. AI stays optional/off.
+
+These are accepted requirements, not claims that live capture, scenes, identity
+links or extraction are enabled. See MILESTONES.md for acceptance criteria and
+LIVE_CHAT_LOG_DESIGN.md for the source review. No third-party Chat Logs dependency
+or code has been added.
+
 ## Toolchain
 
 - Java 21 target and runtime.

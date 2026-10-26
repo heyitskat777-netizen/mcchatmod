@@ -87,6 +87,13 @@ Target Minecraft 1.21.11, Fabric, Java 21. Do not silently upgrade Minecraft.
 - Noise filters match complete known unattributed server notices. Preserve real
   roleplay, quoted notices and unknown bracketed actions; privacy gates take priority.
   Persona command replies do not become RP or automatic identity links.
+- Favorites key immutable observation coordinates; never copy dialogue or imply
+  identity/analysis eligibility. Deleting a message atomically removes its favorite.
+- Live capture must filter before disk, use durable event identity/replay and bounded
+  off-thread queues. Daily files are not immutable historical content-hash sources.
+- Scene/extraction suggestions are separate evidence-backed interpretations. Ask
+  about uncertain identities, allow skip/unassigned and persist manual overrides;
+  never keep an import transaction open for user review.
 - Identity merges require user confirmation and must be reversible.
 - AI defaults off. Never silently fall back to a paid provider.
 - Never run unattended tests against the live LoTC server.

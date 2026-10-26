@@ -14,6 +14,7 @@ final class LegacyJournalFixtures {
             statement.execute("PRAGMA legacy_alter_table=ON");
             connection.setAutoCommit(false);
             try {
+                statement.execute("DROP TABLE IF EXISTS message_favorites");
                 statement.execute("ALTER TABLE transcript_lines RENAME TO legacy_conversion");
                 statement.execute(sql);
                 statement.execute("INSERT INTO transcript_lines SELECT source_id,source_line,clock,'[00:00:01] [Render thread/INFO]: [CHAT] '||text,text,channel,observed_speaker FROM legacy_conversion");
