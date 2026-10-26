@@ -99,7 +99,18 @@ native CHAT/GAME + overlay/privacy exclusions, paused restart, closed-format UI
 reimport, character/persona UI, explicit two-message assignments and persona memory
 views, while retaining prior import/undo/watch/scroll/backup/keybind/world/shutdown
 assertions. Identity and live worker termination are included in shutdown witnesses.
-Runtime is not yet reported as passed. Logs: `/tmp/lotc-live-core-1.log`,
+First runtime attempt **failed** in development reader (128.5s), reproduced both
+locally and in GitHub Actions run 40381310444. Preflight (145.4s) and development
+writer (150.3s, 20 assertion stages) passed; packaged phases were not attempted
+after the reader failure. The old SQL RP assertion counted all stored sources,
+including the writer's three valid live RP events, while still expecting the 52
+historical fixture rows. The visible historical query was already correct.
+Repair cycle 1 scopes the SQL counts to that exact historical source, retains
+52 RP / 10 UNKNOWN expectations, and leaves the separate exact-three-live-event
+assertions intact. This is a test-scope repair, not an ignored application failure
+or reduced criterion. Failed evidence remains under `live-persona-smoke-1`.
+The required check/build and full fresh `live-persona-smoke-2` are being rerun;
+runtime is not yet reported as passed. Logs: `/tmp/lotc-live-core-1.log`,
 `/tmp/lotc-live-integrated-2.log`, `/tmp/lotc-live-integrated-3.log`,
 `/tmp/lotc-live-integrated-final.log`, `/tmp/lotc-live-runner-tests.log`,
 `/tmp/lotc-live-client-1.log`. User checklist:

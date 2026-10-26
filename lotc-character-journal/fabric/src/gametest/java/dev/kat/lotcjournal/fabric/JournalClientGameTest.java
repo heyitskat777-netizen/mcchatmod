@@ -299,13 +299,13 @@ public final class JournalClientGameTest implements FabricClientGameTest {
                 context.clickScreenButton("Roleplay only");
                 context.waitFor(client -> screenButtonActive(client.screen, "Channel: ROLEPLAY")
                     && client.screen.getNarrationMessage().getString().contains("Messages 1 to 50 of 52"), WAIT_TICKS);
-                check(sqlCount(database, "SELECT count(*) FROM transcript_lines WHERE channel='ROLEPLAY'") == 52,
+                check(sqlCount(database, "SELECT count(*) FROM transcript_lines WHERE source_id='" + sourceId + "' AND channel='ROLEPLAY'") == 52,
                     "Trusted RP envelopes must be classified without inferring speaker identities");
                 report.screenshot(context.takeScreenshot("lotc-roleplay-only-" + report.phase()));
                 context.clickScreenButton("UNKNOWN review");
                 context.waitFor(client -> screenButtonActive(client.screen, "Channel: UNKNOWN")
                     && client.screen.getNarrationMessage().getString().contains("Messages 1 to 10 of 10"), WAIT_TICKS);
-                check(sqlCount(database, "SELECT count(*) FROM transcript_lines WHERE channel='UNKNOWN'") == 10,
+                check(sqlCount(database, "SELECT count(*) FROM transcript_lines WHERE source_id='" + sourceId + "' AND channel='UNKNOWN'") == 10,
                     "Only genuinely unmarked observations should remain in review");
                 context.clickScreenButton("Channel: UNKNOWN");
                 context.waitFor(client -> screenButtonActive(client.screen, "Channel: ALL")
