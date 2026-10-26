@@ -1,6 +1,8 @@
 package dev.kat.lotcjournal.fabric;
 
 import dev.kat.lotcjournal.domain.Channel;
+import dev.kat.lotcjournal.domain.MessageReference;
+import java.util.Set;
 import dev.kat.lotcjournal.domain.ImportSource;
 import dev.kat.lotcjournal.domain.TranscriptLine;
 import dev.kat.lotcjournal.ingestion.LogImportService;
@@ -9,11 +11,13 @@ import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractTextAreaWidget;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 import org.lwjgl.glfw.GLFW;
@@ -28,9 +32,11 @@ public final class TranscriptScreen extends Screen {
     private int sourceIndex = -1, channelIndex, offset;
     private long total, removed, request;
     private String query = "", notice = "";
-    private boolean pending, details;
+    private boolean pending, details, favoritesOnly;
+    private Set<MessageReference> favorites = Set.of();
+    private MessageReference selected;
     private List<TranscriptLine> entries = List.of();
-    private Button source, channel, previous, next, detail;
+    private Button source, channel, previous, next, detail, favoritesFilter, favorite;
     private DialoguePane pane;
 
     public TranscriptScreen(Screen parent, LogImportService importer, List<ImportSource> sources) {
@@ -46,12 +52,20 @@ public final class TranscriptScreen extends Screen {
         channel = addRenderableWidget(Button.builder(Component.literal("Channel: ALL"), button -> {
             channelIndex = (channelIndex + 1) % CHANNELS.length; offset = 0; load(false);
         }).bounds(left + panel / 2 + 4, 24, panel / 2 - 4, 20).build());
-        var search = new EditBox(font, left, 49, panel - 106, 20, Component.literal("Transcript search"));
+        var search = new EditBox(font, left, 49, panel - 212, 20, Component.literal("Transcript search"));
         search.setMaxLength(200); search.setHint(Component.literal("Search dialogue")); search.setValue(query);
         search.setResponder(value -> { query = value; offset = 0; load(false); }); addRenderableWidget(search);
+        addRenderableWidget(Button.builder(Component.literal("Roleplay only"), button -> {
+            channelIndex = 1; offset = 0; load(false);
+        }).bounds(left + panel - 206, 49, 100, 20).build());
         addRenderableWidget(Button.builder(Component.literal("UNKNOWN review"), button -> {
             channelIndex = 2; sourceIndex = -1; offset = 0; load(false);
         }).bounds(left + panel - 100, 49, 100, 20).build());
+        favoritesFilter = addRenderableWidget(Button.builder(Component.literal("Favorites: All"), button -> {
+            favoritesOnly = !favoritesOnly; offset = 0; load(false);
+        }).bounds(left, 74, panel / 2 - 4, 20).build());
+        favorite = addRenderableWidget(Button.builder(Component.literal("Favorite selected"), button -> saveFavorite())
+            .bounds(left + panel / 2 + 4, 74, panel / 2 - 4, 20).build());
         int part = panel / 4, y = height - 24;
         previous = addRenderableWidget(Button.builder(Component.literal("Previous"), button -> page(-1, true))
             .bounds(left, y, part - 3, 20).build());
@@ -63,7 +77,7 @@ public final class TranscriptScreen extends Screen {
             .bounds(left + 2 * part, y, part - 3, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Done"), button -> onClose())
             .bounds(left + 3 * part, y, panel - 3 * part, 20).build());
-        pane = addRenderableWidget(new DialoguePane(left, 88, panel - 7, Math.max(20, height - 118)));
+        pane = addRenderableWidget(new DialoguePane(left, 113, panel - 7, Math.max(20, height - 143)));
         pane.setEntries(entries, anchor, false);
         detail.setMessage(Component.literal(details ? "Hide details" : "Details"));
         if (entries.isEmpty()) load(false);
@@ -74,10 +88,11 @@ public final class TranscriptScreen extends Screen {
         offset = direction < 0 ? Math.max(0, offset - PAGE_SIZE) : Math.addExact(offset, PAGE_SIZE);
         load(bottom);
     }
-    private void load(boolean bottom) {
+    private void load(boolean bottom) { load(bottom, null); }
+    private void load(boolean bottom, Anchor anchor) {
         if (pane == null) return;
         long sequence = ++request;
-        pending = true; entries = List.of(); pane.setEntries(entries, null, false);
+        pending = true; entries = List.of(); favorites = Set.of(); pane.setEntries(entries, null, false);
         notice = "Loading dialogue"; tick();
         String sourceId = sourceIndex < 0 ? null : sources.get(sourceIndex).id();
         importer.removedRecords(sourceId).whenComplete((count, error) -> minecraft.execute(() -> {
@@ -86,27 +101,50 @@ public final class TranscriptScreen extends Screen {
                 if (details) pane.setEntries(entries, pane.anchor(), false);
             }
         }));
-        importer.transcript(sourceId, query, CHANNELS[channelIndex], offset, PAGE_SIZE)
+        importer.transcript(sourceId, query, CHANNELS[channelIndex], favoritesOnly, offset, PAGE_SIZE)
             .whenComplete((page, error) -> minecraft.execute(() -> {
                 if (sequence != request) return;
                 pending = false;
                 if (error != null) { total = 0; notice = "Dialogue unavailable; retry when storage is ready"; }
                 else {
-                    total = page.total(); entries = page.entries();
+                    total = page.total(); entries = page.entries(); favorites = page.favorites();
+                    if (entries.stream().noneMatch(entry -> MessageReference.of(entry).equals(selected)))
+                        selected = entries.isEmpty() ? null : MessageReference.of(entries.getFirst());
                     if (entries.isEmpty() && offset > 0 && total > 0) {
                         offset = (int) Math.min(Integer.MAX_VALUE - PAGE_SIZE, ((total - 1) / PAGE_SIZE) * PAGE_SIZE);
                         load(true); return;
                     }
-                    notice = entries.isEmpty() ? "No matching records in this filter" : "";
+                    notice = entries.isEmpty() ? (channelIndex == 1 && query.isBlank()
+                        ? "No confirmed RP; older or ambiguous imports may need UNKNOWN review"
+                        : "No matching records in this filter") : "";
                 }
-                pane.setEntries(entries, null, bottom); tick();
+                pane.setEntries(entries, anchor, bottom); tick();
             }));
+    }
+    private void saveFavorite() {
+        if (pending || selected == null || !pane.selectedVisible()) return;
+        MessageReference message = selected;
+        boolean desired = !favorites.contains(message);
+        Anchor anchor = pane.anchor();
+        long sequence = ++request; pending = true; tick();
+        importer.setFavorite(message, desired).whenComplete((ignored, error) -> minecraft.execute(() -> {
+            if (sequence != request || minecraft.screen != this) return;
+            pending = false;
+            if (error != null) { notice = "Favorite could not be saved; message may have been removed. Retry"; tick(); }
+            else load(false, anchor);
+        }));
     }
     @Override public void tick() {
         previous.active = !pending && offset > 0;
         next.active = !pending && offset + (long) entries.size() < total && offset <= Integer.MAX_VALUE - PAGE_SIZE;
         source.active = !pending && !sources.isEmpty(); channel.active = !pending;
         detail.active = !pending;
+        favoritesFilter.active = !pending;
+        favoritesFilter.setMessage(Component.literal(favoritesOnly ? "Favorites: Only" : "Favorites: All"));
+        favorite.active = !pending && selected != null && pane.selectedVisible();
+        favorite.setTooltip(selected == null ? null : Tooltip.create(Component.literal("Selected source "
+            + selected.sourceId().substring(0, 12) + ", line " + selected.sourceLine() + ". Click a dialogue message to select it; F or its star toggles favorite.")));
+        favorite.setMessage(Component.literal(selected != null && favorites.contains(selected) ? "Unfavorite selected" : "Favorite selected"));
         channel.setMessage(Component.literal("Channel: " + (CHANNELS[channelIndex] == null ? "ALL" : CHANNELS[channelIndex])));
         source.setMessage(Component.literal(sourceIndex < 0 ? "All sources (click to filter)" : font.plainSubstrByWidth(
             sources.get(sourceIndex).label(), source.getWidth() - 12)));
@@ -115,13 +153,14 @@ public final class TranscriptScreen extends Screen {
         super.render(graphics, mouseX, mouseY, delta);
         graphics.drawCenteredString(font, title, width / 2, 8, 0xFFE5E7EB);
         int panel = Math.min(600, width - 32), left = (width - panel) / 2;
-        String status = pending || entries.isEmpty() ? notice : "Messages " + (offset + 1) + "–" + (offset + entries.size())
+        String status = pending || entries.isEmpty() || !notice.isBlank() ? notice : "Messages " + (offset + 1) + "–" + (offset + entries.size())
             + " of " + total + " | Scroll or drag the bar";
-        graphics.drawString(font, font.plainSubstrByWidth(status, panel), left, 75, 0xFF93C5FD);
+        graphics.drawString(font, font.plainSubstrByWidth(status, panel), left, 100, 0xFF93C5FD);
     }
     @Override public Component getNarrationMessage() {
         return Component.literal(title.getString() + ". " + (entries.isEmpty() ? notice : "Messages " + (offset + 1)
-            + " to " + (offset + entries.size()) + " of " + total) + ". Scroll " + (int) pane.scrollAmount()
+            + " to " + (offset + entries.size()) + " of " + total) + (selected == null ? "" : ". Selected line " + selected.sourceLine() + ". Favorite: " + (favorites.contains(selected) ? "yes" : "no"))
+            + ". Scroll " + (int) pane.scrollAmount()
             + " of " + pane.maxScrollAmount() + ". " + pane.visibleText()
             + (details ? ". Removed for selected source(s), all text/channels: " + removed : ""));
     }
@@ -146,13 +185,13 @@ public final class TranscriptScreen extends Screen {
                     + " | line " + entry.sourceLine() + " | clock " + (entry.clock() == null ? "unknown" : entry.clock())
                     + "\nChannel " + entry.channel() + " | Speaker " + (entry.observedSpeaker() == null ? "unresolved" : entry.observedSpeaker())
                     + " | Date and timezone unresolved";
-                var lines = font.split(Component.literal(text), Math.max(16, getWidth() - totalInnerPadding()));
+                var lines = font.split(Component.literal(text), Math.max(16, getWidth() - totalInnerPadding() - 20));
                 int height = lines.size() * 12 + 8;
                 result.add(new Row(index, y, height, lines, text)); y += height;
             }
             if (details) {
                 String text = "Removed for selected source(s): " + removed + " (all text/channels)";
-                var lines = font.split(Component.literal(text), Math.max(16, getWidth() - totalInnerPadding()));
+                var lines = font.split(Component.literal(text), Math.max(16, getWidth() - totalInnerPadding() - 20));
                 result.add(new Row(values.size(), y, lines.size() * 12 + 8, lines, text)); y += lines.size() * 12 + 8;
             }
             rows = List.copyOf(result); innerHeight = y;
@@ -166,6 +205,12 @@ public final class TranscriptScreen extends Screen {
             for (var row : rows) if (row.y() + row.height() > scrollAmount())
                 return new Anchor(row.entry(), Math.max(0, (scrollAmount() - row.y()) / row.height()));
             return null;
+        }
+        boolean selectedVisible() {
+            for (var row : rows) if (row.entry() < entries.size()
+                && MessageReference.of(entries.get(row.entry())).equals(selected))
+                return row.y() + row.height() > scrollAmount() && row.y() < scrollAmount() + getHeight();
+            return false;
         }
         String visibleText() {
             var result = new StringBuilder();
@@ -184,13 +229,32 @@ public final class TranscriptScreen extends Screen {
         @Override protected void renderContents(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
             for (var row : rows) {
                 if (row.y() > scrollAmount() + getHeight() || row.y() + row.height() < scrollAmount()) continue;
+                if (row.entry() < entries.size()) {
+                    int markerY = getInnerTop() + row.y();
+                    if (withinContentAreaTopBottom(markerY, markerY + 10)) graphics.drawString(font,
+                        favorites.contains(MessageReference.of(entries.get(row.entry()))) ? "[*]" : "[ ]",
+                        getInnerLeft(), markerY, 0xFFFDE68A);
+                }
                 int first = Math.max(0, (int) ((scrollAmount() - innerPadding() - row.y()) / 12));
                 for (int index = first; index < row.lines().size(); index++) {
                     int y = getInnerTop() + row.y() + index * 12;
                     if (y - scrollAmount() >= getBottom()) break;
-                    if (withinContentAreaTopBottom(y, y + 10)) graphics.drawString(font, row.lines().get(index), getInnerLeft(), y, 0xFFE5E7EB);
+                    if (withinContentAreaTopBottom(y, y + 10)) graphics.drawString(font, row.lines().get(index), getInnerLeft() + 20, y,
+                        row.entry() < entries.size() && MessageReference.of(entries.get(row.entry())).equals(selected) ? 0xFFE5E7EB : 0xFFD1D5DB);
                 }
             }
+        }
+        @Override public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+            if (!pending && event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && isMouseOver(event.x(), event.y())
+                && event.x() < getInnerLeft() + getWidth() - totalInnerPadding()) {
+                double contentY = event.y() - getInnerTop() + scrollAmount();
+                for (var row : rows) if (row.entry() < entries.size() && contentY >= row.y() && contentY < row.y() + row.height()) {
+                    selected = MessageReference.of(entries.get(row.entry())); tick();
+                    if (event.x() >= getInnerLeft() && event.x() < getInnerLeft() + 18) saveFavorite();
+                    return true;
+                }
+            }
+            return super.mouseClicked(event, doubleClick);
         }
         @Override public boolean mouseScrolled(double x, double y, double horizontal, double vertical) {
             double before = scrollAmount();
@@ -199,6 +263,7 @@ public final class TranscriptScreen extends Screen {
             return super.mouseScrolled(x, y, horizontal, vertical);
         }
         @Override public boolean keyPressed(KeyEvent event) {
+            if (event.key() == GLFW.GLFW_KEY_F && !pending && selectedVisible()) { saveFavorite(); return true; }
             if (!pending && (event.isDown() || event.key() == GLFW.GLFW_KEY_PAGE_DOWN)
                 && scrollAmount() >= maxScrollAmount() && next.active) { page(1, false); return true; }
             if (!pending && (event.isUp() || event.key() == GLFW.GLFW_KEY_PAGE_UP)
@@ -213,7 +278,7 @@ public final class TranscriptScreen extends Screen {
         }
         @Override protected void updateWidgetNarration(NarrationElementOutput output) {
             output.add(NarratedElementType.TITLE, getMessage());
-            output.add(NarratedElementType.HINT, Component.literal(visibleText()));
+            output.add(NarratedElementType.HINT, Component.literal(visibleText() + ". Click a message to select it, then Favorite selected, or press F. Click its star to toggle directly."));
         }
     }
 }

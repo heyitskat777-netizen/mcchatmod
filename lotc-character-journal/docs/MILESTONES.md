@@ -99,7 +99,9 @@ exit criterion below:
   now includes the implemented preview/dashboard/filter/undo/watch workflow.
   Alpha.3 smoke tests were accepted by Kat. The alpha.4 refinement adds a native
   scrollable dialogue conversation and backed-up cleanup of existing payloads;
-  new refinement user testing is separate from alpha.3 acceptance.
+  new refinement user testing is separate from alpha.3 acceptance. Alpha.5 adds
+  positive RP classification and anchored system-notice cleanup while preserving
+  uncertain observations in review; results are tracked in STATUS.md.
 - **2b — Live capture and reconciliation:** shared normalized observations, live
   events or tailing, rotation/partial-line handling, and overlapping historical/live
   provenance without collapsing repeated emotes.
@@ -107,6 +109,37 @@ exit criterion below:
   count differences resolved, and measured import/capture performance budgets.
 
 Completing 2a does not mark live capture or the entire Phase 2 complete.
+
+**Accepted favorites/access refinement (alpha.6)**
+
+- Bookmark individual observations, including repeated-looking dialogue, by source
+  and coordinate. Provide visible star controls and a Favorites filter which
+  combines with source/channel/search. A bookmark is not an identity or permission
+  for AI analysis. Persist through restart and backups; undoing its message removes
+  the bookmark without resurrecting observations on repeat import.
+- Offer **View transcripts** directly on the main journal screen, including a useful
+  empty state. Keep the import dashboard entry point too.
+
+**2b — accepted automatic daily live-log requirement**
+
+Kat requests Chat Logs-style recording in the mod's own dated folder, starting
+without a manual command whenever connected to a world, with an explicit pause
+control. This is the next implementation slice, not enabled by alpha.6. Use the
+same RP/noise/privacy policy before any disk persistence. Capture received chat
+and non-overlay server/plugin chat, not outbound commands or action bars. Save
+on every eligible message through a bounded worker; display pending/error state.
+Provide a versioned daily `.lotc-chat.jsonl` journal with immutable session/event
+coordinates and a readable timestamp/dialogue representation, plus a derived
+plain-text view/export. Do not put server addresses or account identities in names.
+
+Prove append/force/checkpoint/replay behavior with abrupt-process-death tests;
+acknowledged durable messages must survive crashes, while any unforced queue window
+is measured and disclosed. Test disk errors, queue pressure, UTF-8/multiline
+messages, midnight/clock changes, partial tails, restarts, and packaged loading.
+Never model the growing file as an immutable historical content hash. Reconcile
+historical overlap without text-only deduplication or losing favorites/undo.
+See [LIVE_CHAT_LOG_DESIGN.md](LIVE_CHAT_LOG_DESIGN.md) for the inspected Chat Logs
+reference, exact Fabric hooks, storage authority and acceptance criteria.
 
 **Deliverables**
 
@@ -176,6 +209,12 @@ The reviewed sample has no unexplained missing or duplicated eligible messages. 
 
 Character pages, manual notes, account observations, aliases, persona selection, reversible identity decisions, and the prior-database importer with a dry-run report. Back up before applying an existing-database import or schema migration.
 
+Future favorites, scene participants and extracted records must use these identity
+contracts. The user can explicitly tie a bookmark/record to a specific identity;
+unknown or ambiguous attribution requires a confirmation prompt with evidence,
+plus an unassigned/skip choice. Confirmed links are reversible and persona-scoped.
+Never create a persona/account identity link from a command reply automatically.
+
 Store raw observations separately from attribution decisions. A shared archive must not make all of its facts available to every persona. Ambiguous historical ownership stays unassigned until reviewed.
 
 **Developer verification**
@@ -195,6 +234,25 @@ Identity decisions are reversible without losing source dialogue; the reviewed p
 **Deliverables**
 
 Deterministic encounter suggestions based on time gaps, participants, and interaction cues; split/combine controls; participant corrections; transcript search; direct/overheard/mentioned labels; and the confirmed statistics scope.
+
+**Accepted scene-view requirement**
+
+Add a Scene view listing suggested continuous dialogue groups, location and observed
+participants, with message-level provenance. Use time/session and explicit location
+cues where present; missing historical positions, speakers or dates remain unknown.
+A client position is evidence of the observer's location, not proof that every
+speaker occupied it. A name mentioned in speech is not automatically a participant.
+
+Present uncertain boundaries, locations and participant identities in the import
+review flow after atomic observation commits. Let the user confirm/correct them,
+choose **Skip for now / import without grouping**, or override automatic grouping.
+No import worker/SQL transaction may wait for a user response. Persist skip and
+manual override decisions across retry/restart; allow later review, split/combine
+and participant edits without copying or deleting source dialogue. Do not silently
+confirm an identity based on a scene suggestion. Scenes also work with AI disabled.
+Test interleaved nearby conversations, missing locations, explicit location changes,
+ambiguous names, skipped review, retries and manual overrides; record false joins
+and splits separately from import correctness.
 
 The initial 15-minute inactivity threshold is configurable. Estimate active dialogue time separately from elapsed scene duration, with a visible explanation of how gaps are counted. Preserve uncertainty in reconstructed emote totals.
 
@@ -241,6 +299,24 @@ All displayed substantive summary claims have valid evidence; incorrect interpre
 **Deliverables**
 
 Dated and directional relationship developments; promises, debts, meetings, and resolutions; alias suggestions with evidence; and a review queue with accept, reject, edit, and keep-separate actions.
+
+**Accepted favorite-driven extraction milestone (depends on Phases 3 and 5)**
+
+Review starred messages for **item**, **name/character mention**, or **task/commitment**
+records and propose the appropriate record type and fields with exact source
+references. Let the user edit, accept or dismiss each proposal and select its
+specific identity/persona. If identity cannot be established, ask for confirmation
+or allow it to remain unassigned; never guess a confirmed owner, speaker or target.
+An ordinary name mention alone cannot create/merge a character. Generation creates
+reviewable interpretations, never rewrites original dialogue or silently resolves
+identity links. A favorite alone does not make UNKNOWN/private/other-persona data
+eligible for AI. Manual creation/editing remains available with AI off.
+
+Test quoted/hypothetical items, ambiguous possessors, several identical names,
+negative/completed tasks, repeated generation, source undo and corrections. Avoid
+repeated duplicate records; preserve edits/rejections and invalidate stale results.
+Unstarring a source does not silently delete an accepted user record. Accepted
+records retain evidence and uncertainty even when the original is later removed.
 
 Confirmed corrections and rejected identity suggestions persist across re-analysis. AI-assisted encounter refinement is a proposal and preserves manual scene edits.
 

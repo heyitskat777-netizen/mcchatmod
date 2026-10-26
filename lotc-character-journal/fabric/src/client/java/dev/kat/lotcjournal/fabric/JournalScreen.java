@@ -24,7 +24,8 @@ public final class JournalScreen extends Screen {
     private EditBox search;
     private Button layout;
     private Button backup;
-    private Button importLogs;
+    private Button importLogs, transcripts;
+    private boolean loadingTranscripts;
     private String operation = "";
     private boolean savingLayout;
     private boolean creatingBackup;
@@ -48,7 +49,16 @@ public final class JournalScreen extends Screen {
         addRenderableWidget(search);
         importLogs = addRenderableWidget(Button.builder(Component.literal("Log import"), button ->
             minecraft.setScreen(new LogImportScreen(this, importer, batches, watcher, FabricLoader.getInstance().getGameDir())))
-            .bounds(left, 140, panel, 20).build());
+            .bounds(left, 140, panel / 2 - 4, 20).build());
+        transcripts = addRenderableWidget(Button.builder(Component.literal("View transcripts"), button -> {
+            loadingTranscripts = true; operation = "Loading transcripts..."; tick();
+            importer.sources().whenComplete((sources, error) -> minecraft.execute(() -> {
+                loadingTranscripts = false;
+                if (minecraft.screen != this) return;
+                if (error != null) { operation = "Transcripts unavailable; retry when storage is ready"; tick(); }
+                else { operation = ""; minecraft.setScreen(new TranscriptScreen(this, importer, sources)); }
+            }));
+        }).bounds(left + panel / 2 + 4, 140, panel / 2 - 4, 20).build());
         int y = Math.max(140, height - 76);
         layout = addRenderableWidget(Button.builder(Component.literal("Layout"),
             button -> {
@@ -83,7 +93,8 @@ public final class JournalScreen extends Screen {
         boolean ready = state.status() == JournalSnapshot.Status.READY;
         layout.active = ready && !savingLayout && !creatingBackup;
         backup.active = layout.active;
-        importLogs.active = layout.active;
+        importLogs.active = layout.active && !loadingTranscripts;
+        transcripts.active = layout.active && !loadingTranscripts;
         layout.setMessage(Component.literal("Layout: " +
             (state.settings().compactLayout() ? "Compact" : "Comfortable")));
     }

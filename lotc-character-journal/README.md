@@ -10,12 +10,23 @@ The user has accepted the Phase 1 foundation smoke test. Press **J** in a world
 to open the journal; its key is rebindable in Controls. Layout settings and backup
 creation remain available. Character identity/search is still future work.
 
-The `0.1.0-alpha.4` development build expands **Log import** for finished UTF-8 `.log`
+The `0.1.0-alpha.6` development build expands **Log import** for finished UTF-8 `.log`
 and `.log.gz` files, background validation, progress/cancellation, restart-safe
 checkpoints, repeat-import deduplication, and a transcript browser with literal
 text search. **Import all / dashboard** adds a read-only folder preview,
 confirmed batch import, durable per-file reports/retry and batch-owned undo.
-Transcript browsing supports All sources, channel filters and UNKNOWN review.
+Transcript browsing supports All sources, channel filters, a direct **Roleplay only**
+view and UNKNOWN review. Recognized persona/plugin notices are ignored; IC-channel
+and sender/emote evidence classifies new RP without guessing speaker identities.
+Older cleaned UNKNOWN observations are not promoted from wording alone.
+The main journal now has **View transcripts**, without opening the import screen.
+Click a dialogue message to select it, then **Favorite selected**, or click its
+`[ ]` / `[*]` marker directly. **F** also toggles the selected message while the
+conversation pane is focused and that message is visible. **Favorites: Only**
+combines with source/channel/search filters. Stars persist across restart/backup;
+undoing their imported message removes them. They do not assign an identity or
+change AI eligibility. See [the favorites checklist](docs/USER_TEST_FAVORITES.md).
+
 An explicitly confirmed folder watch handles stable finished archives every 30s;
 it starts disabled and persists your opt-in. See
 [the folder workflow checklist](docs/USER_TEST_BATCH_IMPORT.md), especially the
@@ -31,13 +42,13 @@ metadata. Names remain unresolved unless supplied as
 reviewed observations before import; no character or persona links are created.
 
 Settings live in `config/lotc-journal/journal.sqlite`. Backups are stored in
-`config/lotc-journal/backups/`. A schema migration creates a verified backup of an existing schema-1, schema-2 or schema-3
+`config/lotc-journal/backups/`. A schema migration creates a verified backup of an existing schema-1 through schema-5
 database before upgrading the journal. Undo removes active batch-owned records
 while keeping source checkpoints and payload-free removal accounting; it does not
 restore them on repeat import or erase existing backups. Live capture, log tailing/rotation,
 historical/live overlap reconciliation, nearby recognition, and AI are not enabled.
-See [docs/USER_TEST_DIALOGUE_SCROLL.md](docs/USER_TEST_DIALOGUE_SCROLL.md) before
-upgrading, especially if alpha.3 imports are incomplete.
+See [docs/USER_TEST_ROLEPLAY_FILTER.md](docs/USER_TEST_ROLEPLAY_FILTER.md) before
+upgrading, especially if alpha.4 imports are incomplete.
 See [docs/USER_TEST_IMPORT.md](docs/USER_TEST_IMPORT.md) for historical limits and recognized
 privacy exclusions, and the real-log test still required to advance Phase 2.
 

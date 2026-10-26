@@ -194,8 +194,9 @@ public final class JournalClientGameTest implements FabricClientGameTest {
     private void exerciseImport(ClientGameTestContext context, SmokeReport report, Path database) throws Exception {
         String raw = "[23:59:59] [Render thread/INFO]: [System] [CHAT][Quiet] §aSynthetic Visitor§r waves.";
         var content = new StringBuilder(raw + "\n" + raw + "\n");
-        for (int index = 3; index <= 62; index++) content.append("[23:59:59] [Render thread/INFO]: [System] [CHAT][Quiet] ")
+        for (int index = 3; index <= 62; index++) content.append("[23:59:59] [Render thread/INFO]: [System] [CHAT]" + (index <= 52 ? "[Quiet] " : " "))
             .append(dialogue(index)).append('\n');
+        for (String notice : systemNotices()) content.append("[23:59:59] [Render thread/INFO]: [System] [CHAT] ").append(notice).append('\n');
         String fixture = content + "[00:00:00] [Render thread/INFO]: [CHAT] [PM] IMPORT_PRIVATE_SENTINEL\n"
             + "[00:00:01] [Render thread/INFO]: [CHAT] [OOC]IMPORT_OOC_SENTINEL\n"
             + "synthetic non-chat diagnostic\n";
@@ -284,17 +285,61 @@ public final class JournalClientGameTest implements FabricClientGameTest {
             context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("No matching records"), WAIT_TICKS);
             context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("Synthetic Visitor"));
             context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Messages 1 to 50 of 62"), WAIT_TICKS);
-            context.clickScreenButton("UNKNOWN review");
-            context.waitFor(client -> screenButtonActive(client.screen, "Channel: UNKNOWN")
-                && client.screen.getNarrationMessage().getString().contains("Messages 1 to 50 of 62"), WAIT_TICKS);
-            context.clickScreenButton("Channel: UNKNOWN");
-            context.waitFor(client -> screenButtonActive(client.screen, "Channel: ALL")
-                && client.screen.getNarrationMessage().getString().contains("Messages 1 to 50 of 62"), WAIT_TICKS);
+            report.stage("roleplay-filter", 30_000, () -> {
+                context.clickScreenButton("Roleplay only");
+                context.waitFor(client -> screenButtonActive(client.screen, "Channel: ROLEPLAY")
+                    && client.screen.getNarrationMessage().getString().contains("Messages 1 to 50 of 52"), WAIT_TICKS);
+                check(sqlCount(database, "SELECT count(*) FROM transcript_lines WHERE channel='ROLEPLAY'") == 52,
+                    "Trusted RP envelopes must be classified without inferring speaker identities");
+                report.screenshot(context.takeScreenshot("lotc-roleplay-only-" + report.phase()));
+                context.clickScreenButton("UNKNOWN review");
+                context.waitFor(client -> screenButtonActive(client.screen, "Channel: UNKNOWN")
+                    && client.screen.getNarrationMessage().getString().contains("Messages 1 to 10 of 10"), WAIT_TICKS);
+                check(sqlCount(database, "SELECT count(*) FROM transcript_lines WHERE channel='UNKNOWN'") == 10,
+                    "Only genuinely unmarked observations should remain in review");
+                context.clickScreenButton("Channel: UNKNOWN");
+                context.waitFor(client -> screenButtonActive(client.screen, "Channel: ALL")
+                    && client.screen.getNarrationMessage().getString().contains("Messages 1 to 50 of 62"), WAIT_TICKS);
+            });
             report.screenshot(context.takeScreenshot("lotc-import-transcript-" + report.phase()));
             context.clickScreenButton("Done");
             context.waitFor(client -> isScreen(client.screen, IMPORT_SCREEN), WAIT_TICKS);
             context.clickScreenButton("Done");
             waitForJournal(context);
+        });
+        report.stage("message-favorites", 40_000, () -> {
+            // Use the main journal entry point, independently of the import dashboard.
+            context.clickScreenButton("View transcripts");
+            context.waitFor(client -> isScreen(client.screen, TRANSCRIPT_SCREEN)
+                && client.screen.getNarrationMessage().getString().contains("Messages 1 to 50 of 62"), WAIT_TICKS);
+            String firstFavorite = "SELECT count(*) FROM message_favorites WHERE source_id='" + sourceId + "' AND source_line=1";
+            check(sqlCount(database, "SELECT count(*) FROM message_favorites") == (report.phase().equals("read") ? 1 : 0),
+                "Favorites must start empty and survive the writer-to-reader process restart exactly");
+            if (report.phase().equals("read")) check(sqlCount(database, firstFavorite) == 1,
+                "Restart must retain the exact first coordinate before any UI mutation");
+            else context.clickScreenButton("Favorite selected");
+            context.waitFor(client -> screenButtonActive(client.screen, "Unfavorite selected"), WAIT_TICKS);
+            check(sqlCount(database, firstFavorite) == 1, "Favorite must target the selected observation");
+            check(sqlCount(database, "SELECT count(*) FROM message_favorites WHERE source_line=2") == 0,
+                "Identical-looking repeated dialogue must remain a separate unstarred observation");
+            context.clickScreenButton("Favorites: All");
+            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Messages 1 to 1 of 1")
+                && client.screen.getNarrationMessage().getString().contains("Selected line 1. Favorite: yes"), WAIT_TICKS);
+            report.screenshot(context.takeScreenshot("lotc-message-favorites-" + report.phase()));
+            // Toggle the visible star through real mouse input; removing the last favorite must clamp/empty safely.
+            context.getInput().setCursorPos(context.computeOnClient(client ->
+                (scrollPane(client.screen).getX() + 8.0) * client.getWindow().getWidth() / client.screen.width),
+                context.computeOnClient(client -> (scrollPane(client.screen).getY() + 8.0) * client.getWindow().getHeight() / client.screen.height));
+            context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("No matching records"), WAIT_TICKS);
+            check(sqlCount(database, "SELECT count(*) FROM message_favorites") == 0, "Unfavorite must be committed, not just hidden");
+            context.runOnClient(client -> check(!screenButtonActive(client.screen, "Favorite selected"), "Empty view must disable favorite mutation"));
+            context.clickScreenButton("Favorites: Only");
+            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Messages 1 to 50 of 62"), WAIT_TICKS);
+            context.clickScreenButton("Favorite selected");
+            context.waitFor(client -> screenButtonActive(client.screen, "Unfavorite selected"), WAIT_TICKS);
+            check(sqlCount(database, firstFavorite) == 1, "Writer and reader must leave the same exact bookmark");
+            context.clickScreenButton("Done"); waitForJournal(context);
         });
     }
 
@@ -418,9 +463,9 @@ public final class JournalClientGameTest implements FabricClientGameTest {
                 query.setString(1, sourceId);
                 try (var source = query.executeQuery()) {
                     check(source.next(), "Import source checkpoint must exist");
-                    check(source.getLong("total_lines") == 65 && source.getLong("processed_lines") == 65
+                    check(source.getLong("total_lines") == 78 && source.getLong("processed_lines") == 78
                         && source.getLong("imported_lines") == 62 && source.getLong("excluded_lines") == 2
-                        && source.getLong("ignored_lines") == 1 && source.getInt("complete") == 1,
+                        && source.getLong("ignored_lines") == 14 && source.getInt("complete") == 1,
                         "Import counters and completion checkpoint must survive repeat import/restart");
                     check(!source.next(), "Content identity must identify one source");
                 }
@@ -432,8 +477,8 @@ public final class JournalClientGameTest implements FabricClientGameTest {
                         check(rows.next() && rows.getLong("source_line") == coordinate, "Repeated observations need distinct coordinates");
                         check(dialogue(coordinate).equals(rows.getString("text")), "Database must contain cleaned dialogue and preserve genuine repeated coordinates");
                         check("23:59:59".equals(rows.getString("clock")), "Original clock must remain unchanged");
-                        check("UNKNOWN".equals(rows.getString("channel")) && rows.getString("observed_speaker") == null,
-                            "Unreviewed names must stay unresolved and ineligible for AI");
+                        check((coordinate <= 52 ? "ROLEPLAY" : "UNKNOWN").equals(rows.getString("channel")) && rows.getString("observed_speaker") == null,
+                            "Channel evidence must not become an inferred speaker or character identity");
                     }
                     check(!rows.next(), "Repeat import must not add duplicates or excluded payloads");
                 }
@@ -443,6 +488,16 @@ public final class JournalClientGameTest implements FabricClientGameTest {
                 check(rows.next() && rows.getInt(1) == 0, "PM/OOC payloads must never enter stored transcripts");
             }
         }
+    }
+
+    private static List<String> systemNotices() {
+        return List.of("You are now Roleplaying as Synthetic Persona",
+            "Set size for persona Synthetic Persona to: 1.0 (180cm, 71in, 5'11\")",
+            "JourneyMap: Press [J]", "You have friend requests from: SyntheticAccount",
+            "====== Latest News ======", "• [Link] Synthetic news update",
+            "Your Soulstone will recharge in 5 seconds.", "Your Soulstone begins to glow.",
+            "Showing matches to Persona name synthetic", "Synthetic Persona is a Persona of SyntheticAccount",
+            "The key did not fit!", "Can you build? Yes", "Applicable regions: synthetic_region, synthetic_biome");
     }
 
     private static String dialogue(int coordinate) {

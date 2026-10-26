@@ -58,12 +58,13 @@ tasks.register('verifyPackagedMod') {
             }
             def bundled = metadata.jars.collect { it.file }
             def expected = [
-                "META-INF/jars/domain-${project.version}.jar": 'dev/kat/lotcjournal/domain/JournalSettings.class',
+                "META-INF/jars/domain-${project.version}.jar": ['dev/kat/lotcjournal/domain/JournalSettings.class', 'dev/kat/lotcjournal/domain/MessageReference.class'],
                 "META-INF/jars/application-${project.version}.jar": 'dev/kat/lotcjournal/application/JournalService.class',
                 "META-INF/jars/storage-${project.version}.jar": 'dev/kat/lotcjournal/storage/SqliteJournalStore.class',
                 "META-INF/jars/ingestion-${project.version}.jar": ['dev/kat/lotcjournal/ingestion/LogImportService.class',
                     'dev/kat/lotcjournal/ingestion/BatchImportService.class', 'dev/kat/lotcjournal/ingestion/FolderWatchService.class'],
-                "META-INF/jars/parsing-${project.version}.jar": 'dev/kat/lotcjournal/parsing/LogLineParser.class',
+                "META-INF/jars/parsing-${project.version}.jar": ['dev/kat/lotcjournal/parsing/LogLineParser.class',
+                    'dev/kat/lotcjournal/parsing/DialogueTextNormalizer.class', 'dev/kat/lotcjournal/parsing/SystemNoticeClassifier.class'],
                 "META-INF/jars/sqlite-jdbc-${project.sqlite_version}.jar": 'org/sqlite/JDBC.class'
             ]
             if (bundled.toSet() != expected.keySet().collect { it.toString() }.toSet())

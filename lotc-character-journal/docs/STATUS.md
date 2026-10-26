@@ -1,5 +1,165 @@
 # Current status — October 25, 2026
 
+## Alpha.6 — favorites, transcript access and accepted next milestones
+
+Branch `feature/message-favorites`, based on alpha.5 verification commit `2351a72`.
+Kat reports all tests passed so far; this accepts the preceding smoke work, not
+unimplemented live capture or measured private-source accuracy. Main is unchanged.
+Native agents are available: build investigated exact Fabric hooks and public
+Chat Logs source/package impacts read-only; verification added only new storage
+and domain tests; review independently checked data integrity/threading/privacy
+without edits. Coordinator owns production/UI/client assertions/docs/integration.
+
+Implemented: individual coordinate-keyed favorites, direct star / selected-message
+button / focused-pane F controls, intersecting Favorites filter, and main-screen
+View transcripts using background source loading. Selected offscreen messages
+cannot be toggled accidentally; empty views disable mutation. SQL desired-state
+writes are idempotent and reject missing rows, callbacks retain exact keys and
+ignore stale requests, and count/page/favorite state share a read snapshot.
+Bookmarks do not infer identities or change AI eligibility. Schema 6 is additive
+from v5 with verified pre-schema6 backup, preserves parser policy 3, and cascades
+bookmarks only when their observation is deleted. Older upgrades retain backed-up
+noise cleanup. Existing migration fixtures now reconstruct the exact old shape
+without the new additive table; privacy/reference expectations were preserved.
+
+Accepted and scheduled, **not enabled**: Phase 2b automatic dated crash-recoverable
+live journals/readable logs (next slice), Phase 3 explicit reversible identity
+assignment with confirmation/unassigned, Phase 4 location/participant scene view
+and import-time review with persistent skip/override, Phase 6 evidence-backed
+favorite item/name/task proposals. See MILESTONES.md and DECISIONS.md. The public
+Chat Logs review and exact 1.21.11 capture/durability criteria are in
+[LIVE_CHAT_LOG_DESIGN.md](LIVE_CHAT_LOG_DESIGN.md); no third-party dependency added.
+
+Coordinator verification:
+
+```sh
+./gradlew check :fabric:build --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --run-id favorites-smoke-1 --timeout 300
+```
+
+Integrated check/build passed in **28s** (30 tasks, 7 executed/23 up-to-date).
+Fresh XML totals **217 tests, 0 failures/errors/skips**: domain 4, application 9,
+parsing 115, ingestion 39, storage 50. Ten new tests cover exact-coordinate identity,
+restart/idempotence, missing/removed-row rejection, literal query/channel/source/
+favorites intersections and paging, backup restoration, owned undo/cascade failure
+rollback and genuine v5 additive migration. All **14 Python contract tests passed**
+in 1.157s. Two earlier integration passes also succeeded; no failed repair cycles.
+Independent review caught null-selection and offscreen-F hazards before runtime;
+both guards are present. Package verification checks MessageReference in the
+existing domain JAR and all six bundled runtime dependencies.
+
+Actual five-JVM **`favorites-smoke-1` passed all phases** (300-second bound per
+process, all exit codes zero, no timeouts or report errors):
+
+| Phase | Elapsed | Result |
+| --- | --- | --- |
+| Graphics preflight | 59.9s | Passed |
+| Development writer | 73.8s | Passed |
+| Development reader | 66.0s | Passed |
+| Packaged writer | 96.7s | Passed |
+| Packaged reader | 68.8s | Passed |
+
+Writers passed 16 assertion stages and readers 17, with body-completion and clean
+shutdown witnesses. Normal and 640x480 screenshots were inspected: star controls,
+scrollbar and fixed footer are readable/reachable. Nonfatal graphics/audio/Realms
+warnings did not replace any assertion; no runtime repair cycle was needed.
+Mandatory `message-favorites` assertions use the real main entry point and star
+mouse control, preserve one of two identical-looking observations independently,
+empty the last-favorite view safely, and verify exact SQL state before reader
+mutation. Previous roleplay/privacy/scroll/batch/undo/watch/keybind/world/backup/
+shutdown assertions remain mandatory. No user testing of alpha.6 is inferred.
+Logs: `/tmp/lotc-favorites-integrated-final.log`,
+`/tmp/lotc-favorites-runner-tests.log`, `/tmp/lotc-favorites-client-1.log`.
+Evidence: `fabric/build/client-smoke/evidence/favorites-smoke-1/` contains JSON,
+JUnit XML, screenshots, safe logs and launch/shutdown witnesses. Legacy migration,
+restored favorite backups and transactional undo failures are proven by separate
+synthetic SQLite tests; fresh client profiles do not substitute for upgrade tests.
+
+GitHub Actions passed both verify and the full client-smoke job on functional
+commit `b1960bb`:
+[run 40267722195](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40267722195).
+[PR #7](https://github.com/heyitskat777-netizen/mcchatmod/pull/7) targets the unmerged
+roleplay-filtering PR #6 branch and is ready for review; main remains unchanged.
+This evidence identifies the functional commit; a documentation-only follow-up
+receives the normal CI rerun separately.
+
+Installable local artifact: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.6.jar`,
+14,552,317 bytes; SHA-256
+`f11e5aace13836faabec36dbf11326d58121e8701395bdd6e00e6b5638ab5df1`.
+[Alpha.6 CI artifact ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40267722195/artifacts/12627436071).
+Install the non-`-sources` JAR. User testing of alpha.6 remains pending:
+[USER_TEST_FAVORITES.md](USER_TEST_FAVORITES.md).
+
+## Alpha.5 — roleplay classification and system-noise cleanup
+
+Branch: `feature/roleplay-filtering`, based on `b8220c4`. Kat supplied screenshots
+of command/plugin output retained as UNKNOWN and requested RP-only chat/emotes.
+No private screenshot names, accounts or dialogue are included in fixtures.
+
+Scope: whole-message deterministic filters for persona switch/size/search/results,
+JourneyMap hints, friend requests, news headers/link bullets, Soulstone notices,
+lock and build/region replies; original IC-channel/sender evidence for new ROLEPLAY
+observations; direct Roleplay only control plus existing All/UNKNOWN review.
+Unmarked ambiguous text stays reviewable. Roleplay channel classification does not
+infer speaker identity or confirm persona/account links. Older cleaned UNKNOWN
+rows lack original IC wrappers and are not automatically promoted from wording.
+
+Schema 5 performs backed-up cleanup of old schema-4 notices, preserves source IDs,
+processed positions, classifications, ownership/undo and original files, and adjusts
+ignored/imported contributions atomically. Legacy-v4 structural validation must not
+apply the new notice policy before backup/migration; current-v5 canonical validation
+remains strict. Parser policy 3 requires original-compatible partial jobs; complete
+alpha.4 imports before upgrading or finish using alpha.4 and the pre-upgrade backup.
+
+Native agents are available for this refinement: build owns schema/storage tests
+and package/version checks; verification owns parser/ingestion policy and tests;
+review is read-only. The coordinator owns UI, client assertions, docs and integrated
+checks. Implementation is complete. Independent review found no remaining blocker after
+narrowing region/persona/news matches to preserve extended narration and star/hyphen
+emotes, and replacing recursive long-list matching with constant-stack parsing.
+No user acceptance is inferred from these checks. Alpha.4 results below are historical.
+
+Coordinator commands (Java/proxy/cache activation documented below):
+
+```sh
+./gradlew -PcoreOnly :parsing:test :ingestion:test :storage:test --no-daemon --console=plain
+./gradlew check :fabric:build --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --run-id roleplay-smoke-1 --timeout 300
+```
+
+The initial narrow check passed in **41s**. After conservative pattern refinements
+and a reproduced 30KB region-list StackOverflowError, the affected integrated
+check/build passed in **1m13s** (30 tasks: 11 executed, 19 up-to-date).
+Fresh XML: **207 tests, 0 failures/errors/skips** — domain 1, application 9,
+parsing 115, ingestion 39, storage 43. The new long-list regression covers 10,000
+regions and 2,000 accounts below the existing 64KiB limit, valid/malformed tails
+and actual parser execution under a two-second budget, without reducing limits.
+All **14 Python runner contract tests passed**. Package checks require the bundled
+notice classifier and normalizer as well as the six runtime JARs.
+
+The five-JVM `roleplay-smoke-1` suite **passed all phases**: graphics preflight
+90.1s, development writer 119.9s / reader 88.8s, packaged writer 119.3s / reader
+97.9s. All processes exited zero, with no timeouts or report errors. Writers
+passed 15 assertion stages and readers 16.
+Its mandatory `roleplay-filter` stage asserts 52 explicit-RP and 10 unmarked UNKNOWN
+observations, 13 ignored notice families, no inferred speaker identities, actual
+Roleplay only / UNKNOWN / All controls and persistence. The fixture totals 78 source
+lines = 62 imported + 2 excluded + 14 ignored. Existing scroll/resize/batch/retry/
+undo/watch/backup/world/keybind/shutdown assertions stay in place. Legacy schema-4
+cleanup, no-raw-column backups, rollback/counters/ownership and UNKNOWN preservation
+are separately covered with synthetic databases.
+
+Logs: `/tmp/lotc-roleplay-core.log`, `/tmp/lotc-roleplay-integrated-verified.log`,
+`/tmp/lotc-roleplay-runner-tests.log`, `/tmp/lotc-roleplay-client.log`.
+GitHub Actions also passed verify and client-smoke on functional commit `8bde8d7`: [run 40223901866](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40223901866).
+[PR #6](https://github.com/heyitskat777-netizen/mcchatmod/pull/6) targets
+`feature/client-smoke-tests`; main remains unchanged. [Alpha.5 installable artifact ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40223901866/artifacts/12610327295).
+Kat reports all tests passed so far in the subsequent favorites/scene request.
+This records user smoke acceptance; measured private-source parser accuracy and
+live capture remain unfinished. Checklist: [USER_TEST_ROLEPLAY_FILTER.md](USER_TEST_ROLEPLAY_FILTER.md).
+
 ## Alpha.4 refinement — dialogue-only persistence and scrolling
 
 Branch: `feature/dialogue-transcript`, based on `82884d4`. Kat reports **all alpha.3
