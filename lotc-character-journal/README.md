@@ -60,7 +60,8 @@ limits and restore behavior in STATUS.md.
 review its name, aliases, notes and account observation. **New character** opens a
 separate draft; Save character persists it. **Use as persona** is available for a
 saved, unchanged character; unsaved drafts/edits explain why saving is required.
-Closing/reopening, search and resizing retain the exact saved identity and drafts.
+Saved characters remain selectable after reopening/search; resizing preserves the
+current editor draft.
 Aliases support escaped semicolons/backslashes and the full native field bounds.
 **Use as persona** creates/selects a persona; **Assign** on an individually selected
 message asks for its owning persona, identity or unassigned choice, and whether it

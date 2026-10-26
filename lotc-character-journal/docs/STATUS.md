@@ -56,7 +56,46 @@ invalid encodings and explicit replacement/clearing are covered by the new cases
 Toolchain/metadata and all six packaged runtime JAR checks passed. No failed
 compile or repair cycle is claimed at this point.
 
-Actual five-JVM `character-browser-1` is **running**, not yet a runtime pass.
+Local **`character-browser-1` passed all five phases** within the existing
+300-second process limit, all exit codes zero, no timeouts/report errors:
+
+| Local phase | Elapsed | Result |
+| --- | --- | --- |
+| Graphics preflight | 92.9s | Passed |
+| Development writer | 160.0s | Passed |
+| Development reader | 118.3s | Passed |
+| Packaged writer | 228.9s | Passed |
+| Packaged reader | 123.6s | Passed |
+
+Writers passed **21 assertion stages**, readers **22**, including successful body
+completion and worker/shutdown witnesses. No runtime repair, reduced assertion or
+extended timeout was needed. Evidence: `fabric/build/client-smoke/evidence/character-browser-1/`
+(JSON, XML, selected screenshots, logs, launch/shutdown witnesses). Normal-list and 640x480 detail screenshots were inspected: saved rows/ID
+suffixes, labeled fields and explicit save/persona guidance are readable and the
+controls remain onscreen.
+
+GitHub Actions **passed verify and the complete five-JVM client suite** on
+functional commit `5a49648`:
+[run 40406809302](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40406809302).
+
+| CI phase | Elapsed | Result |
+| --- | --- | --- |
+| Graphics preflight | 34.5s | Passed |
+| Development writer | 36.0s | Passed |
+| Development reader | 34.6s | Passed |
+| Packaged writer | 40.3s | Passed |
+| Packaged reader | 34.0s | Passed |
+
+[PR #9](https://github.com/heyitskat777-netizen/mcchatmod/pull/9) targets PR #8's
+feature/live-capture branch and is ready for review; main stays unchanged. The
+final documentation-only commit receives normal CI separately; the successful
+functional commit/run above identifies the tested code. Alpha.8
+[installable CI artifact ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40406809302/artifacts/12691079070).
+Install the non-`-sources` JAR. Local artifact:
+`fabric/build/libs/lotc-character-journal-0.1.0-alpha.8.jar`, 14,646,256 bytes;
+SHA-256 `25eaf1f7bffc8a1b01f25eec58f30544f19f5251e75109cecc970d2b02d61142`.
+User/modpack acceptance of the new browser remains pending.
+
 Mandatory `character-browser` creates/saves without immediately using a persona,
 returns to visible rows, filters by shared alias and empty query, opens the second
 saved UUID, resizes an edited draft at 640x480, saves/activates that exact persona,
