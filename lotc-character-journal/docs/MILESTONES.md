@@ -124,7 +124,8 @@ Completing 2a does not mark live capture or the entire Phase 2 complete.
 
 Kat requests Chat Logs-style recording in the mod's own dated folder, starting
 without a manual command whenever connected to a world, with an explicit pause
-control. This is the next implementation slice, not enabled by alpha.6. Use the
+control. Alpha.7 implements the live recording/replay slice; actual verification and
+remaining cross-format overlap limits are recorded in STATUS.md. Use the
 same RP/noise/privacy policy before any disk persistence. Capture received chat
 and non-overlay server/plugin chat, not outbound commands or action bars. Save
 on every eligible message through a bounded worker; display pending/error state.
@@ -204,6 +205,15 @@ Compare a short familiar conversation with the transcript inspector. Include RP,
 The reviewed sample has no unexplained missing or duplicated eligible messages. Every displayed message can be traced to a received event or original source. Recovery tests pass.
 
 ## Phase 3 — Character identity and persona memories
+
+Alpha.7 implements **3a — manual identities and persona assignments**: archive
+names/aliases/notes/account observations, explicit persona selection, per-message
+confirmation/unassigned, isolated memory views and reversible link overlays.
+**3b — previous-database import** remains pending inspection of its actual schema.
+**3c — private multi-persona acceptance** requires Kat's user checks. Do not mark
+all Phase 3 complete merely because 3a's automated tests pass. Live capture leaves
+knowledge unassigned until explicitly reviewed; selecting a persona is not proof
+that every archived or received event belongs to that persona.
 
 **Deliverables**
 

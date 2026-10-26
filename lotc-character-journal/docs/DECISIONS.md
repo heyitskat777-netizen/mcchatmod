@@ -138,3 +138,20 @@ or code has been added.
 - SQLite JDBC 3.51.3.0.
 - JUnit 5.12.2.
 
+
+## October 26 continuation — authorized Phase 2b / 3 implementation
+
+Kat reports an individual-selection usability defect and authorizes live capture
+and identities/personas. Alpha.7 removes implicit first-message selection and shows
+an unmistakable chosen row; automated input must exercise a non-first wrapped row
+after scrolling, not infer this from a first-row star. Automatic received capture,
+durable daily journals and a manual identity/persona slice are implemented; see
+STATUS.md for actual checks. Persona notes in the shared archive are administrative
+metadata, not automatically shared persona knowledge. Memory searches/favorites
+are restricted to explicit owning-persona assignments. No account/persona link is
+inferred from operational notices. Prior database format remains unknown.
+
+Comma-titled persona replies now belong to policy 4. Older partial jobs must finish
+under their original policy. Backed-up schema 8 migration cleans uncertain legacy
+noise and retains previously proven roleplay/undo/source identities. Exact wording
+alone cannot safely discard every historically mislabeled server notice.

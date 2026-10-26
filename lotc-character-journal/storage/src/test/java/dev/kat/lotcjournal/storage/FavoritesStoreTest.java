@@ -146,7 +146,7 @@ class FavoritesStoreTest {
         assertEquals(progress, restored.progress(SOURCE));
         restored.setFavorite(ref(SOURCE, 1), false);
         assertEquals(Set.of(ref(SOURCE, 2)), store.transcript(null, null, 0, 20).favorites());
-        assertEquals(6, scalar(backup, "PRAGMA user_version"));
+        assertEquals(8, scalar(backup, "PRAGMA user_version"));
     }
 
     @Test void undoCascadesOnlyItsOwnedFavoritesAndRemovedCoordinatesCannotBeFavoritedAgain() throws Exception {
@@ -206,9 +206,10 @@ class FavoritesStoreTest {
         var entries = old.transcript(null, null, 0, 20).entries();
         var progress = old.progress(SOURCE); var sources = old.sources(); var contribution = old.batchFiles(batch.id());
         // Reconstruct the complete genuine v5 schema, not a v6 table set with a changed version number.
+        try(var connection=DriverManager.getConnection("jdbc:sqlite:"+path())) {LegacyJournalFixtures.removeLaterSchemas(connection);}
         sql(path(), "DROP TABLE message_favorites"); sql(path(), "PRAGMA user_version=5");
         var migrated = open(path());
-        assertEquals(6, scalar(path(), "PRAGMA user_version"));
+        assertEquals(8, scalar(path(), "PRAGMA user_version"));
         assertEquals(entries, migrated.transcript(null, null, 0, 20).entries());
         assertTrue(migrated.transcript(null, null, 0, 20).favorites().isEmpty());
         assertEquals(progress, migrated.progress(SOURCE)); assertEquals(sources, migrated.sources());

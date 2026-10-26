@@ -5,7 +5,7 @@ import java.util.regex.Pattern;
 
 /** Whole, unattributed server templates only. Never use substring/keyword filtering on dialogue. */
 final class SystemNoticeClassifier {
-    private static final String PERSONA = "[\\p{L}\\p{N}_'’ -]{1,96}";
+    private static final String PERSONA = "[\\p{L}\\p{N}_'’, -]{1,96}";
     private static final String ACCOUNT = "[A-Za-z0-9_]{1,16}";
     private static final List<Pattern> NOTICES = List.of(
         notice("(?:\\[Personas?]\\s*)?You are now Roleplaying as " + PERSONA + "[.!]?"),

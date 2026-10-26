@@ -34,6 +34,18 @@ class RoleplayIngestionTest {
             assertEquals(content, Files.readString(path));
         }
     }
+    @Test void policyFourRefusesIncompletePolicyThreeWithoutChangingCheckpoint() throws Exception {
+        var repository = new LogImportServiceTest.MemoryCapture();
+        Path path = Files.writeString(directory.resolve("partial-policy-three.log"), line("[Quiet]Synthetic Visitor waves."));
+        String id = hash(Files.readAllBytes(path));
+        repository.beginSource(new ImportSource(id, "partial-policy-three.log", "plain", 1,
+            hash("parser-policy-3\n".getBytes(StandardCharsets.UTF_8))));
+        try (var service = new LogImportService(repository)) {
+            assertThrows(java.util.concurrent.ExecutionException.class, () -> service.importFile(path, Set.of()).get(5, TimeUnit.SECONDS));
+            assertEquals(0, repository.progress(id).processedLines());
+            assertTrue(repository.received.isEmpty());
+        }
+    }
     @Test void policyThreeRefusesAnIncompletePolicyTwoSourceWithoutWritingRecords() throws Exception {
         var repository = new LogImportServiceTest.MemoryCapture();
         Path path = Files.writeString(directory.resolve("partial-policy-two.log"), line("[Quiet]Synthetic Visitor waves."));

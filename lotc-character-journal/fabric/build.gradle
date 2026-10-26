@@ -58,11 +58,11 @@ tasks.register('verifyPackagedMod') {
             }
             def bundled = metadata.jars.collect { it.file }
             def expected = [
-                "META-INF/jars/domain-${project.version}.jar": ['dev/kat/lotcjournal/domain/JournalSettings.class', 'dev/kat/lotcjournal/domain/MessageReference.class'],
-                "META-INF/jars/application-${project.version}.jar": 'dev/kat/lotcjournal/application/JournalService.class',
-                "META-INF/jars/storage-${project.version}.jar": 'dev/kat/lotcjournal/storage/SqliteJournalStore.class',
+                "META-INF/jars/domain-${project.version}.jar": ['dev/kat/lotcjournal/domain/JournalSettings.class', 'dev/kat/lotcjournal/domain/MessageReference.class', 'dev/kat/lotcjournal/domain/LiveEvent.class', 'dev/kat/lotcjournal/domain/IdentityRepository.class'],
+                "META-INF/jars/application-${project.version}.jar": ['dev/kat/lotcjournal/application/JournalService.class','dev/kat/lotcjournal/application/IdentityService.class'],
+                "META-INF/jars/storage-${project.version}.jar": ['dev/kat/lotcjournal/storage/SqliteJournalStore.class','dev/kat/lotcjournal/storage/SqliteIdentityRepository.class'],
                 "META-INF/jars/ingestion-${project.version}.jar": ['dev/kat/lotcjournal/ingestion/LogImportService.class',
-                    'dev/kat/lotcjournal/ingestion/BatchImportService.class', 'dev/kat/lotcjournal/ingestion/FolderWatchService.class'],
+                    'dev/kat/lotcjournal/ingestion/BatchImportService.class', 'dev/kat/lotcjournal/ingestion/FolderWatchService.class', 'dev/kat/lotcjournal/ingestion/LiveCaptureService.class', 'dev/kat/lotcjournal/ingestion/LiveJournalCodec.class'],
                 "META-INF/jars/parsing-${project.version}.jar": ['dev/kat/lotcjournal/parsing/LogLineParser.class',
                     'dev/kat/lotcjournal/parsing/DialogueTextNormalizer.class', 'dev/kat/lotcjournal/parsing/SystemNoticeClassifier.class'],
                 "META-INF/jars/sqlite-jdbc-${project.sqlite_version}.jar": 'org/sqlite/JDBC.class'

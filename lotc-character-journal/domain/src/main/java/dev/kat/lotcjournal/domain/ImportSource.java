@@ -2,7 +2,7 @@ package dev.kat.lotcjournal.domain;
 
 import java.util.Objects;
 
-/** Identity is SHA-256 of the complete validated decompressed byte stream. */
+/** Historical IDs hash complete validated decompressed bytes; live IDs belong to the explicit session namespace. */
 public record ImportSource(String id, String label, String format, long totalLines, String policyFingerprint) {
     /** Unconfigured low-level callers still have an explicit stable classification policy. */
     public ImportSource(String id, String label, String format, long totalLines) {

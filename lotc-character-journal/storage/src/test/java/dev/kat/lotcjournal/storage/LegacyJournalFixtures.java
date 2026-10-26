@@ -4,6 +4,12 @@ import java.sql.Connection;
 
 /** Reconstructs the exact historical transcript DDL, including its redundant raw column. */
 final class LegacyJournalFixtures {
+    static void removeLaterSchemas(Connection connection) throws Exception {
+        try(var statement=connection.createStatement()) {
+            for(String table:java.util.List.of("identity_decisions","identity_merges","memory_assignments","identity_state","personas","character_aliases","character_identities","live_events","live_sessions"))
+                statement.execute("DROP TABLE IF EXISTS " + table);
+        }
+    }
     static void transcript(Connection connection, int version) throws Exception {
         String sql;
         try (var query = connection.createStatement(); var row = query.executeQuery("SELECT sql FROM sqlite_master WHERE name='transcript_lines'")) {
@@ -14,6 +20,7 @@ final class LegacyJournalFixtures {
             statement.execute("PRAGMA legacy_alter_table=ON");
             connection.setAutoCommit(false);
             try {
+                removeLaterSchemas(connection);
                 statement.execute("DROP TABLE IF EXISTS message_favorites");
                 statement.execute("ALTER TABLE transcript_lines RENAME TO legacy_conversion");
                 statement.execute(sql);
