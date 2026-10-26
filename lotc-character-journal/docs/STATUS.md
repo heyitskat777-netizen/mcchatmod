@@ -48,7 +48,10 @@ and actual parser execution under a two-second budget, without reducing limits.
 All **14 Python runner contract tests passed**. Package checks require the bundled
 notice classifier and normalizer as well as the six runtime JARs.
 
-The five-JVM `roleplay-smoke-1` suite is **running**, not yet a runtime-pass claim.
+The five-JVM `roleplay-smoke-1` suite **passed all phases**: graphics preflight
+90.1s, development writer 119.9s / reader 88.8s, packaged writer 119.3s / reader
+97.9s. All processes exited zero, with no timeouts or report errors. Writers
+passed 15 assertion stages and readers 16.
 Its mandatory `roleplay-filter` stage asserts 52 explicit-RP and 10 unmarked UNKNOWN
 observations, 13 ignored notice families, no inferred speaker identities, actual
 Roleplay only / UNKNOWN / All controls and persistence. The fixture totals 78 source
@@ -59,8 +62,12 @@ are separately covered with synthetic databases.
 
 Logs: `/tmp/lotc-roleplay-core.log`, `/tmp/lotc-roleplay-integrated-verified.log`,
 `/tmp/lotc-roleplay-runner-tests.log`, `/tmp/lotc-roleplay-client.log`.
-User/private-source testing remains pending:
-[USER_TEST_ROLEPLAY_FILTER.md](USER_TEST_ROLEPLAY_FILTER.md).
+GitHub Actions also passed verify and client-smoke on functional commit `8bde8d7`: [run 40223901866](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40223901866).
+[PR #6](https://github.com/heyitskat777-netizen/mcchatmod/pull/6) targets
+`feature/client-smoke-tests`; main remains unchanged. [Alpha.5 installable artifact ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40223901866/artifacts/12610327295).
+Kat reports all tests passed so far in the subsequent favorites/scene request.
+This records user smoke acceptance; measured private-source parser accuracy and
+live capture remain unfinished. Checklist: [USER_TEST_ROLEPLAY_FILTER.md](USER_TEST_ROLEPLAY_FILTER.md).
 
 ## Alpha.4 refinement — dialogue-only persistence and scrolling
 
