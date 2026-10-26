@@ -2,6 +2,7 @@ package dev.kat.lotcjournal.ingestion;
 
 import dev.kat.lotcjournal.domain.CaptureRepository;
 import dev.kat.lotcjournal.domain.Channel;
+import dev.kat.lotcjournal.domain.MessageReference;
 import dev.kat.lotcjournal.domain.ImportProgress;
 import dev.kat.lotcjournal.domain.ImportSource;
 import dev.kat.lotcjournal.domain.ImportView;
@@ -99,6 +100,14 @@ public final class LogImportService implements AutoCloseable {
 
     public CompletableFuture<TranscriptPage> transcript(String sourceId, String query, Channel channel, int offset, int limit) {
         return submit(() -> repository.transcript(sourceId, query, channel, offset, limit));
+    }
+
+    public CompletableFuture<TranscriptPage> transcript(String sourceId, String query, Channel channel, boolean favoritesOnly, int offset, int limit) {
+        return submit(() -> repository.transcript(sourceId, query, channel, favoritesOnly, offset, limit));
+    }
+
+    public CompletableFuture<Void> setFavorite(MessageReference message, boolean favorite) {
+        return submit(() -> { repository.setFavorite(message, favorite); return null; });
     }
 
     public CompletableFuture<Long> removedRecords(String sourceId) { return submit(() -> repository.removedRecords(sourceId)); }

@@ -7,6 +7,7 @@ import dev.kat.lotcjournal.domain.BatchRepository;
 import dev.kat.lotcjournal.domain.BatchSummary;
 import dev.kat.lotcjournal.domain.CaptureRepository;
 import dev.kat.lotcjournal.domain.Channel;
+import dev.kat.lotcjournal.domain.MessageReference;
 import dev.kat.lotcjournal.domain.DialogueNormalizer;
 import dev.kat.lotcjournal.domain.DialogueCleanup;
 import dev.kat.lotcjournal.domain.ImportProgress;
@@ -36,7 +37,7 @@ import java.time.Instant;
 
 /** SQLite adapter. Callers use short-lived connections only on journal/import worker threads. */
 public final class SqliteJournalStore implements SettingsRepository, BackupService, CaptureRepository, BatchRepository {
-    private static final int SCHEMA_VERSION = 5;
+    private static final int SCHEMA_VERSION = 6;
     private static final String SETTINGS_SQL = "CREATE TABLE journal_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)";
     private static final String SOURCES_SQL = """
         CREATE TABLE capture_sources (
@@ -135,6 +136,14 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
         """;
     private static final String TRANSCRIPT_SQL = LEGACY_TRANSCRIPT_SQL.replace(
         "  raw TEXT NOT NULL CHECK(length(raw)<=65536),\n", "");
+    private static final String FAVORITES_SQL = """
+        CREATE TABLE message_favorites (
+          source_id TEXT NOT NULL,
+          source_line INTEGER NOT NULL,
+          PRIMARY KEY(source_id,source_line),
+          FOREIGN KEY(source_id,source_line) REFERENCES transcript_lines(source_id,source_line) ON DELETE CASCADE
+        )
+        """;
     private final Path database;
     private boolean startupRecovered;
     private final DialogueNormalizer normalizer;
@@ -174,7 +183,8 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                     statement.execute("INSERT INTO journal_settings VALUES ('compact_layout','false')");
                     createCaptureSchema(connection);
                     createWorkflowSchema(connection);
-                    statement.execute("PRAGMA user_version=5");
+                    statement.execute(FAVORITES_SQL);
+                    statement.execute("PRAGMA user_version=6");
                     validateSchema(connection, SCHEMA_VERSION);
                     verifyIntegrity(connection);
                     connection.commit();
@@ -187,7 +197,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 verifyIntegrity(connection);
                 // No schema or WAL mutation until a complete, owned old-version snapshot exists.
                 Path backup = createBackup(database.getParent().resolve("backups").resolve(
-                    database.getFileName() + "-pre-schema5-" + UUID.randomUUID() + ".sqlite"));
+                    database.getFileName() + "-pre-schema6-" + UUID.randomUUID() + ".sqlite"));
                 try (var saved = DriverManager.getConnection("jdbc:sqlite:" + backup)) {
                     validateSchema(saved, version);
                     verifyIntegrity(saved);
@@ -196,8 +206,9 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 try {
                     if (version == 1) createCaptureSchema(connection);
                     if (version < 3) createWorkflowSchema(connection);
-                    if (version >= 2) migrateDialogue(connection, version);
-                    statement.execute("PRAGMA user_version=5");
+                    if (version >= 2 && version < 5) migrateDialogue(connection, version);
+                    statement.execute(FAVORITES_SQL);
+                    statement.execute("PRAGMA user_version=6");
                     validateSchema(connection, SCHEMA_VERSION);
                     verifyIntegrity(connection);
                     connection.commit();
@@ -311,6 +322,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 expected.put("watch_settings", WATCH_SQL);
                 expected.put("watch_attempts", WATCH_ATTEMPTS_SQL);
             }
+            if (version >= 6) expected.put("message_favorites", FAVORITES_SQL);
             int found = 0;
             try (var objects = statement.executeQuery(
                 "SELECT name, type, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'")) {
@@ -340,7 +352,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 }
             }
         }
-        if (version >= 2) validateCaptureData(connection, version >= 3, version >= 4, version >= SCHEMA_VERSION);
+        if (version >= 2) validateCaptureData(connection, version >= 3, version >= 4, version >= 5);
         if (version >= 3) validateWorkflowData(connection);
     }
 
@@ -631,6 +643,10 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
     }
 
     @Override public TranscriptPage transcript(String sourceId, String query, Channel channel, int offset, int limit) throws SQLException {
+        return transcript(sourceId, query, channel, false, offset, limit);
+    }
+
+    @Override public TranscriptPage transcript(String sourceId, String query, Channel channel, boolean favoritesOnly, int offset, int limit) throws SQLException {
         if (sourceId != null) requireSourceId(sourceId);
         if (channel == Channel.PRIVATE_MESSAGE || channel == Channel.OOC) throw new IllegalArgumentException("Excluded channels are not stored");
         if (offset < 0 || limit < 1 || limit > 200) throw new IllegalArgumentException("Invalid transcript page bounds");
@@ -638,25 +654,55 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
         if (filter.length() > 256) throw new IllegalArgumentException("Transcript query is too long");
         String pattern = "%" + filter.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
         String where = " WHERE (? IS NULL OR source_id=?) AND (text LIKE ? ESCAPE '\\' OR observed_speaker LIKE ? ESCAPE '\\') AND (? IS NULL OR channel=?)";
+        if (favoritesOnly) where += " AND EXISTS (SELECT 1 FROM message_favorites f WHERE f.source_id=transcript_lines.source_id AND f.source_line=transcript_lines.source_line)";
         try (var connection = open()) {
-            connection.setAutoCommit(false); // Count and entries use the same read snapshot.
+            connection.setAutoCommit(false); // Count, entries and favorite state share the read snapshot.
             long total;
             try (var count = connection.prepareStatement("SELECT count(*) FROM transcript_lines" + where)) {
                 bindFilter(count, sourceId, pattern, channel);
                 try (var rows = count.executeQuery()) { total = rows.getLong(1); }
             }
             var entries = new ArrayList<TranscriptLine>();
-            try (var select = connection.prepareStatement("SELECT * FROM transcript_lines" + where
+            var favorites = new java.util.HashSet<MessageReference>();
+            try (var select = connection.prepareStatement("SELECT *, EXISTS (SELECT 1 FROM message_favorites f WHERE f.source_id=transcript_lines.source_id AND f.source_line=transcript_lines.source_line) AS favorite FROM transcript_lines" + where
                 + " ORDER BY source_id,source_line LIMIT ? OFFSET ?")) {
                 bindFilter(select, sourceId, pattern, channel);
                 select.setInt(7, limit);
                 select.setInt(8, offset);
                 try (var rows = select.executeQuery()) {
-                    while (rows.next()) entries.add(readLine(rows));
+                    while (rows.next()) {
+                        var line = readLine(rows); entries.add(line);
+                        if (rows.getBoolean("favorite")) favorites.add(MessageReference.of(line));
+                    }
                 }
             }
             connection.commit();
-            return new TranscriptPage(entries, total, offset, limit);
+            return new TranscriptPage(entries, total, offset, limit, favorites);
+        }
+    }
+
+    @Override public void setFavorite(MessageReference message, boolean favorite) throws SQLException {
+        Objects.requireNonNull(message);
+        try (var connection = open()) {
+            connection.setAutoCommit(false);
+            try {
+                // Acquire the write lock before existence check: undo cannot race this decision.
+                try (var lock = connection.createStatement()) {
+                    lock.executeUpdate("UPDATE journal_settings SET value=value WHERE key='compact_layout'");
+                }
+                try (var query = connection.prepareStatement("SELECT 1 FROM transcript_lines WHERE source_id=? AND source_line=?")) {
+                    query.setString(1, message.sourceId()); query.setLong(2, message.sourceLine());
+                    try (var result = query.executeQuery()) {
+                        if (!result.next()) throw new SQLException("Message is no longer available");
+                    }
+                }
+                try (var update = connection.prepareStatement(favorite
+                    ? "INSERT INTO message_favorites(source_id,source_line) VALUES (?,?) ON CONFLICT DO NOTHING"
+                    : "DELETE FROM message_favorites WHERE source_id=? AND source_line=?")) {
+                    update.setString(1, message.sourceId()); update.setLong(2, message.sourceLine()); update.executeUpdate();
+                }
+                connection.commit();
+            } catch (SQLException | RuntimeException failure) { connection.rollback(); throw failure; }
         }
     }
 

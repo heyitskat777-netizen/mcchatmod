@@ -58,7 +58,7 @@ tasks.register('verifyPackagedMod') {
             }
             def bundled = metadata.jars.collect { it.file }
             def expected = [
-                "META-INF/jars/domain-${project.version}.jar": 'dev/kat/lotcjournal/domain/JournalSettings.class',
+                "META-INF/jars/domain-${project.version}.jar": ['dev/kat/lotcjournal/domain/JournalSettings.class', 'dev/kat/lotcjournal/domain/MessageReference.class'],
                 "META-INF/jars/application-${project.version}.jar": 'dev/kat/lotcjournal/application/JournalService.class',
                 "META-INF/jars/storage-${project.version}.jar": 'dev/kat/lotcjournal/storage/SqliteJournalStore.class',
                 "META-INF/jars/ingestion-${project.version}.jar": ['dev/kat/lotcjournal/ingestion/LogImportService.class',

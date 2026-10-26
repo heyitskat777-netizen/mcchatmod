@@ -307,6 +307,40 @@ public final class JournalClientGameTest implements FabricClientGameTest {
             context.clickScreenButton("Done");
             waitForJournal(context);
         });
+        report.stage("message-favorites", 40_000, () -> {
+            // Use the main journal entry point, independently of the import dashboard.
+            context.clickScreenButton("View transcripts");
+            context.waitFor(client -> isScreen(client.screen, TRANSCRIPT_SCREEN)
+                && client.screen.getNarrationMessage().getString().contains("Messages 1 to 50 of 62"), WAIT_TICKS);
+            String firstFavorite = "SELECT count(*) FROM message_favorites WHERE source_id='" + sourceId + "' AND source_line=1";
+            check(sqlCount(database, "SELECT count(*) FROM message_favorites") == (report.phase().equals("read") ? 1 : 0),
+                "Favorites must start empty and survive the writer-to-reader process restart exactly");
+            if (report.phase().equals("read")) check(sqlCount(database, firstFavorite) == 1,
+                "Restart must retain the exact first coordinate before any UI mutation");
+            else context.clickScreenButton("Favorite selected");
+            context.waitFor(client -> screenButtonActive(client.screen, "Unfavorite selected"), WAIT_TICKS);
+            check(sqlCount(database, firstFavorite) == 1, "Favorite must target the selected observation");
+            check(sqlCount(database, "SELECT count(*) FROM message_favorites WHERE source_line=2") == 0,
+                "Identical-looking repeated dialogue must remain a separate unstarred observation");
+            context.clickScreenButton("Favorites: All");
+            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Messages 1 to 1 of 1")
+                && client.screen.getNarrationMessage().getString().contains("Selected line 1. Favorite: yes"), WAIT_TICKS);
+            report.screenshot(context.takeScreenshot("lotc-message-favorites-" + report.phase()));
+            // Toggle the visible star through real mouse input; removing the last favorite must clamp/empty safely.
+            context.getInput().setCursorPos(context.computeOnClient(client ->
+                (scrollPane(client.screen).getX() + 8.0) * client.getWindow().getWidth() / client.screen.width),
+                context.computeOnClient(client -> (scrollPane(client.screen).getY() + 8.0) * client.getWindow().getHeight() / client.screen.height));
+            context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("No matching records"), WAIT_TICKS);
+            check(sqlCount(database, "SELECT count(*) FROM message_favorites") == 0, "Unfavorite must be committed, not just hidden");
+            context.runOnClient(client -> check(!screenButtonActive(client.screen, "Favorite selected"), "Empty view must disable favorite mutation"));
+            context.clickScreenButton("Favorites: Only");
+            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Messages 1 to 50 of 62"), WAIT_TICKS);
+            context.clickScreenButton("Favorite selected");
+            context.waitFor(client -> screenButtonActive(client.screen, "Unfavorite selected"), WAIT_TICKS);
+            check(sqlCount(database, firstFavorite) == 1, "Writer and reader must leave the same exact bookmark");
+            context.clickScreenButton("Done"); waitForJournal(context);
+        });
     }
 
     private void exerciseBatchImport(ClientGameTestContext context, SmokeReport report, Path database) throws Exception {

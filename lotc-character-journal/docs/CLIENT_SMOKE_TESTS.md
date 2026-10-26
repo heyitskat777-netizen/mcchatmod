@@ -120,3 +120,15 @@ and restart persistence in development and packaged JVMs. Existing scroll, backu
 batch, undo, watch, world, keybind and shutdown criteria remain. Unit tests separately
 check every notice family against quoted/attributed/near-miss dialogue, privacy
 precedence, schema-4 cleanup with no raw column, rollback and legacy uncertainty.
+
+## Alpha.6 favorites assertions
+
+Mandatory `message-favorites` exercises main-screen View transcripts, an exact
+first-coordinate favorite among repeated-looking dialogue, Favorites: Only,
+actual star mouse input, removing the last favorite into a safe empty view,
+restoring the star and returning directly to the main journal. Reader JVMs assert
+the saved exact key before mutation. This runs in both development and packaged
+profiles. Synthetic fixtures and existing privacy/channel/scroll/undo checks remain.
+Schema-5 upgrades, restored backups, owned favorite cascade/rollback and filter
+intersections are separately verified by SQLite tests, not inferred from fresh
+client profiles. This build does not capture live chat or create scenes/identities.
