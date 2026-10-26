@@ -49,7 +49,21 @@ Independent review caught null-selection and offscreen-F hazards before runtime;
 both guards are present. Package verification checks MessageReference in the
 existing domain JAR and all six bundled runtime dependencies.
 
-Actual five-JVM `favorites-smoke-1` is **running**, not yet a runtime pass.
+Actual five-JVM **`favorites-smoke-1` passed all phases** (300-second bound per
+process, all exit codes zero, no timeouts or report errors):
+
+| Phase | Elapsed | Result |
+| --- | --- | --- |
+| Graphics preflight | 59.9s | Passed |
+| Development writer | 73.8s | Passed |
+| Development reader | 66.0s | Passed |
+| Packaged writer | 96.7s | Passed |
+| Packaged reader | 68.8s | Passed |
+
+Writers passed 16 assertion stages and readers 17, with body-completion and clean
+shutdown witnesses. Normal and 640x480 screenshots were inspected: star controls,
+scrollbar and fixed footer are readable/reachable. Nonfatal graphics/audio/Realms
+warnings did not replace any assertion; no runtime repair cycle was needed.
 Mandatory `message-favorites` assertions use the real main entry point and star
 mouse control, preserve one of two identical-looking observations independently,
 empty the last-favorite view safely, and verify exact SQL state before reader
@@ -57,7 +71,25 @@ mutation. Previous roleplay/privacy/scroll/batch/undo/watch/keybind/world/backup
 shutdown assertions remain mandatory. No user testing of alpha.6 is inferred.
 Logs: `/tmp/lotc-favorites-integrated-final.log`,
 `/tmp/lotc-favorites-runner-tests.log`, `/tmp/lotc-favorites-client-1.log`.
-User checklist: [USER_TEST_FAVORITES.md](USER_TEST_FAVORITES.md).
+Evidence: `fabric/build/client-smoke/evidence/favorites-smoke-1/` contains JSON,
+JUnit XML, screenshots, safe logs and launch/shutdown witnesses. Legacy migration,
+restored favorite backups and transactional undo failures are proven by separate
+synthetic SQLite tests; fresh client profiles do not substitute for upgrade tests.
+
+GitHub Actions passed both verify and the full client-smoke job on functional
+commit `b1960bb`:
+[run 40267722195](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40267722195).
+[PR #7](https://github.com/heyitskat777-netizen/mcchatmod/pull/7) targets the unmerged
+roleplay-filtering PR #6 branch and is ready for review; main remains unchanged.
+This evidence identifies the functional commit; a documentation-only follow-up
+receives the normal CI rerun separately.
+
+Installable local artifact: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.6.jar`,
+14,552,317 bytes; SHA-256
+`f11e5aace13836faabec36dbf11326d58121e8701395bdd6e00e6b5638ab5df1`.
+[Alpha.6 CI artifact ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40267722195/artifacts/12627436071).
+Install the non-`-sources` JAR. User testing of alpha.6 remains pending:
+[USER_TEST_FAVORITES.md](USER_TEST_FAVORITES.md).
 
 ## Alpha.5 — roleplay classification and system-noise cleanup
 
