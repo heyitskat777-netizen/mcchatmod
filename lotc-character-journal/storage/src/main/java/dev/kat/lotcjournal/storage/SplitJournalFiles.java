@@ -15,7 +15,7 @@ import java.util.UUID;
 /** One attached connection is the only transaction boundary for a native storage pair. */
 final class SplitJournalFiles {
     static final String PAIR_SQL = "CREATE TABLE storage_pair (id INTEGER PRIMARY KEY CHECK(id=1),pair_uuid TEXT NOT NULL,generation TEXT NOT NULL)";
-    static final int ARCHIVE_VERSION = 9, CHARACTERS_VERSION = 1;
+    static final int ARCHIVE_VERSION = 9, CHARACTERS_VERSION = 2;
     private SplitJournalFiles() {}
     static Path charactersFor(Path archive) { return archive.resolveSibling(archive.getFileName() + ".characters.sqlite"); }
     static Path manifestFor(Path archive) { return archive.resolveSibling(archive.getFileName() + ".pair.json"); }
@@ -55,12 +55,16 @@ final class SplitJournalFiles {
         try (var q = c.prepareStatement("ATTACH DATABASE ? AS characters")) { q.setString(1, characters.toString()); q.execute(); }
     }
     static Connection open(Path archive, Path characters) throws SQLException {
+        return open(archive,characters,false);
+    }
+    static Connection openCompatible(Path archive,Path characters) throws SQLException {return open(archive,characters,true);}
+    private static Connection open(Path archive,Path characters,boolean allowPrevious) throws SQLException {
         paths(archive, characters);
         if (!Files.isRegularFile(archive, LinkOption.NOFOLLOW_LINKS) || !Files.isRegularFile(characters, LinkOption.NOFOLLOW_LINKS))
             throw new SQLException("Both native storage files are required");
         Connection c = archive(archive);
         try {
-            attach(c, characters); validatePair(c); configure(c); return c;
+            attach(c, characters); validatePair(c,allowPrevious); configure(c); return c;
         } catch (SQLException | RuntimeException failure) { c.close(); throw failure; }
     }
     static void configure(Connection c) throws SQLException {
@@ -103,6 +107,9 @@ final class SplitJournalFiles {
         }
     }
     static void validatePair(Connection c) throws SQLException {
+        validatePair(c,false);
+    }
+    static void validatePair(Connection c,boolean allowPrevious) throws SQLException {
         var main = pair(c, "main"); var chars = pair(c, "characters");
         if (!Objects.equals(main[0], chars[0]) || !Objects.equals(main[1], chars[1]))
             throw new SQLException("Archive and characters files are from different storage snapshots");
@@ -110,7 +117,7 @@ final class SplitJournalFiles {
             if (!r.next() || r.getInt(1) != ARCHIVE_VERSION) throw new SQLException("Unsupported archive schema");
         }
         try (var s = c.createStatement(); var r = s.executeQuery("PRAGMA characters.user_version")) {
-            if (!r.next() || r.getInt(1) != CHARACTERS_VERSION) throw new SQLException("Unsupported character schema");
+            if (!r.next() || (r.getInt(1) != CHARACTERS_VERSION && !(allowPrevious&&r.getInt(1)==1))) throw new SQLException("Unsupported character schema");
         }
     }
     static void integrity(Connection c, String schema) throws SQLException {

@@ -20,4 +20,11 @@ public interface IdentityRepository {
     String mergeIdentity(String fromIdentity, String toIdentity) throws Exception;
     void undoMerge(String decisionId) throws Exception;
     String resolveIdentity(String identityId) throws Exception;
+    default List<IdentitySeparation> separations() throws Exception { return List.of(); }
+    default String denyIdentityLink(String firstIdentity, String secondIdentity) throws Exception {
+        throw new UnsupportedOperationException("Identity denials are unavailable");
+    }
+    default void undoSeparation(String decisionId) throws Exception {
+        throw new UnsupportedOperationException("Identity denials are unavailable");
+    }
 }

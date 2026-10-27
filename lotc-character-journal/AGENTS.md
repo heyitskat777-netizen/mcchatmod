@@ -100,6 +100,9 @@ Target Minecraft 1.21.11, Fabric, Java 21. Do not silently upgrade Minecraft.
   about uncertain identities, allow skip/unassigned and persist manual overrides;
   never keep an import transaction open for user review.
 - Identity merges require user confirmation and must be reversible.
+- Explicit keep-separate decisions persist across restarts, alias updates and backups.
+  Block direct and indirect merges across their resolved identity groups. Only an
+  explicit user reversal may clear a denial; clearing never links automatically.
 - AI defaults off. Never silently fall back to a paid provider.
 - Never run unattended tests against the live LoTC server.
 - Use two mod-owned SQLite files: `config/lotc-journal/archive.sqlite` for imported

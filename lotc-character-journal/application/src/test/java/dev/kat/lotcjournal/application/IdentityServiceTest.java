@@ -46,6 +46,26 @@ class IdentityServiceTest {
         } finally { release.countDown(); }
     }
 
+    @Test void denialReviewAndReversalUseTheIdentityWorkerAndPreserveArguments() throws Exception {
+        String first = UUID.randomUUID().toString(), second = UUID.randomUUID().toString(), decision = UUID.randomUUID().toString();
+        var calls = new ArrayList<String>(); var caller = Thread.currentThread();
+        var value = new dev.kat.lotcjournal.domain.IdentitySeparation(decision, first, second, true);
+        var repository = repository((method, arguments) -> {
+            assertNotSame(caller, Thread.currentThread()); assertEquals("lotc-identity-io", Thread.currentThread().getName()); calls.add(method);
+            return switch (method) {
+                case "denyIdentityLink" -> { assertArrayEquals(new Object[]{first,second}, arguments); yield decision; }
+                case "separations" -> List.of(value);
+                case "undoSeparation" -> { assertArrayEquals(new Object[]{decision}, arguments); yield null; }
+                default -> throw new AssertionError("Unexpected identity operation");
+            };
+        });
+        try (var service = new IdentityService(repository)) {
+            assertEquals(decision, await(service.denyIdentityLink(first,second)));
+            assertEquals(List.of(value), await(service.separations())); await(service.undoSeparation(decision));
+        }
+        assertEquals(List.of("denyIdentityLink","separations","undoSeparation"),calls);
+    }
+
     @Test void failedOperationCompletesItsFutureWithoutPoisoningLaterIdentityWork() throws Exception {
         var identity = new CharacterIdentity(UUID.randomUUID().toString(), "Synthetic Identity", "", Set.of(), "");
         var calls = new AtomicInteger();

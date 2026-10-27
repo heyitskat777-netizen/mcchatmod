@@ -14,7 +14,14 @@ final class IdentitySchema {
         "identity_decisions", "CREATE TABLE identity_decisions (id TEXT PRIMARY KEY NOT NULL,kind TEXT NOT NULL,persona_id TEXT NOT NULL,source_id TEXT NOT NULL,source_line INTEGER NOT NULL,old_identity TEXT,new_identity TEXT,role TEXT NOT NULL,created_at TEXT NOT NULL)"
     );
     static final java.util.List<String> ORDER = java.util.List.of("character_identities","character_aliases","personas","identity_state","memory_assignments","identity_merges","identity_decisions");
-    static final Map<String,String> TABLES = splitTables();
+    static final Map<String,String> V1_TABLES = splitTables();
+    static final Map<String,String> TABLES = currentTables();
+    static final Map<String,String> INDEXES = Map.of("identity_separations_active_pair",IdentitySeparations.INDEX);
+    private static Map<String,String> currentTables() {
+        var tables=new java.util.HashMap<>(V1_TABLES);tables.put("identity_separations",IdentitySeparations.TABLE);return Map.copyOf(tables);
+    }
+    static Map<String,String> tablesForVersion(int version) {return version==1?V1_TABLES:TABLES;}
+    static Map<String,String> indexesForVersion(int version) {return version==1?Map.of():INDEXES;}
     private static Map<String,String> splitTables() {
         var tables = new java.util.HashMap<>(LEGACY_TABLES);
         tables.put("memory_assignments", tables.get("memory_assignments").replace(",FOREIGN KEY(source_id,source_line) REFERENCES transcript_lines(source_id,source_line) ON DELETE CASCADE", ""));
@@ -26,6 +33,7 @@ final class IdentitySchema {
             s.execute("INSERT INTO characters.identity_state VALUES(1,NULL)");
         }
         CharacterIndex.create(c);
+        IdentitySeparations.create(c);
     }
     static void migrate(java.sql.Connection c) throws java.sql.SQLException {
         create(c);
@@ -40,7 +48,12 @@ final class IdentitySchema {
                 s.execute("DROP TABLE main."+table);
         }
     }
-    static void validate(java.sql.Connection c) throws java.sql.SQLException { validate(c,"characters"); CharacterIndex.validate(c); }
+    static void validate(java.sql.Connection c) throws java.sql.SQLException {
+        validate(c,"characters"); CharacterIndex.validate(c);
+        try(var s=c.createStatement();var r=s.executeQuery("PRAGMA characters.user_version")) {
+            if(r.getInt(1)>=2) IdentitySeparations.validate(c);
+        }
+    }
     static void validateLegacy(java.sql.Connection c) throws java.sql.SQLException { validate(c,"main"); }
     private static void validate(java.sql.Connection c,String schema) throws java.sql.SQLException {
         try(var s=c.createStatement();var r=s.executeQuery("SELECT * FROM "+schema+".character_identities")) {

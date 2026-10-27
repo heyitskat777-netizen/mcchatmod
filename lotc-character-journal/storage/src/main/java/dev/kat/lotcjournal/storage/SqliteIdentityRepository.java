@@ -158,6 +158,7 @@ public final class SqliteIdentityRepository implements IdentityRepository {
     @Override public String mergeIdentity(String from,String to) throws Exception {
         return write(c -> {exists(c,"characters.character_identities",from);exists(c,"characters.character_identities",to);
             if(!resolve(c,from).equals(from) || resolve(c,to).equals(from))throw new IllegalArgumentException("Identity already linked or cyclic merge");
+            IdentitySeparations.checkMerge(c,from,resolve(c,to));
             String id=UUID.randomUUID().toString();
             try(var q=c.prepareStatement("INSERT INTO characters.identity_merges VALUES(?,?,?,1,?)")) {
                 q.setString(1,id);q.setString(2,from);q.setString(3,to);q.setString(4,Instant.now().toString());q.executeUpdate();
@@ -168,6 +169,15 @@ public final class SqliteIdentityRepository implements IdentityRepository {
         uuid(decision);write(c -> {
             try(var q=c.prepareStatement("UPDATE characters.identity_merges SET active=0 WHERE id=?")) {q.setString(1,decision);if(q.executeUpdate()!=1)throw new SQLException("Unknown merge decision");}return null;
         });
+    }
+    @Override public List<IdentitySeparation> separations() throws Exception {
+        try(var c=open()) {return IdentitySeparations.all(c);}
+    }
+    @Override public String denyIdentityLink(String first,String second) throws Exception {
+        return write(c -> IdentitySeparations.deny(c,first,second));
+    }
+    @Override public void undoSeparation(String decision) throws Exception {
+        write(c -> {IdentitySeparations.undo(c,decision);return null;});
     }
     @Override public String resolveIdentity(String identity) throws Exception {
         try(var c=open()) {exists(c,"characters.character_identities",identity);return resolve(c,identity);}

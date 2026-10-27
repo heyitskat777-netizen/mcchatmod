@@ -192,3 +192,14 @@ names/aliases remain unresolved. Original observations and parser policy stay
 unchanged. Account ownership, merges and persona memories still require review.
 The first observed spelling remains linked after renaming an automatic character
 to prevent rediscovery as a duplicate; user aliases can be removed independently.
+
+## Identity denial — October 27, 2026
+
+Kat requests a **Deny link** action in identity review, reports persistence is good
+and no persona-separation issue so far. Implement denial as an unordered, persistent,
+reversible keep-separate decision. It blocks both direct linking and bridges between
+the current resolved groups. Require explicit clearing before later linking; clear
+does not imply acceptance. An existing positive link must be undone first. Denials
+do not rewrite dialogue, aliases, favorites or persona knowledge and must survive
+backups and future analysis. These user checks do not complete automatic-tag
+correction, scene detection, optional AI or large-archive performance acceptance.

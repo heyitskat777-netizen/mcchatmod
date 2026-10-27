@@ -230,7 +230,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
             } else if(!Files.isRegularFile(characters,java.nio.file.LinkOption.NOFOLLOW_LINKS)) throw new SQLException("Characters file is missing from a native pair");
             SplitJournalFiles.attach(connection,characters);
             if(oldVersion<9) requireEmpty(connection,"characters");
-            else {SplitJournalFiles.validatePair(connection);validateSchema(connection,9);validateCharacters(connection);verifyIntegrity(connection);SplitJournalFiles.integrity(connection,"characters");}
+            else {SplitJournalFiles.validatePair(connection,true);validateSchema(connection,9);validateCharacters(connection);verifyIntegrity(connection);SplitJournalFiles.integrity(connection,"characters");}
             // Only validated, backed-up legacy data can switch modes. Both databases
             // must use rollback journals and FULL sync before an attached write.
             SplitJournalFiles.configure(connection);
@@ -245,7 +245,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                     if(oldVersion<7) {statement.execute(LIVE_SESSIONS_SQL);statement.execute(LIVE_EVENTS_SQL);}
                     if(oldVersion==8) IdentitySchema.migrate(connection); else IdentitySchema.create(connection);
                     SplitJournalFiles.createPair(connection);
-                    statement.execute("PRAGMA main.user_version=9");statement.execute("PRAGMA characters.user_version=1");
+                    statement.execute("PRAGMA main.user_version=9");statement.execute("PRAGMA characters.user_version=2");
                     CharacterIndex.reindex(connection);
                     validateSchema(connection,9);validateCharacters(connection);verifyIntegrity(connection);SplitJournalFiles.integrity(connection,"characters");
                     connection.commit();
@@ -253,6 +253,8 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 finally {connection.setAutoCommit(true);}
             }
             NativePairBackup.verifyForAdoption(connection,database,characters);
+            if(version(connection,"characters")==1) upgradeCharacters(connection);
+            SplitJournalFiles.validatePair(connection);
             validateSchema(connection,9);validateCharacters(connection);verifyIntegrity(connection);SplitJournalFiles.integrity(connection,"characters");
             if(!startupRecovered) {
                 SplitJournalFiles.beginWrite(connection);
@@ -267,6 +269,22 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 finally {connection.setAutoCommit(true);}
             }
         }
+    }
+
+    private void upgradeCharacters(Connection connection) throws Exception {
+        Path backup=database.getParent().resolve("backups").resolve(database.getFileName()+"-pre-characters2-"+UUID.randomUUID()+".sqlite");
+        NativePairBackup.pair(database,characters,backup);
+        try(var saved=SplitJournalFiles.openCompatible(backup,SplitJournalFiles.charactersFor(backup))) {
+            validateSchema(saved,9);validateCharacters(saved);verifyIntegrity(saved);SplitJournalFiles.integrity(saved,"characters");
+        }
+        SplitJournalFiles.beginWrite(connection);
+        try {
+            IdentitySeparations.create(connection);
+            try(var s=connection.createStatement()) {s.execute("PRAGMA characters.user_version=2");}
+            validateSchema(connection,9);validateCharacters(connection);SplitJournalFiles.integrity(connection,"characters");
+            connection.commit();
+        } catch(Exception failure) {connection.rollback();throw failure;}
+        finally {connection.setAutoCommit(true);}
     }
 
     private static void createCaptureSchema(Connection connection) throws SQLException {
@@ -396,7 +414,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
         if (version >= 3) validateWorkflowData(connection);
         if (version >= 7) validateLiveData(connection);
         if (version == 8) IdentitySchema.validateLegacy(connection);
-        if (version >= 9) {SplitJournalFiles.validatePair(connection);IdentitySchema.validate(connection);}
+        if (version >= 9) {SplitJournalFiles.validatePair(connection,true);IdentitySchema.validate(connection);}
     }
 
     private static String normalizeSql(String sql) {
@@ -1235,12 +1253,14 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
         }
     }
     private static void validateCharacters(Connection connection) throws SQLException {
-        var expected=new java.util.HashMap<>(IdentitySchema.TABLES);expected.putAll(CharacterIndex.TABLES);expected.putAll(CharacterIndex.INDEXES);expected.put("storage_pair",SplitJournalFiles.PAIR_SQL);
+        int characterVersion=version(connection,"characters");
+        var identityIndexes=IdentitySchema.indexesForVersion(characterVersion);
+        var expected=new java.util.HashMap<>(IdentitySchema.tablesForVersion(characterVersion));expected.putAll(identityIndexes);expected.putAll(CharacterIndex.TABLES);expected.putAll(CharacterIndex.INDEXES);expected.put("storage_pair",SplitJournalFiles.PAIR_SQL);
         int found=0;
         try(var s=connection.createStatement();var rows=s.executeQuery("SELECT name,type,sql FROM characters.sqlite_master WHERE name NOT LIKE 'sqlite_%'")) {
             while(rows.next()) {
                 String sql=expected.get(rows.getString(1));
-                String type=CharacterIndex.INDEXES.containsKey(rows.getString(1))?"index":"table";
+                String type=CharacterIndex.INDEXES.containsKey(rows.getString(1))||identityIndexes.containsKey(rows.getString(1))?"index":"table";
                 if(sql==null||!type.equals(rows.getString(2))||!normalizeSql(sql).equals(normalizeSql(rows.getString(3)))) throw new SQLException("Refusing unrelated character storage");
                 found++;
             }

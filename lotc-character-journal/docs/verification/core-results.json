@@ -1,9 +1,9 @@
 {
-  "date": "2026-10-26",
-  "version": "0.1.0-alpha.9",
+  "date": "2026-10-27",
+  "version": "0.1.0-alpha.10",
   "java_target": 21,
   "gradle": "9.7.1",
-  "command": "./gradlew check :fabric:build --no-daemon --console=plain",
+  "command": "./gradlew check :fabric:build :fabric:prepareClientSmoke --no-daemon --console=plain",
   "core_gradle_result": "passed",
   "suites": [
     {
@@ -41,7 +41,7 @@
     {
       "module": "application",
       "suite": "dev.kat.lotcjournal.application.IdentityServiceTest",
-      "tests": 3,
+      "tests": 4,
       "failures": 0,
       "errors": 0,
       "skipped": 0
@@ -208,6 +208,14 @@
     },
     {
       "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.IdentitySeparationTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
       "suite": "dev.kat.lotcjournal.storage.LiveRepositoryTest",
       "tests": 7,
       "failures": 0,
@@ -255,105 +263,62 @@
       "skipped": 0
     }
   ],
-  "total_tests": 279,
-  "fabric_build": "passed; client and game-test source compiled; packaged runtime dependencies verified",
-  "client_game_test": "passed all five isolated JVMs in character-discovery-2 after one shutdown-lifetime repair",
-  "user_test": "alpha.8 smoke passed per user; alpha.9 pending",
-  "affected_command": "./gradlew -PcoreOnly :application:test --no-daemon --console=plain",
+  "total_tests": 291,
+  "fabric_build": "passed; actual packaged JAR writer/reader passed",
+  "python_runner_tests": 14,
+  "client_game_test": "passed all five isolated JVMs in identity-denials-1 without repairs",
   "client_phases": [
     {
       "name": "graphics-preflight",
       "status": "PASSED",
-      "duration": 20.65941448799822,
+      "duration": 19.25810119900416,
       "returncode": 0,
       "timedOut": false,
-      "processId": 13522,
+      "processId": 32618,
       "errors": []
     },
     {
       "name": "development-write",
       "status": "PASSED",
-      "duration": 26.535584983999797,
+      "duration": 27.431737320999673,
       "returncode": 0,
       "timedOut": false,
-      "processId": 13800,
+      "processId": 32929,
       "errors": []
     },
     {
       "name": "development-read",
       "status": "PASSED",
-      "duration": 25.14254743099991,
+      "duration": 25.833885154999734,
       "returncode": 0,
       "timedOut": false,
-      "processId": 14143,
+      "processId": 33231,
       "errors": []
     },
     {
       "name": "packaged-write",
       "status": "PASSED",
-      "duration": 30.97058229399954,
+      "duration": 29.10080933899735,
       "returncode": 0,
       "timedOut": false,
-      "processId": 14452,
+      "processId": 33532,
       "errors": []
     },
     {
       "name": "packaged-read",
       "status": "PASSED",
-      "duration": 25.983078031000332,
+      "duration": 26.231951604000642,
       "returncode": 0,
       "timedOut": false,
-      "processId": 14755,
+      "processId": 33833,
       "errors": []
     }
   ],
   "artifact": {
-    "name": "lotc-character-journal-0.1.0-alpha.9.jar",
-    "bytes": 14677910,
-    "sha256": "36125ca0b9ecc9f7a19b1992bad13f33d98a4b804b4e3a7968bdb1e69b8238a1"
+    "name": "lotc-character-journal-0.1.0-alpha.10.jar",
+    "bytes": 14690652,
+    "sha256": "9599f0430d2981e9f920d4c6bb83ec0c0ac0ad2a3555e16bb18054dd073add0b"
   },
-  "ci": {
-    "functional_commit": "5bb41b43778b3efe9670cfd8d90894de519be72d",
-    "run_id": 40452649263,
-    "url": "https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40452649263",
-    "verify": "passed",
-    "client_smoke": "passed",
-    "client_phases": [
-      {
-        "name": "graphics-preflight",
-        "seconds": 35.3,
-        "result": "PASSED",
-        "exit_code": 0
-      },
-      {
-        "name": "development-write",
-        "seconds": 38.5,
-        "result": "PASSED",
-        "exit_code": 0
-      },
-      {
-        "name": "development-read",
-        "seconds": 36.8,
-        "result": "PASSED",
-        "exit_code": 0
-      },
-      {
-        "name": "packaged-write",
-        "seconds": 43.3,
-        "result": "PASSED",
-        "exit_code": 0
-      },
-      {
-        "name": "packaged-read",
-        "seconds": 35.5,
-        "result": "PASSED",
-        "exit_code": 0
-      }
-    ],
-    "artifact_ids": {
-      "journal-jars": 12710474939,
-      "client-smoke-evidence": 12711086981,
-      "test-reports": 12710709913
-    }
-  }
+  "user_test": "alpha.9 persistence/persona separation positive per user; alpha.10 denials pending",
+  "ci": "pending"
 }

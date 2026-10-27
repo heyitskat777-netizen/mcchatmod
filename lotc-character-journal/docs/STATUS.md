@@ -1,3 +1,103 @@
+# Current work — October 27, 2026: persistent identity denials
+
+Branch `feature/identity-denials` continues alpha.9 from `11043a4` without changing
+main. Target remains Fabric / Minecraft 1.21.11 / Java 21; build alpha.10.
+Kat reports alpha.9 persistence is good and persona separation has shown no issues
+so far. This is positive user evidence for those paths; backup restoration, broad
+real-log matching accuracy and large-archive performance are not newly certified.
+
+**Review links** now offers **Deny link / keep separate** for the selected pair.
+The unordered decision survives restart, alias edits and paired backups. Both
+positive linking and indirect linking through another character are blocked until
+its denial is explicitly cleared. **Clear selected denial** reverses the decision
+without creating a link. Already-linked identities must have their link undone
+before they can be denied. Active positive and negative decisions share the review
+history; chosen character UUIDs and selected decision survive refresh/resize.
+Dialogue, favorites, aliases and persona memories remain independent of the choice.
+
+Characters schema **2** adds a dedicated denial table and unique active-pair index;
+archive schema **9** and parser policy **4** stay unchanged. Existing characters
+schema 1 is validated and receives a verified paired pre-upgrade backup before
+transactional schema upgrade. A restored old pair can upgrade normally; the source
+backup trio remains unchanged. Native journal.sqlite remains a recovery source.
+
+Native build, verification and review agents were used with non-overlapping scopes.
+Build and verification produced storage changes and nine tests before reaching
+usage limits. Coordinator reviewed/completed that work, added two storage cases,
+one off-thread service case and the actual client assertions, and runs integration.
+Reviewer provided early graph-constraint guidance; a completed final independent
+review was unavailable after the agent turns ended. No simulated review is claimed.
+
+## Verification
+
+Coordinator narrow storage/application tests passed in 8s before the final added
+cases. Integrated command:
+
+```sh
+./gradlew check :fabric:build :fabric:prepareClientSmoke --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+```
+
+**Passed in 17s**, 34 tasks (24 executed/10 up-to-date). Fresh XML: **291 core tests,
+0 failures/errors/skips** — domain 9, application 18, parsing 116, ingestion 57,
+storage 91. All 14 Python runner-contract tests passed in 1.107s. Twelve new cases
+cover unordered idempotent denial/reversal, direct/reverse/transitive rejection,
+concurrent deny/link serialization, exact message/persona preservation, backed-up
+schema-1 migration, restoring an old paired backup, failed writes/backups,
+contradictory stored decisions and off-thread service dispatch. No acceptance
+expectations were weakened. `git diff --check` passed.
+
+A short UI guidance-text change was followed by a fresh
+`./gradlew :fabric:prepareClientSmoke --no-daemon --console=plain` before runtime.
+The isolated `identity-denials-1` five-JVM suite **passed all phases**, using the
+existing accepted EULA, display :99, software rendering and unchanged 300-second
+process caps:
+
+```sh
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --prepared --timeout 300 --run-id identity-denials-1
+```
+
+| Local phase | Elapsed | Result |
+| --- | --- | --- |
+| graphics-preflight | 19.3s | PASSED |
+| development-write | 27.4s | PASSED |
+| development-read | 25.8s | PASSED |
+| packaged-write | 29.1s | PASSED |
+| packaged-read | 26.2s | PASSED |
+
+Writers passed **24 assertion stages**, readers **25**, including required
+identity-denials assertions in both development and packaged modes: deny, reopen,
+small resize, restart persistence, explicit clear, link, undo, re-deny and exact
+preservation of existing persona memories, active persona and favorites. Backup
+assertions include the saved denial. Each phase exited 0 without timeout or
+evidence errors; packaged classes loaded from actual JARs. The packaged 640x480
+review screenshot was inspected. No runtime repair or increased timeout was needed.
+Evidence: `fabric/build/client-smoke/evidence/identity-denials-1/` contains JSON,
+JUnit XML, screenshots, logs and launch/shutdown witnesses. User testing of alpha.10
+remains separate: [denial checklist](USER_TEST_IDENTITY_DENIALS.md).
+
+Local artifact: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.10.jar`, **14,690,652 bytes**,
+SHA-256 `9599f0430d2981e9f920d4c6bb83ec0c0ac0ad2a3555e16bb18054dd073add0b`.
+GitHub Actions validation and pull-request publication are pending.
+
+## What remains
+
+1. Complete Phase 3: durable correction/rejection of automatically inferred message
+   tags; define and implement how confirmed merge overlays affect related dialogue.
+   Continue real-log accuracy, paired restore and large-import user checks.
+2. Phase 4 scene view: suggested conversation groups using available time/location
+   evidence, participant lists, uncertainty review/skip, manual split/combine and
+   participant corrections. Missing location evidence must remain unknown.
+3. Phase 5 optional AI: provider connection, grounded summaries, citations, privacy
+   gates and reliable operation while disabled/offline.
+4. Phase 6 favorite extraction: propose items, names and tasks from individually
+   starred messages; ask for identity confirmation when uncertain, retain edits and
+   rejected identity choices. Relationships/commitments remain evidence-backed.
+5. Phase 7: measured performance, interrupted-write/restore coverage, compatibility
+   and ordinary-session beta acceptance. Phase 3 is not declared complete here.
+
+---
+
 # Current work — October 26, 2026: two-file storage and character discovery
 
 Branch: `feature/character-discovery`, based on reviewed-for-testing alpha.8
