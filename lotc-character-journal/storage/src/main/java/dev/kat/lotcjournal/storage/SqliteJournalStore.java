@@ -245,7 +245,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                     if(oldVersion<7) {statement.execute(LIVE_SESSIONS_SQL);statement.execute(LIVE_EVENTS_SQL);}
                     if(oldVersion==8) IdentitySchema.migrate(connection); else IdentitySchema.create(connection);
                     SplitJournalFiles.createPair(connection);
-                    statement.execute("PRAGMA main.user_version=9");statement.execute("PRAGMA characters.user_version=2");
+                    statement.execute("PRAGMA main.user_version=9");statement.execute("PRAGMA characters.user_version=3");
                     CharacterIndex.reindex(connection);
                     validateSchema(connection,9);validateCharacters(connection);verifyIntegrity(connection);SplitJournalFiles.integrity(connection,"characters");
                     connection.commit();
@@ -253,7 +253,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 finally {connection.setAutoCommit(true);}
             }
             NativePairBackup.verifyForAdoption(connection,database,characters);
-            if(version(connection,"characters")==1) upgradeCharacters(connection);
+            if(version(connection,"characters")<3) upgradeCharacters(connection);
             SplitJournalFiles.validatePair(connection);
             validateSchema(connection,9);validateCharacters(connection);verifyIntegrity(connection);SplitJournalFiles.integrity(connection,"characters");
             if(!startupRecovered) {
@@ -272,15 +272,17 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
     }
 
     private void upgradeCharacters(Connection connection) throws Exception {
-        Path backup=database.getParent().resolve("backups").resolve(database.getFileName()+"-pre-characters2-"+UUID.randomUUID()+".sqlite");
+        int previousVersion=version(connection,"characters");
+        Path backup=database.getParent().resolve("backups").resolve(database.getFileName()+"-pre-characters3-"+UUID.randomUUID()+".sqlite");
         NativePairBackup.pair(database,characters,backup);
         try(var saved=SplitJournalFiles.openCompatible(backup,SplitJournalFiles.charactersFor(backup))) {
             validateSchema(saved,9);validateCharacters(saved);verifyIntegrity(saved);SplitJournalFiles.integrity(saved,"characters");
         }
         SplitJournalFiles.beginWrite(connection);
         try {
-            IdentitySeparations.create(connection);
-            try(var s=connection.createStatement()) {s.execute("PRAGMA characters.user_version=2");}
+            if(previousVersion<2) IdentitySeparations.create(connection);
+            MessageTagReviews.create(connection);
+            try(var s=connection.createStatement()) {s.execute("PRAGMA characters.user_version=3");}
             validateSchema(connection,9);validateCharacters(connection);SplitJournalFiles.integrity(connection,"characters");
             connection.commit();
         } catch(Exception failure) {connection.rollback();throw failure;}
@@ -1143,7 +1145,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 try (var ledger = connection.prepareStatement("INSERT INTO removed_observations SELECT source_id,source_line,batch_id,file_ordinal FROM observation_owners WHERE batch_id=?")) {
                     ledger.setString(1, batchId); removed = ledger.executeUpdate();
                 }
-                for(String table:List.of("memory_assignments","character_evidence")) {
+                for(String table:List.of("memory_assignments","character_evidence","message_tag_reviews")) {
                     try(var delete=connection.prepareStatement("DELETE FROM characters."+table+" WHERE (source_id,source_line) IN (SELECT source_id,source_line FROM main.observation_owners WHERE batch_id=?)")) {
                         delete.setString(1,batchId);delete.executeUpdate();
                     }
@@ -1246,7 +1248,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
     }
 
     private static void removeCharacterReferences(Connection connection,String source,long line) throws SQLException {
-        for(String table:List.of("memory_assignments","character_evidence")) {
+        for(String table:List.of("memory_assignments","character_evidence","message_tag_reviews")) {
             try(var delete=connection.prepareStatement("DELETE FROM characters."+table+" WHERE source_id=? AND source_line=?")) {
                 delete.setString(1,source);delete.setLong(2,line);delete.executeUpdate();
             }

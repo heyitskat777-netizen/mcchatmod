@@ -66,6 +66,15 @@ final class PairedDatabaseFixtures {
         }
         return Set.copyOf(tables);
     }
+    /** Reconstruct an exact earlier character member, rather than changing only its version number. */
+    static void characterVersion(Path characters, int version) throws Exception {
+        if (version < 1 || version > 2) throw new IllegalArgumentException("Expected an older synthetic character schema");
+        try (var c = DriverManager.getConnection("jdbc:sqlite:" + characters); var s = c.createStatement()) {
+            s.execute("DROP TABLE IF EXISTS message_tag_choices"); s.execute("DROP TABLE IF EXISTS message_tag_reviews");
+            if (version == 1) s.execute("DROP TABLE IF EXISTS identity_separations");
+            s.execute("PRAGMA user_version=" + version);
+        }
+    }
     /** Exact native v8 layout, including the original assignment FK to the same-file archive. */
     static void convertToNativeEight(Path archive, Path characters) throws Exception {
         try (var c = DriverManager.getConnection("jdbc:sqlite:" + archive); var s = c.createStatement()) {

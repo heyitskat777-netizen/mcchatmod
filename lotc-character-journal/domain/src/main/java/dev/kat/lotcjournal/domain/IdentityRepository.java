@@ -27,4 +27,13 @@ public interface IdentityRepository {
     default void undoSeparation(String decisionId) throws Exception {
         throw new UnsupportedOperationException("Identity denials are unavailable");
     }
+    default MessageTagReview reviewTags(MessageReference message) throws Exception {
+        throw new UnsupportedOperationException("Message tag review is unavailable");
+    }
+    default MessageTagReview saveReviewedTags(MessageReference message,long expectedRevision,List<CharacterTag> tags) throws Exception {
+        throw new UnsupportedOperationException("Message tag review is unavailable");
+    }
+    default MessageTagReview restoreAutomaticTags(MessageReference message,long expectedRevision) throws Exception {
+        throw new UnsupportedOperationException("Message tag review is unavailable");
+    }
 }

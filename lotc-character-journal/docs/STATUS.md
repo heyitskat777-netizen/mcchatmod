@@ -1,3 +1,113 @@
+# Current work — October 27, 2026: durable message tag review
+
+Kat reports alpha.10 smoke tests passed. Branch `feature/message-tag-review`
+continues `e4b4e14` without changing main. Target remains Fabric / Minecraft 1.21.11 /
+Java 21; build alpha.11. Phase 3 continues with correction/rejection of automatic
+character tags; combined related-dialogue behavior for confirmed identity links
+remains the next identity slice before scenes.
+
+Select an individual transcript message and choose **Review tags**. The shared
+archive editor searches character names/aliases and distinguishes duplicate names
+by UUID. Add/replace/remove individual SPEAKER/ACTION/MENTION tags, then **Save
+reviewed tags** to persist that exact set. **Reject all tags** saves a reviewed-empty
+set. **Restore automatic** resumes the current automatic suggestions. Saved reviews
+survive aliases, reimports/live replay, restart and paired backups. Original
+observations, channels, favorites and persona memories stay unchanged. UNKNOWN
+allows manual MENTION only. No AI eligibility or persona knowledge is granted.
+
+Automatic suggestions remain separately rebuildable. Optimistic revisions prevent
+stale editors overwriting newer decisions; AUTO revision markers remain after
+restore to prevent stale save/restore cycles. Failed/stale writes retain the draft,
+disable writes and require explicit Reload saved tags. Resize/search retain the
+whole draft, including tags outside the 1000-row search-choice cap. Save has an
+explicit 64-tag bound; larger automatic sets are never silently truncated.
+
+Characters schema **3** adds review/choice tables and an identity-query index.
+Archive schema **9** and parser policy **4** stay unchanged. Character schemas 1/2
+receive a verified paired backup before transactional upgrade. Batch undo and noise
+cleanup remove review markers/choices at exact owned coordinates in the same
+attached transaction as source deletion; unrelated reviews and explicit persona
+assignments remain. Import undo never silently restores rejected/removed records.
+
+Native build, verification and read-only review agents were available and completed
+their scopes. Build owned storage/configuration, verification owned non-Fabric
+regressions, reviewer inspected integrity/privacy/threading without edits. Coordinator
+owned domain/service/UI/client assertions/docs and integration. Independent review
+reported no blocking issue. Findings on duplicate-name labels, stale search choices
+and persistent reload guidance were fixed. No assertion was weakened.
+
+## Automated verification
+
+```sh
+./gradlew check :fabric:build :fabric:prepareClientSmoke --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+```
+
+Final integrated run **passed in 13s**, 34 tasks (16 executed/18 up-to-date).
+Latest XML reports **305 core tests, 0 failures/errors/skips** — domain 11,
+application 19, parsing 116, ingestion 58, storage 101. All **14 Python** runner
+contract tests passed in **1.113s**. Fourteen new cases cover immutable models,
+exact multitag correction and coordinate isolation, reject/restore and ABA/stale
+revision protection, concurrency, UNKNOWN restrictions, 64-tag limits with larger
+automatic sets, rollback, alias/live/import persistence, paired upgrade/restore,
+exact undo cleanup including injected pre-delete rollback and off-thread service
+input snapshots. The first preliminary integrated run passed before the final
+import case arrived; final checks include that case and the strengthened rollback.
+
+Actual client suite `message-tag-review-1` passed all five phases (21.2/28.1/27.5/
+32.2/28.2s). Then a minor persistent conflict-guidance improvement and explicit GUI
+stale-editor fault test were added; a fresh smoke preparation passed before the
+final `message-tag-review-2` run. The test-thread-only fixture advances one known
+synthetic review revision to simulate another writer. The actual screen must retain
+its dirty draft, reject the stale save without altering the stored tag set, keep
+Reload guidance after further draft edits, and allow a valid save after reload.
+No application failure or automatic repair cycle occurred in the first run.
+
+Final runtime **message-tag-review-2 passed all five phases** with unchanged
+300-second limits and no timeouts/report errors:
+
+```sh
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --prepared --timeout 300 --run-id message-tag-review-2
+```
+
+| Local phase | Elapsed | Result |
+| --- | --- | --- |
+| graphics-preflight | 21.3s | PASSED |
+| development-write | 28.6s | PASSED |
+| development-read | 27.5s | PASSED |
+| packaged-write | 30.4s | PASSED |
+| packaged-read | 28.7s | PASSED |
+
+Writers passed **25 assertion stages**, readers **26**, including multitag edits,
+removal, reviewed-empty rejection, automatic restore, a persistent UNKNOWN mention,
+reopen/restart, unsaved drafts across resize, explicit stale-write rejection/reload
+and exact preservation of source text/channel, favorites and persona assignments.
+The paired-backup stage verifies the saved reviewed tag. Actual packaged mod and
+SQLite loaded from JARs; no development output masked missing dependencies.
+The packaged small-draft and saved-UNKNOWN screenshots were visually inspected.
+Evidence: `fabric/build/client-smoke/evidence/message-tag-review-2/` includes JSON,
+JUnit XML, selected screenshots, logs and separate launch/shutdown witnesses.
+
+Local artifact: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.11.jar`, **14,710,888 bytes**,
+SHA-256 `8bd7cbeb0f80f5191dfafe42ccfa9b0b87ca88c75a915401c57a8c65314ed42e`.
+GitHub Actions and PR publication are pending.
+
+
+## Acceptance and remaining work
+
+User accepted alpha.10 smoke; alpha.11 tag review still needs
+[the focused user checklist](USER_TEST_MESSAGE_TAGS.md). Broad real-log matching
+accuracy, large-archive latency and actual modpack backup restoration remain separate
+acceptance items. Backfill can still scan the archive within a worker transaction.
+
+Next Phase 3 slice: define and implement how confirmed identity groups appear in
+related dialogue while preserving reversible decisions, keep-separate constraints
+and explicit persona ownership. Scene grouping/participants/manual corrections,
+optional AI summaries and favorite-based item/name/task extraction remain later
+milestones. Phase 3 is not declared fully complete here.
+
+---
+
 # Current work — October 27, 2026: persistent identity denials
 
 Branch `feature/identity-denials` continues alpha.9 from `11043a4` without changing

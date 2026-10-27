@@ -226,9 +226,11 @@ it across direct and indirect identity links. User reports persistence/persona
 separation positive so far. Durable automatic-tag corrections and scene/analysis
 acceptance remain separate work.
 
-Remaining after observed-character discovery: user correction/rejection of automatic
-archive tags with durable overrides, and a deliberate policy for displaying confirmed
-merge overlays in related dialogue. These are separate from explicit persona memory
+Per-message tag review now provides durable correction/rejection of automatic
+archive tags, explicit restoration and stale-edit protection. Alpha.10 user smoke
+tests passed; tag-review user acceptance is still pending. The remaining identity
+slice needs a deliberate policy and implementation for displaying confirmed merge
+overlays in related dialogue. These are separate from explicit persona memory
 assignments; discovery alone does not close Phase 3.
 
 Future favorites, scene participants and extracted records must use these identity

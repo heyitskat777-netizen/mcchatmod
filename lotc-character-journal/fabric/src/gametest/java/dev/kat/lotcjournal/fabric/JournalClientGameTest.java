@@ -170,6 +170,7 @@ public final class JournalClientGameTest implements FabricClientGameTest {
                 check(sqlCount(created.getFirst(),"SELECT count(*) FROM character_identities")==4,"Paired backup must preserve observed and manual characters");
                 check(sqlCount(created.getFirst(),"SELECT count(*) FROM memory_assignments")==2,"Paired backup must preserve explicit persona assignments");
                 check(sqlCount(created.getFirst(),"SELECT count(*) FROM identity_separations WHERE active=1")==1,"Paired backup must preserve the saved denial");
+                check(sqlCount(created.getFirst(),"SELECT count(*) FROM message_tag_reviews WHERE reviewed=1")==1&&sqlCount(created.getFirst(),"SELECT count(*) FROM message_tag_choices")==1,"Paired backup must preserve the exact reviewed message tag");
                 check(readLayout(created.getFirst()), "Backup must contain the selected compact layout");
                 toggle(context, false);
                 check(!readLayout(database), "Source setting must change after backup");
@@ -483,6 +484,88 @@ public final class JournalClientGameTest implements FabricClientGameTest {
             context.clickScreenButton("Done");context.clickScreenButton("Done");waitForJournal(context);
         });
         exerciseIdentityDenials(context,report,database);
+        exerciseMessageTagReview(context,report,database);
+    }
+    private void exerciseMessageTagReview(ClientGameTestContext context,SmokeReport report,Path database) throws Exception {
+        report.stage("message-tag-review",60_000,()->{
+            String memories=sqlText(database,"SELECT group_concat(persona_id||':'||source_id||':'||source_line||':'||coalesce(identity_id,'none')||':'||role,'|') FROM (SELECT * FROM memory_assignments ORDER BY persona_id,source_id,source_line)");
+            long count=sqlCount(database,"SELECT count(*) FROM transcript_lines"),stars=sqlCount(database,"SELECT count(*) FROM message_favorites");
+            String source=sqlText(database,"SELECT source_id FROM transcript_lines WHERE text='Synthetic Visitor waves.' ORDER BY source_id,source_line LIMIT 1");
+            String ref="source_id='"+source+"' AND source_line=1";
+            openTagEditor(context,"Synthetic Visitor waves.",2);
+            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Automatic saved tags 1"),WAIT_TICKS);
+            chooseTagIdentity(context,"Synthetic Persona A");chooseTagKind(context,"SPEAKER");context.clickScreenButton("Replace");
+            chooseTagIdentity(context,"Synthetic Persona B");chooseTagKind(context,"MENTION");context.clickScreenButton("Add tag");
+            context.runOnClient(client -> check(client.screen.getNarrationMessage().getString().contains("Draft tags 2"),"Individual corrections must preserve the full unsaved multitag draft"));
+            context.getInput().resizeWindow(640,480);
+            context.waitFor(client -> client.screen.width==320&&client.screen.height==240,WAIT_TICKS);
+            context.runOnClient(client -> {
+                check(client.screen.getNarrationMessage().getString().contains("Draft tags 2"),"Resize must preserve both unsaved tag edits");
+                check(client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).allMatch(button -> button.getY()>=0&&button.getBottom()<=client.screen.height),"Tag-review controls must stay onscreen");
+            });
+            report.screenshot(context.takeScreenshot("lotc-message-tags-draft-small-"+report.phase()));
+            context.getInput().resizeWindow(854,480);context.waitFor(client -> client.screen.width==427,WAIT_TICKS);
+            context.clickScreenButton("Save reviewed tags");
+            context.waitFor(client -> screenButtonActive(client.screen,"Save reviewed tags")&&client.screen.getNarrationMessage().getString().contains("Reviewed saved tags 2"),WAIT_TICKS);
+            check(sqlCount(database,"SELECT count(*) FROM message_tag_choices WHERE "+ref)==2,"Both reviewed tags must persist at the exact selected coordinate");
+            // Simulate a second editor's newer revision; the real screen must preserve
+            // its dirty draft and reject the stale write, rather than overwrite it.
+            try(var other=DriverManager.getConnection("jdbc:sqlite:"+database.resolveSibling("characters.sqlite"));var q=other.createStatement()) {
+                check(q.executeUpdate("UPDATE message_tag_reviews SET revision=revision+1 WHERE "+ref)==1,"Concurrent-review fixture must touch exactly one known message");
+            }
+            context.clickScreenButton("Remove");context.clickScreenButton("Save reviewed tags");
+            context.waitFor(client -> screenButtonActive(client.screen,"Reload saved tags")&&client.screen.getNarrationMessage().getString().contains("Reload saved tags required"),WAIT_TICKS);
+            context.runOnClient(client -> check(!screenButtonActive(client.screen,"Save reviewed tags")&&client.screen.getNarrationMessage().getString().contains("Draft tags 1"),"A stale save must retain the exact unsaved draft and require explicit reload"));
+            check(sqlCount(database,"SELECT count(*) FROM message_tag_choices WHERE "+ref)==2,"Stale UI writes must not replace the newer stored set");
+            context.clickScreenButton("Remove");
+            context.runOnClient(client -> check(client.screen.getNarrationMessage().getString().contains("Reload saved tags required")&&client.screen.getNarrationMessage().getString().contains("Draft tags 0"),"Further draft edits must not hide the conflict/reload requirement"));
+            context.clickScreenButton("Reload saved tags");
+            context.waitFor(client -> screenButtonActive(client.screen,"Save reviewed tags")&&client.screen.getNarrationMessage().getString().contains("Reviewed saved tags 2"),WAIT_TICKS);
+            context.clickScreenButton("Remove");context.clickScreenButton("Save reviewed tags");
+            context.waitFor(client -> screenButtonActive(client.screen,"Save reviewed tags")&&client.screen.getNarrationMessage().getString().contains("Reviewed saved tags 1"),WAIT_TICKS);
+            check(sqlCount(database,"SELECT count(*) FROM message_tag_choices WHERE "+ref)==1,"Removing one tag must preserve the other reviewed tag");
+            context.clickScreenButton("Reject all tags");
+            context.waitFor(client -> screenButtonActive(client.screen,"Restore automatic")&&client.screen.getNarrationMessage().getString().contains("Reviewed saved tags 0"),WAIT_TICKS);
+            check(sqlCount(database,"SELECT count(*) FROM message_tag_reviews WHERE "+ref+" AND reviewed=1")==1&&sqlCount(database,"SELECT count(*) FROM message_tag_choices WHERE "+ref)==0,"Reviewed-empty must be a saved rejection, not missing automatic state");
+            context.clickScreenButton("Restore automatic");
+            context.waitFor(client -> screenButtonActive(client.screen,"Save reviewed tags")&&client.screen.getNarrationMessage().getString().contains("Automatic saved tags 1"),WAIT_TICKS);
+            check(sqlCount(database,"SELECT count(*) FROM message_tag_reviews WHERE "+ref+" AND reviewed=0")==1,"Restore must preserve a revision marker while enabling automatic evidence");
+            context.clickScreenButton("Done");context.waitFor(client -> isScreen(client.screen,TRANSCRIPT_SCREEN),WAIT_TICKS);context.clickScreenButton("Done");waitForJournal(context);
+            openTagEditor(context,"Synthetic Visitor says dialogue 53.",1);
+            if(report.phase().equals("read")) context.runOnClient(client -> check(client.screen.getNarrationMessage().getString().contains("Reviewed saved tags 1")&&client.screen.getNarrationMessage().getString().contains("Synthetic Persona B"),"A new JVM must load the writer's exact reviewed identity"));
+            context.runOnClient(client -> check(!screenButtonActive(client.screen,"MENTION"),"UNKNOWN must not expose a speaker/action override control"));
+            chooseTagIdentity(context,"Synthetic Persona B");context.clickScreenButton("Replace");context.clickScreenButton("Save reviewed tags");
+            context.waitFor(client -> screenButtonActive(client.screen,"Save reviewed tags")&&client.screen.getNarrationMessage().getString().contains("Reviewed saved tags 1"),WAIT_TICKS);
+            check(sqlCount(database,"SELECT count(*) FROM message_tag_choices x JOIN character_identities i ON i.id=x.identity_id WHERE x.source_id='"+source+"' AND x.source_line=53 AND x.kind='MENTION' AND i.name='Synthetic Persona B'")==1,"UNKNOWN review must persist a mention without changing its channel");
+            check(sqlCount(database,"SELECT count(*) FROM transcript_lines WHERE source_id='"+source+"' AND source_line=53 AND channel='UNKNOWN'")==1,"Review must retain source channel uncertainty");
+            context.clickScreenButton("Done");context.waitFor(client -> isScreen(client.screen,TRANSCRIPT_SCREEN)&&screenButtonActive(client.screen,"Details"),WAIT_TICKS);
+            transcriptClick(context,45,8);context.clickScreenButton("Review tags");
+            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Reviewed saved tags 1")&&screenButtonActive(client.screen,"Save reviewed tags"),WAIT_TICKS);
+            report.screenshot(context.takeScreenshot("lotc-message-tags-reviewed-"+report.phase()));
+            check(count==sqlCount(database,"SELECT count(*) FROM transcript_lines")&&stars==sqlCount(database,"SELECT count(*) FROM message_favorites"),"Tag edits must preserve source dialogue and individual favorites");
+            check(memories.equals(sqlText(database,"SELECT group_concat(persona_id||':'||source_id||':'||source_line||':'||coalesce(identity_id,'none')||':'||role,'|') FROM (SELECT * FROM memory_assignments ORDER BY persona_id,source_id,source_line)")),"Shared tag edits must never grant or rewrite persona memories");
+            context.clickScreenButton("Done");context.waitFor(client -> isScreen(client.screen,TRANSCRIPT_SCREEN),WAIT_TICKS);context.clickScreenButton("Done");waitForJournal(context);
+        });
+    }
+    private static void openTagEditor(ClientGameTestContext context,String query,int matches) {
+        context.clickScreenButton("View transcripts");context.waitFor(client -> isScreen(client.screen,TRANSCRIPT_SCREEN),WAIT_TICKS);
+        context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue(query));
+        context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Messages 1 to "+matches+" of "+matches),WAIT_TICKS);
+        transcriptClick(context,45,8);context.clickScreenButton("Review tags");
+        context.waitFor(client -> isScreen(client.screen,"dev.kat.lotcjournal.fabric.MessageTagReviewScreen")&&screenButtonActive(client.screen,"Reject all tags"),WAIT_TICKS);
+    }
+    private static void chooseTagIdentity(ClientGameTestContext context,String name) {
+        context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue(name));
+        context.waitFor(client -> screenButtonActive(client.screen,"Choose character (click)"),WAIT_TICKS);
+        context.clickScreenButton("Choose character (click)");
+        context.waitFor(client -> client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).anyMatch(button -> button.active&&button.getMessage().getString().startsWith(name+" #")),WAIT_TICKS);
+    }
+    private static void chooseTagKind(ClientGameTestContext context,String desired) {
+        for(int attempt=0;attempt<3;attempt++) {
+            String current=context.computeOnClient(client -> client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).map(button -> button.getMessage().getString()).filter(text -> List.of("SPEAKER","ACTION","MENTION").contains(text)).findFirst().orElseThrow());
+            if(current.equals(desired))return;context.clickScreenButton(current);
+        }
+        throw new AssertionError("Expected evidence kind must be selectable");
     }
     private void exerciseIdentityDenials(ClientGameTestContext context,SmokeReport report,Path database) throws Exception {
         report.stage("identity-denials",60_000,()->{

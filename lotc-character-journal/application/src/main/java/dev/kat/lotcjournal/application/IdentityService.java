@@ -34,6 +34,14 @@ public final class IdentityService implements AutoCloseable {
     public CompletableFuture<List<IdentitySeparation>> separations() { return submit(repository::separations); }
     public CompletableFuture<String> denyIdentityLink(String first,String second) { return submit(() -> repository.denyIdentityLink(first,second)); }
     public CompletableFuture<Void> undoSeparation(String id) { return submit(() -> { repository.undoSeparation(id); return null; }); }
+    public CompletableFuture<MessageTagReview> reviewTags(MessageReference message) { return submit(() -> repository.reviewTags(message)); }
+    public CompletableFuture<MessageTagReview> saveReviewedTags(MessageReference message,long revision,List<CharacterTag> tags) {
+        var snapshot=List.copyOf(tags);
+        return submit(() -> repository.saveReviewedTags(message,revision,snapshot));
+    }
+    public CompletableFuture<MessageTagReview> restoreAutomaticTags(MessageReference message,long revision) {
+        return submit(() -> repository.restoreAutomaticTags(message,revision));
+    }
     private <T> CompletableFuture<T> submit(Operation<T> action) {
         var result = new CompletableFuture<T>(); pending.add(result); result.whenComplete((v,e) -> pending.remove(result));
         try {worker.execute(() -> {try {result.complete(action.run());} catch(Exception e) {result.completeExceptionally(e);}});}

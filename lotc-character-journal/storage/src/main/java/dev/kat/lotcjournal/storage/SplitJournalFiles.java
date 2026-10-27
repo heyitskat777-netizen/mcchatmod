@@ -15,7 +15,7 @@ import java.util.UUID;
 /** One attached connection is the only transaction boundary for a native storage pair. */
 final class SplitJournalFiles {
     static final String PAIR_SQL = "CREATE TABLE storage_pair (id INTEGER PRIMARY KEY CHECK(id=1),pair_uuid TEXT NOT NULL,generation TEXT NOT NULL)";
-    static final int ARCHIVE_VERSION = 9, CHARACTERS_VERSION = 2;
+    static final int ARCHIVE_VERSION = 9, CHARACTERS_VERSION = 3;
     private SplitJournalFiles() {}
     static Path charactersFor(Path archive) { return archive.resolveSibling(archive.getFileName() + ".characters.sqlite"); }
     static Path manifestFor(Path archive) { return archive.resolveSibling(archive.getFileName() + ".pair.json"); }
@@ -117,7 +117,7 @@ final class SplitJournalFiles {
             if (!r.next() || r.getInt(1) != ARCHIVE_VERSION) throw new SQLException("Unsupported archive schema");
         }
         try (var s = c.createStatement(); var r = s.executeQuery("PRAGMA characters.user_version")) {
-            if (!r.next() || (r.getInt(1) != CHARACTERS_VERSION && !(allowPrevious&&r.getInt(1)==1))) throw new SQLException("Unsupported character schema");
+            if (!r.next() || (r.getInt(1) != CHARACTERS_VERSION && !(allowPrevious&&r.getInt(1)>=1&&r.getInt(1)<CHARACTERS_VERSION))) throw new SQLException("Unsupported character schema");
         }
     }
     static void integrity(Connection c, String schema) throws SQLException {

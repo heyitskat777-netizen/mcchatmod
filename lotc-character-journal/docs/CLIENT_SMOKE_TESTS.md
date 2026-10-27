@@ -53,8 +53,10 @@ validation rather than treating a standalone task exit as a suite pass.
 
 Both development and packaged runs also assert the physical archive/character
 SQLite split, historical/live character discovery, filtered related dialogue,
-paired backups, persistent reversible link denials and explicit persona isolation. Writers require 24 stages; readers
-require 25 including restart evidence. Worker liveness at shutdown remains a strict
+paired backups, persistent reversible link denials, durable message-tag reviews and explicit persona
+isolation. The tag-review stage includes multitag drafts, resize, save/reject/restore,
+a simulated newer review revision, stale-save rejection and explicit reload. Writers require 25 stages; readers
+require 26 including restart evidence. Worker liveness at shutdown remains a strict
 assertion, separate from Gradle process exit.
 
 Each suite run has a unique run ID. Graphics, development, and packaged game

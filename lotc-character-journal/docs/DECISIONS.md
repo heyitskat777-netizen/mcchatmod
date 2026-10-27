@@ -203,3 +203,19 @@ does not imply acceptance. An existing positive link must be undone first. Denia
 do not rewrite dialogue, aliases, favorites or persona knowledge and must survive
 backups and future analysis. These user checks do not complete automatic-tag
 correction, scene detection, optional AI or large-archive performance acceptance.
+
+## Per-message tag review — October 27, 2026
+
+Kat reports alpha.10 smoke tests passed and asks to continue. The next Phase 3
+slice provides durable corrections/rejections of automatic archive character tags.
+The user edits an exact per-message tag list (identity plus SPEAKER/ACTION/MENTION),
+can save a reviewed-empty list to reject all tags, or explicitly restore current
+automatic suggestions. Source text/channel and persona assignments are unchanged.
+UNKNOWN can receive only MENTION interpretations; this does not make it RP or AI
+knowledge. Duplicate names remain distinguishable by UUID.
+
+Implementation stores the review separately from the rebuildable automatic index.
+Saved lists survive alias edits, reimports, live replay, restart and paired backups.
+Optimistic revisions prevent stale edits; restoring automatic mode retains a revision
+marker so an older draft cannot overwrite it. Save supports at most 64 reviewed
+tags with explicit limits; larger automatic sets are not silently truncated.

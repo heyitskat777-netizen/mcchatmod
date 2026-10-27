@@ -15,13 +15,21 @@ final class IdentitySchema {
     );
     static final java.util.List<String> ORDER = java.util.List.of("character_identities","character_aliases","personas","identity_state","memory_assignments","identity_merges","identity_decisions");
     static final Map<String,String> V1_TABLES = splitTables();
+    static final Map<String,String> V2_TABLES = denialTables();
     static final Map<String,String> TABLES = currentTables();
-    static final Map<String,String> INDEXES = Map.of("identity_separations_active_pair",IdentitySeparations.INDEX);
-    private static Map<String,String> currentTables() {
+    static final Map<String,String> V2_INDEXES = Map.of("identity_separations_active_pair",IdentitySeparations.INDEX);
+    static final Map<String,String> INDEXES = currentIndexes();
+    private static Map<String,String> denialTables() {
         var tables=new java.util.HashMap<>(V1_TABLES);tables.put("identity_separations",IdentitySeparations.TABLE);return Map.copyOf(tables);
     }
-    static Map<String,String> tablesForVersion(int version) {return version==1?V1_TABLES:TABLES;}
-    static Map<String,String> indexesForVersion(int version) {return version==1?Map.of():INDEXES;}
+    private static Map<String,String> currentTables() {
+        var tables=new java.util.HashMap<>(V2_TABLES);tables.putAll(MessageTagReviews.TABLES);return Map.copyOf(tables);
+    }
+    private static Map<String,String> currentIndexes() {
+        var indexes=new java.util.HashMap<>(V2_INDEXES);indexes.putAll(MessageTagReviews.INDEXES);return Map.copyOf(indexes);
+    }
+    static Map<String,String> tablesForVersion(int version) {return version==1?V1_TABLES:version==2?V2_TABLES:TABLES;}
+    static Map<String,String> indexesForVersion(int version) {return version==1?Map.of():version==2?V2_INDEXES:INDEXES;}
     private static Map<String,String> splitTables() {
         var tables = new java.util.HashMap<>(LEGACY_TABLES);
         tables.put("memory_assignments", tables.get("memory_assignments").replace(",FOREIGN KEY(source_id,source_line) REFERENCES transcript_lines(source_id,source_line) ON DELETE CASCADE", ""));
@@ -34,6 +42,7 @@ final class IdentitySchema {
         }
         CharacterIndex.create(c);
         IdentitySeparations.create(c);
+        MessageTagReviews.create(c);
     }
     static void migrate(java.sql.Connection c) throws java.sql.SQLException {
         create(c);
@@ -52,6 +61,7 @@ final class IdentitySchema {
         validate(c,"characters"); CharacterIndex.validate(c);
         try(var s=c.createStatement();var r=s.executeQuery("PRAGMA characters.user_version")) {
             if(r.getInt(1)>=2) IdentitySeparations.validate(c);
+            if(r.getInt(1)>=3) MessageTagReviews.validate(c);
         }
     }
     static void validateLegacy(java.sql.Connection c) throws java.sql.SQLException { validate(c,"main"); }
