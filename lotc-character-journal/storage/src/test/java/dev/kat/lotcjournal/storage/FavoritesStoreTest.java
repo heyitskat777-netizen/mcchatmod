@@ -146,7 +146,7 @@ class FavoritesStoreTest {
         assertEquals(progress, restored.progress(SOURCE));
         restored.setFavorite(ref(SOURCE, 1), false);
         assertEquals(Set.of(ref(SOURCE, 2)), store.transcript(null, null, 0, 20).favorites());
-        assertEquals(8, scalar(backup, "PRAGMA user_version"));
+        assertEquals(9, scalar(backup, "PRAGMA user_version"));
     }
 
     @Test void undoCascadesOnlyItsOwnedFavoritesAndRemovedCoordinatesCannotBeFavoritedAgain() throws Exception {
@@ -209,7 +209,7 @@ class FavoritesStoreTest {
         try(var connection=DriverManager.getConnection("jdbc:sqlite:"+path())) {LegacyJournalFixtures.removeLaterSchemas(connection);}
         sql(path(), "DROP TABLE message_favorites"); sql(path(), "PRAGMA user_version=5");
         var migrated = open(path());
-        assertEquals(8, scalar(path(), "PRAGMA user_version"));
+        assertEquals(9, scalar(path(), "PRAGMA user_version"));
         assertEquals(entries, migrated.transcript(null, null, 0, 20).entries());
         assertTrue(migrated.transcript(null, null, 0, 20).favorites().isEmpty());
         assertEquals(progress, migrated.progress(SOURCE)); assertEquals(sources, migrated.sources());

@@ -31,6 +31,8 @@ class SqliteJournalStoreTest {
         original.save(new JournalSettings(false));
         Path restored = directory.resolve("restored.sqlite");
         Files.copy(backup, restored);
+        Files.copy(backup.resolveSibling(backup.getFileName() + ".characters.sqlite"), restored.resolveSibling(restored.getFileName() + ".characters.sqlite"));
+        Files.copy(backup.resolveSibling(backup.getFileName() + ".pair.json"), restored.resolveSibling(restored.getFileName() + ".pair.json"));
         var replacement = new SqliteJournalStore(restored, new dev.kat.lotcjournal.parsing.DialogueTextNormalizer());
         replacement.initialize();
         assertTrue(replacement.load().compactLayout());

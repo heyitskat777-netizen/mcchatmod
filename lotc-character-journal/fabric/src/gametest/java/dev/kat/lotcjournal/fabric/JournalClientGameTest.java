@@ -37,7 +37,7 @@ public final class JournalClientGameTest implements FabricClientGameTest {
         try {
             Path profile = FabricLoader.getInstance().getGameDir().toAbsolutePath().normalize();
             String expected = System.getProperty("lotc.journal.smoke.profile");
-            Path database = FabricLoader.getInstance().getConfigDir().resolve("lotc-journal/journal.sqlite")
+            Path database = FabricLoader.getInstance().getConfigDir().resolve("lotc-journal/archive.sqlite")
                 .toAbsolutePath().normalize();
             report.stage("startup", 30_000, () -> {
                 check(FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT, "Must run a real client");
@@ -163,7 +163,12 @@ public final class JournalClientGameTest implements FabricClientGameTest {
                 context.clickScreenButton("Create backup");
                 context.waitFor(client -> hasButton(client.screen, "Create backup"), WAIT_TICKS);
                 List<Path> created = backupFiles(backups).stream().filter(path -> !before.contains(path)).toList();
-                check(created.size() == 1, "Backup button must create exactly one fresh snapshot");
+                check(created.size() == 1, "Backup button must create exactly one fresh primary snapshot");
+                Path companion=created.getFirst().resolveSibling(created.getFirst().getFileName()+".characters.sqlite");
+                check(Files.isRegularFile(companion),"Backup must include its character database companion");
+                check(Files.isRegularFile(created.getFirst().resolveSibling(created.getFirst().getFileName()+".pair.json")),"Backup must include its pair manifest");
+                check(sqlCount(created.getFirst(),"SELECT count(*) FROM character_identities")==4,"Paired backup must preserve observed and manual characters");
+                check(sqlCount(created.getFirst(),"SELECT count(*) FROM memory_assignments")==2,"Paired backup must preserve explicit persona assignments");
                 check(readLayout(created.getFirst()), "Backup must contain the selected compact layout");
                 toggle(context, false);
                 check(!readLayout(database), "Source setting must change after backup");
@@ -434,15 +439,16 @@ public final class JournalClientGameTest implements FabricClientGameTest {
             check(Arrays.equals(originalJournal,Files.readAllBytes(selectedJournal)),"Journal format import must leave selected original untouched");
             context.clickScreenButton("Done");waitForJournal(context);
         });
+        exerciseCharacterDiscovery(context,report,database);
         exerciseCharacterBrowser(context,report,database);
         report.stage("identity-personas",60_000,()->{
             context.runOnClient(client -> search(client.screen).setValue(""));
             if(report.phase().equals("read")) {
-                check(sqlCount(database,"SELECT count(*) FROM character_identities")==2,"Manual identities must survive restart");
+                check(sqlCount(database,"SELECT count(*) FROM character_identities")==4,"Manual identities must survive restart");
                 check(sqlCount(database,"SELECT count(*) FROM personas")==2,"Distinct persona choices must survive restart");
                 check(sqlCount(database,"SELECT count(*) FROM memory_assignments")==2,"Explicit memory assignments must survive restart");
             }
-            check(sqlCount(database,"SELECT count(*) FROM character_identities")==2,"Saved character selection must not create extra identities");
+            check(sqlCount(database,"SELECT count(*) FROM character_identities")==4,"Saved character selection must not create extra identities");
             check(sqlCount(database,"SELECT count(*) FROM personas")==2,"Reusing saved characters must reuse existing personas");
             context.clickScreenButton("View transcripts");
             context.waitFor(client -> isScreen(client.screen,TRANSCRIPT_SCREEN),WAIT_TICKS);
@@ -476,11 +482,52 @@ public final class JournalClientGameTest implements FabricClientGameTest {
             context.clickScreenButton("Done");context.clickScreenButton("Done");waitForJournal(context);
         });
     }
+    private void exerciseCharacterDiscovery(ClientGameTestContext context,SmokeReport report,Path database) throws Exception {
+        report.stage("storage-split",20_000,()->{
+            Path characters=database.resolveSibling("characters.sqlite");
+            check(Files.isRegularFile(database)&&Files.isRegularFile(characters),"Both physical database files must exist");
+            try(var c=DriverManager.getConnection("jdbc:sqlite:"+database.toUri()+"?mode=ro");var q=c.createStatement();var r=q.executeQuery("SELECT count(*) FROM sqlite_master WHERE name IN ('character_identities','personas','memory_assignments')")) {
+                check(r.next()&&r.getLong(1)==0,"Archive must not contain character or persona tables");
+            }
+            try(var c=DriverManager.getConnection("jdbc:sqlite:"+characters.toUri()+"?mode=ro");var q=c.createStatement();var r=q.executeQuery("SELECT count(*) FROM sqlite_master WHERE name IN ('transcript_lines','live_events','capture_sources')")) {
+                check(r.next()&&r.getLong(1)==0,"Characters database must not contain dialogue tables");
+            }
+        });
+        report.stage("character-discovery",40_000,()->{
+            check(sqlCount(database,"SELECT count(*) FROM character_identities WHERE name IN ('Synthetic Visitor','Synthetic Live Actor')")==2,"Historical and live speakers must each create exactly one observed character");
+            check(sqlCount(database,"SELECT count(*) FROM character_identities WHERE name LIKE '% says'")==0,"Speech verbs must never become part of discovered names");
+            check(sqlCount(database,"SELECT count(*) FROM character_evidence e JOIN character_identities i ON i.id=e.identity_id WHERE i.name='Synthetic Visitor' AND e.kind='ACTION'")==2,"Repeated historical actions at different coordinates must both tag their actor");
+            check(sqlCount(database,"SELECT count(*) FROM character_evidence e JOIN character_identities i ON i.id=e.identity_id WHERE i.name='Synthetic Visitor' AND e.kind='SPEAKER'")==50,"Trusted historical speech must tag its speaker");
+            check(sqlCount(database,"SELECT count(*) FROM character_evidence e JOIN transcript_lines t ON t.source_id=e.source_id AND t.source_line=e.source_line WHERE t.channel='UNKNOWN' AND e.kind IN ('SPEAKER','ACTION')")==0,"Unknown channel text must never acquire a confident speaker/action attribution");
+            check(sqlCount(database,"SELECT count(*) FROM character_identities WHERE account_observation<>''")==0,"Observed speakers must not infer account ownership");
+            if(!report.phase().equals("read")) check(sqlCount(database,"SELECT count(*) FROM personas")==0&&sqlCount(database,"SELECT count(*) FROM memory_assignments")==0,"Discovery must not create personas or grant memories");
+            context.clickScreenButton("Characters");
+            context.waitFor(client -> screenButtonActive(client.screen,"Refresh / retry"),WAIT_TICKS);
+            context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("Synthetic Visitor"));waitForCharacterList(context,1);
+            openCharacter(context,"Synthetic Visitor",sqlText(database,"SELECT id FROM character_identities WHERE name='Synthetic Visitor'"));
+            context.clickScreenButton("Related dialogue");
+            context.waitFor(client -> isScreen(client.screen,TRANSCRIPT_SCREEN)&&screenButtonActive(client.screen,"Evidence: All"),WAIT_TICKS);
+            context.clickScreenButton("Evidence: All");
+            context.waitFor(client -> screenButtonActive(client.screen,"Evidence: SPEAKER")&&client.screen.getNarrationMessage().getString().contains("of 50"),WAIT_TICKS);
+            context.clickScreenButton("Evidence: SPEAKER");
+            context.waitFor(client -> screenButtonActive(client.screen,"Evidence: ACTION")&&client.screen.getNarrationMessage().getString().contains("Messages 1 to 2 of 2"),WAIT_TICKS);
+            report.screenshot(context.takeScreenshot("lotc-character-dialogue-"+report.phase()));
+            context.clickScreenButton("Done");context.clickScreenButton("Done");context.clickScreenButton("Done");waitForJournal(context);
+        });
+    }
+
+    private static java.sql.Connection archiveConnection(Path database) throws Exception {
+        var c=DriverManager.getConnection("jdbc:sqlite:"+database.toUri()+"?mode=ro");
+        Path companion=database.getFileName().toString().equals("archive.sqlite") ? database.resolveSibling("characters.sqlite") : database.resolveSibling(database.getFileName()+".characters.sqlite");
+        try(var q=c.prepareStatement("ATTACH DATABASE ? AS characters")) {q.setString(1,companion.toUri()+"?mode=ro");q.execute();}
+        catch(Exception e) {c.close();throw e;}return c;
+    }
+
     private void exerciseCharacterBrowser(ClientGameTestContext context,SmokeReport report,Path database) throws Exception {
         report.stage("character-browser",60_000,()->{
             context.runOnClient(client -> search(client.screen).setValue(""));
             context.clickScreenButton("Characters");
-            waitForCharacterList(context,report.phase().equals("read")?2:0);
+            waitForCharacterList(context,report.phase().equals("read")?4:2);
             if(!report.phase().equals("read")) {
                 for(String label:List.of("Synthetic Persona A","Synthetic Persona B")) {
                     context.clickScreenButton("New character");
@@ -492,14 +539,14 @@ public final class JournalClientGameTest implements FabricClientGameTest {
                     });
                     context.clickScreenButton("Save character");
                     context.waitFor(client -> screenButtonActive(client.screen,"Use as persona"),WAIT_TICKS);
-                    context.clickScreenButton("Done");waitForCharacterList(context,label.endsWith("A")?1:2);
+                    context.clickScreenButton("Done");waitForCharacterList(context,label.endsWith("A")?3:4);
                 }
                 check(sqlCount(database,"SELECT count(*) FROM personas")==0,"Saving alone must not silently choose a persona");
             }
             report.screenshot(context.takeScreenshot("lotc-character-list-"+report.phase()));
             context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("Shared Alias"));waitForCharacterList(context,2);
             context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("NO_SYNTHETIC_CHARACTER_MATCH"));waitForCharacterList(context,0);
-            context.clickScreenButton("Clear search");waitForCharacterList(context,2);
+            context.clickScreenButton("Clear search");waitForCharacterList(context,4);
             String secondId=sqlText(database,"SELECT id FROM character_identities WHERE name='Synthetic Persona B'");
             openCharacter(context,"Synthetic Persona B",secondId);
             context.runOnClient(client -> {
@@ -525,7 +572,7 @@ public final class JournalClientGameTest implements FabricClientGameTest {
             context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Persona selected"),WAIT_TICKS);
             check(secondId.equals(sqlText(database,"SELECT p.identity_id FROM personas p JOIN identity_state s ON s.active_persona=p.id WHERE s.id=1")),"Use as persona must activate the selected second character, not the first list row");
             check(draft.get(3).equals(sqlText(database,"SELECT notes FROM character_identities WHERE id='"+secondId+"'")),"Saved draft must update only its exact UUID");
-            context.clickScreenButton("Done");waitForCharacterList(context,2);
+            context.clickScreenButton("Done");waitForCharacterList(context,4);
             context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("Synthetic Persona A"));waitForCharacterList(context,1);
             String firstId=sqlText(database,"SELECT id FROM character_identities WHERE name='Synthetic Persona A'");
             openCharacter(context,"Synthetic Persona A",firstId);
@@ -533,12 +580,12 @@ public final class JournalClientGameTest implements FabricClientGameTest {
             check(firstId.equals(sqlText(database,"SELECT p.identity_id FROM personas p JOIN identity_state s ON s.active_persona=p.id WHERE s.id=1")),"Filtered saved selection must activate its own persona");
             context.clickScreenButton("Done");waitForCharacterList(context,1);
             context.clickScreenButton("Done");waitForJournal(context);
-            context.clickScreenButton("Characters");waitForCharacterList(context,2);
+            context.clickScreenButton("Characters");waitForCharacterList(context,4);
             openCharacter(context,"Synthetic Persona B",secondId);
             context.runOnClient(client -> check(screenButtonActive(client.screen,"Use as persona"),"Reopening saved detail after leaving the browser must not reset it to an unsaved New character"));
-            check(sqlCount(database,"SELECT count(*) FROM character_identities")==2,"Browsing, editing and reusing personas must not duplicate identities");
+            check(sqlCount(database,"SELECT count(*) FROM character_identities")==4,"Browsing, editing and reusing personas must not duplicate identities");
             check(sqlCount(database,"SELECT count(*) FROM personas")==2,"Repeated Use as persona must reuse existing persona records");
-            context.clickScreenButton("Done");waitForCharacterList(context,2);context.clickScreenButton("Done");waitForJournal(context);
+            context.clickScreenButton("Done");waitForCharacterList(context,4);context.clickScreenButton("Done");waitForJournal(context);
         });
     }
     private static void waitForCharacterList(ClientGameTestContext context,int count) {
@@ -555,7 +602,7 @@ public final class JournalClientGameTest implements FabricClientGameTest {
     }
 
     private static String sqlText(Path database,String sql) throws Exception {
-        try(var c=DriverManager.getConnection("jdbc:sqlite:"+database.toUri()+"?mode=ro");var q=c.createStatement();var r=q.executeQuery(sql)){check(r.next(),"Expected metadata row");return r.getString(1);}
+        try(var c=archiveConnection(database);var q=c.createStatement();var r=q.executeQuery(sql)){check(r.next(),"Expected metadata row");return r.getString(1);}
     }
 
     private void exerciseBatchImport(ClientGameTestContext context, SmokeReport report, Path database) throws Exception {
@@ -656,7 +703,7 @@ public final class JournalClientGameTest implements FabricClientGameTest {
     }
 
     private static long sqlCount(Path database, String sql) throws Exception {
-        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database.toUri() + "?mode=ro");
+        try (var connection = archiveConnection(database);
              var statement = connection.createStatement(); var rows = statement.executeQuery(sql)) {
             check(rows.next(), "Count query must return a row"); return rows.getLong(1);
         }
@@ -767,7 +814,7 @@ public final class JournalClientGameTest implements FabricClientGameTest {
 
     private static List<Path> backupFiles(Path directory) throws Exception {
         if (!Files.exists(directory)) return List.of();
-        try (var paths = Files.list(directory)) { return paths.filter(Files::isRegularFile).toList(); }
+        try (var paths = Files.list(directory)) { return paths.filter(Files::isRegularFile).filter(path -> path.toString().endsWith(".sqlite") && !path.toString().endsWith(".characters.sqlite")).toList(); }
     }
 
     private static boolean readLayout(Path database) throws Exception {

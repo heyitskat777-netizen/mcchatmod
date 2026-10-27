@@ -33,12 +33,12 @@ public final class JournalClient implements ClientModInitializer {
 
     @Override public void onInitializeClient() {
         Path directory = FabricLoader.getInstance().getConfigDir().resolve("lotc-journal");
-        SqliteJournalStore store = new SqliteJournalStore(directory.resolve("journal.sqlite"), new dev.kat.lotcjournal.parsing.DialogueTextNormalizer());
+        SqliteJournalStore store = new SqliteJournalStore(directory.resolve("archive.sqlite"), directory.resolve("characters.sqlite"), new dev.kat.lotcjournal.parsing.DialogueTextNormalizer());
         service = new JournalService(store, store);
         importer = new LogImportService(store);
         batches = new BatchImportService(importer, store);
         watcher = new FolderWatchService(batches, store);
-        identities = new IdentityService(new SqliteIdentityRepository(directory.resolve("journal.sqlite")));
+        identities = new IdentityService(new SqliteIdentityRepository(directory.resolve("archive.sqlite"), directory.resolve("characters.sqlite")));
         live = new LiveCaptureService(FabricLoader.getInstance().getGameDir().resolve("lotc-journal/live"), store, java.util.Set.of());
         var ready = service.start().thenCompose(ignored -> watcher.load()).thenCompose(ignored -> live.recover());
         liveAdapter = new LiveChatAdapter(live, ready);

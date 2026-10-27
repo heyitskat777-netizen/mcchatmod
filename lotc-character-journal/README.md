@@ -10,14 +10,15 @@ The user has accepted the Phase 1 foundation smoke test. Press **J** in a world
 to open the journal; its key is rebindable in Controls. Layout settings and backup
 creation remain available. Characters now supports explicit names, aliases and notes; persona memories require manual message assignment.
 
-The `0.1.0-alpha.8` development build expands **Log import** for finished UTF-8 `.log`
+The `0.1.0-alpha.9` development build expands **Log import** for finished UTF-8 `.log`
 and `.log.gz` files, background validation, progress/cancellation, restart-safe
 checkpoints, repeat-import deduplication, and a transcript browser with literal
 text search. **Import all / dashboard** adds a read-only folder preview,
 confirmed batch import, durable per-file reports/retry and batch-owned undo.
 Transcript browsing supports All sources, channel filters, a direct **Roleplay only**
 view and UNKNOWN review. Recognized persona/plugin notices are ignored; IC-channel
-and sender/emote evidence classifies new RP without guessing speaker identities.
+and sender/emote evidence classifies new RP; trusted anchored speech/actions also
+create observed character records.
 Older cleaned UNKNOWN observations are not promoted from wording alone.
 The main journal now has **View transcripts**, without opening the import screen.
 Click an individual dialogue message to select its highlighted row, then **Favorite selected**, or click its
@@ -38,12 +39,15 @@ through Details. The database stores cleaned dialogue without redundant raw logg
 lines. Logger/thread tags, recognized leading RP tags, log clocks and color escapes
 are removed from the payload; quoted markers inside speech remain. Source
 fingerprints, line coordinates, clocks and channel uncertainty remain separate
-metadata. Names remain unresolved unless supplied as
-reviewed observations before import. Character/persona links require explicit user
-confirmation through Assign; import never creates those links automatically.
+metadata. Names found in trusted ROLEPLAY speaker/action headers create observed characters.
+New names and aliases search earlier dialogue; ambiguous collisions stay unresolved.
+**Related dialogue** on a saved character filters speech, actions and mentions.
+Persona memories still require explicit confirmation through Assign.
 
-Settings live in `config/lotc-journal/journal.sqlite`. Backups are stored in
-`config/lotc-journal/backups/`. A schema migration creates a verified backup of an existing schema-1 through schema-7
+Dialogue, import/live state, settings and favorites live in
+`config/lotc-journal/archive.sqlite`. Characters, aliases, personas and evidence
+live in `config/lotc-journal/characters.sqlite`. Backups are stored in
+`config/lotc-journal/backups/`. A schema migration creates a verified backup of an existing schema-1 through schema-8
 database before upgrading the journal. Undo removes active batch-owned records
 while keeping source checkpoints and payload-free removal accounting; it does not
 restore them on repeat import or erase existing backups. Live capture now starts automatically in worlds and offers pause/resume on the main
@@ -68,10 +72,12 @@ message asks for its owning persona, identity or unassigned choice, and whether 
 is a reference or speaker attribution. **Persona memories** shows only explicit
 assignments. Shared archive Transcripts remains separate. Review identity links
 supports explicit confirmation and persistent undo; duplicate names/aliases never
-merge automatically. Everything uses the mod-created `config/lotc-journal/journal.sqlite`: `.log` and
-`.log.gz` imports and live recording populate its dialogue archive; character
-records and confirmed assignments use the same database. Existing records remain
-in place. An unrelated old-database importer is no longer planned.
+merge automatically. The mod owns two bound SQLite files: `.log`/`.log.gz` imports and live recording
+populate `archive.sqlite`; character records and confirmed assignments use
+`characters.sqlite`. Upgrading copies native `journal.sqlite` without changing it,
+then migrates the copy. Backups contain both SQLite files and a `.pair.json`
+manifest: keep and restore all three together. Missing/mismatched members fail
+closed. See [the upgrade checklist](docs/USER_TEST_CHARACTER_DISCOVERY.md). An unrelated old-database importer is no longer planned.
 
 Native `.lotc-chat.jsonl` repeat imports reuse event IDs. Ordinary `.log` overlaps
 with live events remain separate when their identity cannot be proved; genuine

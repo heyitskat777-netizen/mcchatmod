@@ -1,3 +1,77 @@
+# Current work — October 26, 2026: two-file storage and character discovery
+
+Branch: `feature/character-discovery`, based on reviewed-for-testing alpha.8
+`e2bb155` / `feature/character-browser`. `main` remains unchanged. Kat reports
+alpha.8 smoke tests passed; that user evidence does not certify this upgrade.
+Target remains Minecraft 1.21.11 / Fabric / Java 21, build alpha.9.
+
+Kat explicitly confirmed two actual SQLite files, superseding the alpha.8
+single-file decision below. `archive.sqlite` holds imported/live observations,
+settings, favorites and import/live recovery state. `characters.sqlite` holds
+characters, aliases, personas, assignments, decisions and derived name evidence.
+The original native `journal.sqlite` is snapshotted read-only and retained.
+The archive upgrades to schema 9, characters uses schema 1; parser policy stays 4.
+No unrelated old-database importer was added.
+
+A single attached connection with DELETE journal and FULL synchronization on both
+same-filesystem members provides SQLite's paired commit boundary. Persistent pair
+UUID/generation rejects missing or mismatched members. Initialization takes a
+profile file lock; paired writers reserve the archive first to avoid lock-order
+inversion. Undo removes exact owned assignments/evidence in the same transaction.
+Backups hold one read snapshot across both files, create both SQLite snapshots,
+validate them and publish a hash manifest. Restore all three backup files together;
+see [the user checklist](USER_TEST_CHARACTER_DISCOVERY.md).
+
+Trusted ROLEPLAY plus anchored speech/action headers discovers stable observed
+characters. New characters/aliases search prior dialogue; literal Unicode name
+matching distinguishes SPEAKER, ACTION and MENTION. Duplicate names/aliases stay
+unresolved. Character **Related dialogue** provides those filters plus search and
+favorites. UNKNOWN can match mentions but is never promoted into RP/AI knowledge.
+Automatic records do not infer accounts, create/select personas, merge identities
+or assign persona memories. Manual assignments and original observations remain
+separate. Renaming a discovered character retains its original observed name to
+avoid duplicate rediscovery.
+
+Native build, verification and read-only review subagents were available and used
+with separate ownership; coordinator owns matching/UI/integration/docs and runs
+checks. Review identified and corrected speech-verb parsing, Unicode/apostrophe
+boundaries, writer lock order, transcript snapshot consistency and migration/backup
+publication races. No acceptance tests were weakened.
+
+## Verification in this restored environment
+
+The attached checkout initially contained main/foundation only; fetched alpha.8
+before branching. Previous machine caches and uncommitted work were absent. System
+Java was a JRE without javac, so extracted SHA-256-verified Temurin 21.0.13+9 to
+`/workspace/toolchains/`. Gradle wrapper download required the environment proxy.
+Set `JAVA_HOME=/workspace/toolchains/jdk-21.0.13+9`, `GRADLE_USER_HOME=/workspace/.gradle`,
+and the HTTPS/HTTP proxy JVM options shown in older verification records below.
+An extracted Debian Xvfb runs display :99 with Mesa software rendering.
+
+First domain run exposed two new matcher failures (Unicode suffix boundary and
+hyphen separation); production fixes preserved all test expectations. Second
+`./gradlew -PcoreOnly :domain:test :storage:compileJava --no-daemon --console=plain`
+passed (domain 9 tests). First integrated `-PcoreOnly check` compiled storage and
+ran 72 storage tests with three failures: two backup exception-contract regressions
+fixed in production; the restore test correctly required updating to copy the
+complete pair rather than its archive member alone. The original snapshot assertions
+remain. Subsequent integrated and in-game results will be recorded below.
+
+## Remaining acceptance and limits
+
+Full archive backfill currently runs off-thread inside a storage transaction when
+new names/aliases require it. Large-archive throughput and real-play queue latency
+remain unmeasured. Automatic matching is deliberately limited to anchored known
+speech/common-action grammar; unresolved wording remains searchable. No inference
+or scene feature is claimed complete. The real child-process interruption test
+covers pre-commit recovery, not power loss inside SQLite's commit algorithm.
+Confirmed merge overlays still keep their existing separate dialogue views; they do
+not combine derived name evidence. Global editing/rejection of automatic tags is
+a remaining Phase 3 task; explicit persona assignments remain independently editable.
+Actual alpha.9 modpack/upgrade/restore acceptance remains pending the checklist.
+
+---
+
 # Current status — October 26, 2026
 
 ## Alpha.8 — visible character browser and native database scope

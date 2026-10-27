@@ -51,7 +51,7 @@ class DialogueMigrationTest {
             }
         }
         var migrated = store(); migrated.initialize();
-        assertEquals(8, scalar(path(), "PRAGMA user_version"));
+        assertEquals(9, scalar(path(), "PRAGMA user_version"));
         assertEquals(0, scalar(path(), "SELECT count(*) FROM pragma_table_info('transcript_lines') WHERE name='raw'"));
         assertEquals(List.of(1L, 2L), migrated.transcript(ID, "", 0, 20).entries().stream().map(TranscriptLine::sourceLine).toList());
         assertEquals("Synthetic Speaker waits 2.", migrated.transcript(ID, "", 0, 20).entries().getLast().text());

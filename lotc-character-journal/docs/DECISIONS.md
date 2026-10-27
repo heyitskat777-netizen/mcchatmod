@@ -7,7 +7,7 @@
 - Phase 2 includes **Import all logs**: a user-selected folder, bounded background
   file queue, existing deduplication/privacy/recovery rules, batch progress and
   per-file outcomes. The accepted workflow includes preview, a durable dashboard, retry and safe undo.
-- One mod-created journal.sqlite for imported logs, live observations, characters, favorites and persona memories; no unrelated old-database importer.
+- Two actual SQLite files: archive.sqlite for imported/live dialogue and characters.sqlite for characters/personas; no unrelated old-database importer.
 - Separate persona memory views; observed account/persona information when available.
 - Manual character creation, renaming, notes, and corrections.
 - AI-suggested aliases, with confirmation required for identity linking/merging.
@@ -173,3 +173,22 @@ it and its records. Historical .log/.log.gz import and live recording populate t
 same dialogue archive, with manual character records and explicit identity/persona
 confirmation alongside it. No reset or replacement database is needed. Native
 schema migrations/backups remain necessary and distinct from a legacy importer.
+
+## Two-file storage and observed characters — October 26, 2026
+
+Kat explicitly selected **two SQLite files**, superseding the alpha.8 single-file
+choice above. Imported logs and live recordings share `archive.sqlite`; character
+records, aliases, personas, assignments and derived name evidence use
+`characters.sqlite`. Preserve the old native `journal.sqlite` as a recovery source
+when upgrading. Both members form one bound storage pair; backup/restore the pair.
+
+Kat also requests automatic creation of characters observed speaking/acting in
+imported logs, and archive searches when creating/editing a character or aliases.
+The same indexing applies to live observations. Only trusted ROLEPLAY plus anchored
+name/speech/action grammar discovers a character. Literal whole-token name/alias
+mentions are a separate classification and may include UNKNOWN archive text;
+that does not reclassify its channel or make it eligible for AI. Ambiguous shared
+names/aliases remain unresolved. Original observations and parser policy stay
+unchanged. Account ownership, merges and persona memories still require review.
+The first observed spelling remains linked after renaming an automatic character
+to prevent rediscovery as a duplicate; user aliases can be removed independently.

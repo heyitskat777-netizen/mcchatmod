@@ -2,6 +2,7 @@ package dev.kat.lotcjournal.fabric;
 
 import dev.kat.lotcjournal.application.IdentityService;
 import dev.kat.lotcjournal.domain.CharacterIdentity;
+import dev.kat.lotcjournal.ingestion.LogImportService;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
@@ -15,6 +16,7 @@ import net.minecraft.network.chat.Component;
 final class IdentityScreen extends Screen {
     private final Screen parent;
     private final IdentityService service;
+    final LogImportService importer;
     private List<CharacterIdentity> identities = List.of();
     private final List<Button> rows = new ArrayList<>();
     private EditBox search;
@@ -25,8 +27,11 @@ final class IdentityScreen extends Screen {
     private boolean pending;
 
     IdentityScreen(Screen parent, IdentityService service, String query) {
+        this(parent, service, query, null);
+    }
+    IdentityScreen(Screen parent, IdentityService service, String query, LogImportService importer) {
         super(Component.literal("Characters — shared archive"));
-        this.parent = parent; this.service = service; this.query = query;
+        this.parent = parent; this.service = service; this.query = query; this.importer = importer;
     }
     @Override protected void init() {
         int panel = Math.min(520, width - 32), left = (width - panel) / 2;

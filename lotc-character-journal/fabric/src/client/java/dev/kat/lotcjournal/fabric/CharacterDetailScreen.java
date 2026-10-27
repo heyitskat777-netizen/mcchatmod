@@ -26,7 +26,7 @@ final class CharacterDetailScreen extends Screen {
     private CharacterIdentity persisted;
     private Draft draft, savedDraft;
     private EditBox name, aliases, account, notes;
-    private Button save, persona;
+    private Button save, persona, dialogue;
     private String status;
     private boolean pending;
 
@@ -49,6 +49,8 @@ final class CharacterDetailScreen extends Screen {
             .bounds(left, 160, panel / 2 - 4, 20).build());
         persona = addRenderableWidget(Button.builder(Component.literal("Use as persona"), button -> useAsPersona())
             .bounds(left + panel / 2 + 4, 160, panel / 2 - 4, 20).build());
+        dialogue = addRenderableWidget(Button.builder(Component.literal("Related dialogue"), button -> relatedDialogue())
+            .bounds(left, 185, panel, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Done"), button -> onClose())
             .bounds(left, height - 26, panel, 20).build());
         tick();
@@ -93,11 +95,23 @@ final class CharacterDetailScreen extends Screen {
             if (minecraft.screen == this) tick();
         }));
     }
+    private void relatedDialogue() {
+        if (pending || persisted == null || parent.importer == null) return;
+        pending = true; status = "Loading shared archive links"; tick();
+        parent.importer.sources().whenComplete((sources, error) -> minecraft.execute(() -> {
+            pending = false;
+            if (minecraft.screen != this) return;
+            if (error != null) { status = "Dialogue could not be loaded; retry"; tick(); }
+            else minecraft.setScreen(new TranscriptScreen(this, parent.importer, sources, service, null, identityId));
+        }));
+    }
     @Override public void tick() {
         if (save == null) return;
         save.active = !pending;
         boolean dirty = !readDraft().equals(savedDraft);
         persona.active = !pending && persisted != null && !dirty;
+        dialogue.active = !pending && persisted != null && !dirty && parent.importer != null;
+        dialogue.setTooltip(Tooltip.create(Component.literal("Shared archive: speech, actions and name/alias mentions. This does not assign persona memories.")));
         persona.setTooltip(Tooltip.create(Component.literal(persisted == null ? "Save this character first" : dirty ? "Save your edits before choosing this persona" : "Choose this saved character as your persona")));
         name.active = aliases.active = account.active = notes.active = !pending;
     }
@@ -111,7 +125,7 @@ final class CharacterDetailScreen extends Screen {
         graphics.drawString(font, "Account observation (unverified)", left, 94, 0xFF9CA3AF);
         graphics.drawString(font, "Shared archive notes", left, 124, 0xFF9CA3AF);
         String message = persisted != null && !pending && !readDraft().equals(savedDraft) ? "Unsaved edits — Save character to enable Use as persona" : status;
-        graphics.drawString(font, font.plainSubstrByWidth(message, panel), left, 190, 0xFF93C5FD);
+        graphics.drawString(font, font.plainSubstrByWidth(message, panel), left, 205, 0xFF93C5FD);
     }
     @Override public Component getNarrationMessage() { return Component.literal(title.getString() + ". " + status + ". Character " + identityId); }
     @Override public void onClose() { if (persisted != null) parent.remember(identityId); minecraft.setScreen(parent); }

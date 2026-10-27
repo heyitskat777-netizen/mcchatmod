@@ -66,7 +66,7 @@ public final class JournalScreen extends Screen {
             }));
         }).bounds(left + panel / 2 + 4, 115, panel / 2 - 4, 20).build());
         characters = addRenderableWidget(Button.builder(Component.literal("Characters"), button ->
-            minecraft.setScreen(new IdentityScreen(this, identities, search.getValue()))).bounds(left,140,panel/2-4,20).build());
+            minecraft.setScreen(new IdentityScreen(this, identities, search.getValue(), importer))).bounds(left,140,panel/2-4,20).build());
         memories = addRenderableWidget(Button.builder(Component.literal("Persona memories"), button ->
             minecraft.setScreen(new PersonaScreen(this, identities, importer))).bounds(left+panel/2+4,140,panel/2-4,20).build());
         capture = addRenderableWidget(Button.builder(Component.literal("Pause live capture"), button -> {
