@@ -4,6 +4,7 @@ import dev.kat.lotcjournal.domain.*;
 import java.nio.file.Path;
 import java.util.concurrent.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import static org.junit.jupiter.api.Assertions.*;
 
 class JournalServiceTest {
@@ -48,6 +49,29 @@ class JournalServiceTest {
         service.close();
         assertEquals(JournalSnapshot.Status.CLOSED, service.snapshot().status());
         assertThrows(ExecutionException.class, () -> service.toggleCompactLayout().get());
+    }
+
+    @Test @Timeout(15) void closeReturnsOnlyAfterTheRealIoThreadHasExited() throws Exception {
+        // Executor TERMINATED can precede Thread.run returning. Exercise real workers,
+        // and inspect them immediately after close rather than polling until they die.
+        for (int attempt = 0; attempt < 128; attempt++) {
+            var initializedOn = new java.util.concurrent.atomic.AtomicReference<Thread>();
+            var loadedOn = new java.util.concurrent.atomic.AtomicReference<Thread>();
+            var store = new MemoryStore() {
+                @Override public void initialize() { initializedOn.set(Thread.currentThread()); }
+                @Override public JournalSettings load() { loadedOn.set(Thread.currentThread()); return super.load(); }
+            };
+            var service = new JournalService(store, store);
+            try {
+                service.start().get(5, TimeUnit.SECONDS);
+                Thread io = initializedOn.get();
+                assertNotNull(io); assertSame(io, loadedOn.get());
+                assertNotSame(Thread.currentThread(), io); assertEquals("lotc-journal-io", io.getName());
+                service.close();
+                assertFalse(io.isAlive(), "close returned before actual I/O thread exit on attempt " + attempt);
+                assertEquals(JournalSnapshot.Status.CLOSED, service.snapshot().status());
+            } finally { service.close(); }
+        }
     }
 
     @Test void boundedQueueRejectsExcessWithoutRunningOnCaller() throws Exception {

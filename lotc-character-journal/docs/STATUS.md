@@ -75,7 +75,60 @@ The first asset-preparation process was deliberately stopped after slow serial
 cold-cache downloads; its verified cache was preserved. Resumed preparation with
 an environment-only Gradle init script setting 16 asset download threads and a
 600-second cap. This changes no source configuration or runtime acceptance criteria.
-Alpha.9 in-game runtime results remain pending; compilation alone is not a pass.
+Initial runtime `character-discovery-1`: graphics preflight passed in 22.6s;
+development writer passed all 23 stages in 32.5s. Development reader passed its
+23 functional stages but FAILED its shutdown stage in 26.5s: a journal I/O thread
+was still alive when CLIENT_STOPPING was inspected. Packaged phases were skipped
+by the fail-closed runner. Gradle exit 0 did not count as a suite pass. This is an
+application/lifecycle failure, separate from graphics/environment setup.
+
+Independent review confirmed the JDK executor can signal TERMINATED before the
+actual worker Thread exits; the original report did not identify which worker.
+The final-closing JournalService now joins its tracked thread within the remaining
+existing 3-second shutdown budget (skipping self-join). No sleep, observer grace,
+weakened assertion or larger runtime timeout was added. Failure diagnostics now
+include remaining worker names/state. A new test captures actual workers and
+checks 128 immediate post-close lifetime boundaries. Coordinator repair check/build/
+smoke preparation passed in 10s before that late-arriving test was compiled;
+its affected test run subsequently passed in 7s (17 application tests including
+the 128 real-thread lifecycles). Latest XML totals **279 core tests, zero failures/
+errors/skips** across integrated plus affected runs. One lifecycle repair was needed.
+The second full runtime passed all five phases:
+Original failed evidence remains in `fabric/build/client-smoke/evidence/character-discovery-1/`.
+
+```sh
+./gradlew check :fabric:build :fabric:prepareClientSmoke --no-daemon --console=plain
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --prepared --timeout 300 --run-id character-discovery-2
+./gradlew -PcoreOnly :application:test --no-daemon --console=plain
+```
+
+| Local phase | Elapsed | Result |
+| --- | --- | --- |
+| graphics-preflight | 20.7s | PASSED |
+| development-write | 26.5s | PASSED |
+| development-read | 25.1s | PASSED |
+| packaged-write | 31.0s | PASSED |
+| packaged-read | 26.0s | PASSED |
+
+All five independent JVMs exited 0, without timeouts or evidence errors. Writers
+passed **23 assertion stages**, readers **24**, including both physical storage
+files, exact historical/live character discovery, SPEAKER/ACTION filters through
+Related dialogue, paired backups, restart persistence and clean shutdown. Packaged
+runs verified the actual mod and SQLite loaded from JARs without development
+outputs masking missing dependencies. Synthetic character-dialogue and 640x480
+editor screenshots were visually inspected; labels/controls remain readable and
+onscreen. Screenshots supplement assertions; they do not establish passing tests.
+Evidence: `fabric/build/client-smoke/evidence/character-discovery-2/` contains JSON,
+XML, screenshots, logs, separate launch/shutdown witnesses and the final summary.
+
+Local artifact: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.9.jar` (**14,677,910 bytes**),
+SHA-256 `36125ca0b9ecc9f7a19b1992bad13f33d98a4b804b4e3a7968bdb1e69b8238a1`.
+
+PR [#10](https://github.com/heyitskat777-netizen/mcchatmod/pull/10) targets the
+previous feature branch; main is unchanged. GitHub Actions on the pre-repair
+feature commit passed both jobs ([run 40451878716](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40451878716));
+CI on the final lifetime repair is pending and will be recorded separately.
+
 
 ## Remaining acceptance and limits
 

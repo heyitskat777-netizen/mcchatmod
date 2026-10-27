@@ -49,7 +49,7 @@
     {
       "module": "application",
       "suite": "dev.kat.lotcjournal.application.JournalServiceTest",
-      "tests": 9,
+      "tests": 10,
       "failures": 0,
       "errors": 0,
       "skipped": 0
@@ -255,8 +255,61 @@
       "skipped": 0
     }
   ],
-  "total_tests": 278,
+  "total_tests": 279,
   "fabric_build": "passed; client and game-test source compiled; packaged runtime dependencies verified",
-  "client_game_test": "pending alpha.9 runtime execution",
-  "user_test": "alpha.8 smoke passed per user; alpha.9 pending"
+  "client_game_test": "passed all five isolated JVMs in character-discovery-2 after one shutdown-lifetime repair",
+  "user_test": "alpha.8 smoke passed per user; alpha.9 pending",
+  "affected_command": "./gradlew -PcoreOnly :application:test --no-daemon --console=plain",
+  "client_phases": [
+    {
+      "name": "graphics-preflight",
+      "status": "PASSED",
+      "duration": 20.65941448799822,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 13522,
+      "errors": []
+    },
+    {
+      "name": "development-write",
+      "status": "PASSED",
+      "duration": 26.535584983999797,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 13800,
+      "errors": []
+    },
+    {
+      "name": "development-read",
+      "status": "PASSED",
+      "duration": 25.14254743099991,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 14143,
+      "errors": []
+    },
+    {
+      "name": "packaged-write",
+      "status": "PASSED",
+      "duration": 30.97058229399954,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 14452,
+      "errors": []
+    },
+    {
+      "name": "packaged-read",
+      "status": "PASSED",
+      "duration": 25.983078031000332,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 14755,
+      "errors": []
+    }
+  ],
+  "artifact": {
+    "name": "lotc-character-journal-0.1.0-alpha.9.jar",
+    "bytes": 14677910,
+    "sha256": "36125ca0b9ecc9f7a19b1992bad13f33d98a4b804b4e3a7968bdb1e69b8238a1"
+  }
 }
