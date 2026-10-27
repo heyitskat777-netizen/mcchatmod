@@ -14,7 +14,7 @@ Suggested test durations below are observation windows, not development estimate
 ## Requirements carried forward
 
 - Import historical logs and compressed archives; ingest new dialogue during play.
-- Populate the single mod-created journal.sqlite through supported historical log imports and live recording; review characters and confirmed corrections in the same database.
+- Populate archive.sqlite through historical imports and live recording; review characters/personas in its bound characters.sqlite companion.
 - Separate account observations, character identities, names, aliases, and knowledge held by each of your personas.
 - Allow manual records, annotations, identity corrections, scene edits, and participant corrections.
 - AI can suggest aliases, scene refinements, summaries, relationship changes, and unfinished business. Linking or merging identities requires confirmation.
@@ -219,7 +219,12 @@ that every archived or received event belongs to that persona.
 
 **Deliverables**
 
-Character list/detail pages, manual notes, account observations, aliases, persona selection and reversible identity decisions in the single native mod database. Historical log imports and live recording populate that same archive. Preserve existing native records and back up before native schema migrations; an unrelated old-database importer is out of scope.
+Character list/detail pages, manual notes, account observations, aliases, persona selection and reversible identity decisions in characters.sqlite. Historical log imports and live recording populate archive.sqlite. Automatically create observed characters from trusted speaker/action evidence; search existing dialogue for new names/aliases, distinguishing speech/actions from mentions. Preserve existing native records and back up before native schema migrations; an unrelated old-database importer is out of scope.
+
+Remaining after observed-character discovery: user correction/rejection of automatic
+archive tags with durable overrides, and a deliberate policy for displaying confirmed
+merge overlays in related dialogue. These are separate from explicit persona memory
+assignments; discovery alone does not close Phase 3.
 
 Future favorites, scene participants and extracted records must use these identity
 contracts. The user can explicitly tie a bookmark/record to a specific identity;
@@ -235,7 +240,7 @@ Test identical names belonging to different characters, multiple personas on one
 
 **Kat's test — two of your personas and several known characters**
 
-Switch personas, inspect which memories appear, deliberately make a wrong identity link, undo it, and verify the affected history. Review saved characters after reopening, searching and resizing; verify imported dialogue and character assignments share the native database.
+Switch personas, inspect which memories appear, deliberately make a wrong identity link, undo it, and verify the affected history. Review saved characters after reopening, searching and resizing; verify the two physical files retain dialogue and character/persona links across restart and paired backup/restore.
 
 **Exit criterion**
 

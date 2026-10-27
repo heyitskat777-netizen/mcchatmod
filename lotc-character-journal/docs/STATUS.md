@@ -1,3 +1,168 @@
+# Current work — October 26, 2026: two-file storage and character discovery
+
+Branch: `feature/character-discovery`, based on reviewed-for-testing alpha.8
+`e2bb155` / `feature/character-browser`. `main` remains unchanged. Kat reports
+alpha.8 smoke tests passed; that user evidence does not certify this upgrade.
+Target remains Minecraft 1.21.11 / Fabric / Java 21, build alpha.9.
+
+Kat explicitly confirmed two actual SQLite files, superseding the alpha.8
+single-file decision below. `archive.sqlite` holds imported/live observations,
+settings, favorites and import/live recovery state. `characters.sqlite` holds
+characters, aliases, personas, assignments, decisions and derived name evidence.
+The original native `journal.sqlite` is snapshotted read-only and retained.
+The archive upgrades to schema 9, characters uses schema 1; parser policy stays 4.
+No unrelated old-database importer was added.
+
+A single attached connection with DELETE journal and FULL synchronization on both
+same-filesystem members provides SQLite's paired commit boundary. Persistent pair
+UUID/generation rejects missing or mismatched members. Initialization takes a
+profile file lock; paired writers reserve the archive first to avoid lock-order
+inversion. Undo removes exact owned assignments/evidence in the same transaction.
+Backups hold one read snapshot across both files, create both SQLite snapshots,
+validate them and publish a hash manifest. Restore all three backup files together;
+see [the user checklist](USER_TEST_CHARACTER_DISCOVERY.md).
+
+Trusted ROLEPLAY plus anchored speech/action headers discovers stable observed
+characters. New characters/aliases search prior dialogue; literal Unicode name
+matching distinguishes SPEAKER, ACTION and MENTION. Duplicate names/aliases stay
+unresolved. Character **Related dialogue** provides those filters plus search and
+favorites. UNKNOWN can match mentions but is never promoted into RP/AI knowledge.
+Automatic records do not infer accounts, create/select personas, merge identities
+or assign persona memories. Manual assignments and original observations remain
+separate. Renaming a discovered character retains its original observed name to
+avoid duplicate rediscovery.
+
+Native build, verification and read-only review subagents were available and used
+with separate ownership; coordinator owns matching/UI/integration/docs and runs
+checks. Review identified and corrected speech-verb parsing, Unicode/apostrophe
+boundaries, writer lock order, transcript snapshot consistency and migration/backup
+publication races. No acceptance tests were weakened.
+
+## Verification in this restored environment
+
+The attached checkout initially contained main/foundation only; fetched alpha.8
+before branching. Previous machine caches and uncommitted work were absent. System
+Java was a JRE without javac, so extracted SHA-256-verified Temurin 21.0.13+9 to
+`/workspace/toolchains/`. Gradle wrapper download required the environment proxy.
+Set `JAVA_HOME=/workspace/toolchains/jdk-21.0.13+9`, `GRADLE_USER_HOME=/workspace/.gradle`,
+and the HTTPS/HTTP proxy JVM options shown in older verification records below.
+An extracted Debian Xvfb runs display :99 with Mesa software rendering.
+
+First domain run exposed two new matcher failures (Unicode suffix boundary and
+hyphen separation); production fixes preserved all test expectations. Second
+`./gradlew -PcoreOnly :domain:test :storage:compileJava --no-daemon --console=plain`
+passed (domain 9 tests). First integrated `-PcoreOnly check` compiled storage and
+ran 72 storage tests with three failures: two backup exception-contract regressions
+fixed in production; the restore test correctly required updating to copy the
+complete pair rather than its archive member alone. The original snapshot assertions
+remain. The subsequent integrated coordinator run passed:
+
+```sh
+./gradlew check :fabric:build --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+```
+
+Gradle **passed in 37s**, 30 tasks (13 executed/17 up-to-date). XML reports
+**278 tests, 0 failures/errors/skips**: domain 9, application 16, parsing 116,
+ingestion 57, storage 80. All 14 Python tests passed in 1.110s. The 21 new core
+cases cover matching boundaries, actual plain/gzip discovery/privacy, native-v8
+upgrade including committed uncheckpointed WAL, paired backup/restore/mismatch,
+transaction rollback and real child-process death before a coordinated undo commit.
+Fabric client and game-test compilation and bundled-runtime checks passed.
+`git diff --check` passed. Independent final source review found no blocker.
+
+The first asset-preparation process was deliberately stopped after slow serial
+cold-cache downloads; its verified cache was preserved. Resumed preparation with
+an environment-only Gradle init script setting 16 asset download threads and a
+600-second cap. This changes no source configuration or runtime acceptance criteria.
+Initial runtime `character-discovery-1`: graphics preflight passed in 22.6s;
+development writer passed all 23 stages in 32.5s. Development reader passed its
+23 functional stages but FAILED its shutdown stage in 26.5s: a journal I/O thread
+was still alive when CLIENT_STOPPING was inspected. Packaged phases were skipped
+by the fail-closed runner. Gradle exit 0 did not count as a suite pass. This is an
+application/lifecycle failure, separate from graphics/environment setup.
+
+Independent review confirmed the JDK executor can signal TERMINATED before the
+actual worker Thread exits; the original report did not identify which worker.
+The final-closing JournalService now joins its tracked thread within the remaining
+existing 3-second shutdown budget (skipping self-join). No sleep, observer grace,
+weakened assertion or larger runtime timeout was added. Failure diagnostics now
+include remaining worker names/state. A new test captures actual workers and
+checks 128 immediate post-close lifetime boundaries. Coordinator repair check/build/
+smoke preparation passed in 10s before that late-arriving test was compiled;
+its affected test run subsequently passed in 7s (17 application tests including
+the 128 real-thread lifecycles). Latest XML totals **279 core tests, zero failures/
+errors/skips** across integrated plus affected runs. One lifecycle repair was needed.
+The second full runtime passed all five phases.
+Original failed evidence remains in `fabric/build/client-smoke/evidence/character-discovery-1/`.
+
+```sh
+./gradlew check :fabric:build :fabric:prepareClientSmoke --no-daemon --console=plain
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --prepared --timeout 300 --run-id character-discovery-2
+./gradlew -PcoreOnly :application:test --no-daemon --console=plain
+```
+
+| Local phase | Elapsed | Result |
+| --- | --- | --- |
+| graphics-preflight | 20.7s | PASSED |
+| development-write | 26.5s | PASSED |
+| development-read | 25.1s | PASSED |
+| packaged-write | 31.0s | PASSED |
+| packaged-read | 26.0s | PASSED |
+
+All five independent JVMs exited 0, without timeouts or evidence errors. Writers
+passed **23 assertion stages**, readers **24**, including both physical storage
+files, exact historical/live character discovery, SPEAKER/ACTION filters through
+Related dialogue, paired backups, restart persistence and clean shutdown. Packaged
+runs verified the actual mod and SQLite loaded from JARs without development
+outputs masking missing dependencies. Synthetic character-dialogue and 640x480
+editor screenshots were visually inspected; labels/controls remain readable and
+onscreen. Screenshots supplement assertions; they do not establish passing tests.
+Evidence: `fabric/build/client-smoke/evidence/character-discovery-2/` contains JSON,
+XML, screenshots, logs, separate launch/shutdown witnesses and the final summary.
+
+Local artifact: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.9.jar` (**14,677,910 bytes**),
+SHA-256 `36125ca0b9ecc9f7a19b1992bad13f33d98a4b804b4e3a7968bdb1e69b8238a1`.
+
+PR [#10](https://github.com/heyitskat777-netizen/mcchatmod/pull/10) targets the
+previous feature branch; main is unchanged. GitHub Actions on the pre-repair
+feature commit passed both jobs ([run 40451878716](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40451878716));
+**Final functional commit `5bb41b4` passed both verify and client-smoke jobs**:
+[GitHub Actions run 40452649263](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40452649263).
+
+| CI phase | Elapsed | Result |
+| --- | --- | --- |
+| graphics-preflight | 35.3s | PASSED |
+| development-write | 38.5s | PASSED |
+| development-read | 36.8s | PASSED |
+| packaged-write | 43.3s | PASSED |
+| packaged-read | 35.5s | PASSED |
+
+All five phase summaries were confirmed from the completed CI log, exit 0.
+Artifacts: [alpha.9 JAR ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40452649263/artifacts/12710474939),
+[client evidence](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40452649263/artifacts/12711086981),
+[test reports](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40452649263/artifacts/12710709913).
+Install `lotc-character-journal-0.1.0-alpha.9.jar` from the ZIP, not its sources JAR.
+The final documentation follow-up records this tested code commit; it changes no
+runtime source or acceptance criteria. PR #10 is ready for review; it is not merged.
+
+
+
+## Remaining acceptance and limits
+
+Full archive backfill currently runs off-thread inside a storage transaction when
+new names/aliases require it. Large-archive throughput and real-play queue latency
+remain unmeasured. Automatic matching is deliberately limited to anchored known
+speech/common-action grammar; unresolved wording remains searchable. No inference
+or scene feature is claimed complete. The real child-process interruption test
+covers pre-commit recovery, not power loss inside SQLite's commit algorithm.
+Confirmed merge overlays still keep their existing separate dialogue views; they do
+not combine derived name evidence. Global editing/rejection of automatic tags is
+a remaining Phase 3 task; explicit persona assignments remain independently editable.
+Actual alpha.9 modpack/upgrade/restore acceptance remains pending the checklist.
+
+---
+
 # Current status — October 26, 2026
 
 ## Alpha.8 — visible character browser and native database scope

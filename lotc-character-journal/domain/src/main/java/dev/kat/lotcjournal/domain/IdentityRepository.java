@@ -12,6 +12,10 @@ public interface IdentityRepository {
     void assign(MemoryAssignment assignment) throws Exception;
     void clearAssignment(MessageReference message, String personaId) throws Exception;
     TranscriptPage memoryTranscript(String personaId, String query, Channel channel, boolean favoritesOnly, int offset, int limit) throws Exception;
+    default TranscriptPage characterTranscript(String identityId, String query, Channel channel, CharacterEvidenceKind kind,
+                                              boolean favoritesOnly, int offset, int limit) throws Exception {
+        throw new UnsupportedOperationException("Character evidence is unavailable");
+    }
     List<IdentityMerge> merges() throws Exception;
     String mergeIdentity(String fromIdentity, String toIdentity) throws Exception;
     void undoMerge(String decisionId) throws Exception;

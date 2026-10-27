@@ -74,7 +74,7 @@ class RoleplayPolicyMigrationTest {
         assertEquals(0, scalar(path(), "SELECT count(*) FROM pragma_table_info('transcript_lines') WHERE name='raw'"));
 
         var migrated = new SqliteJournalStore(path(), new DialogueTextNormalizer()); migrated.initialize();
-        assertEquals(8, scalar(path(), "PRAGMA user_version"));
+        assertEquals(9, scalar(path(), "PRAGMA user_version"));
         assertEquals(0, scalar(path(), "SELECT count(*) FROM pragma_table_info('transcript_lines') WHERE name='raw'"));
         var entries = migrated.transcript(SOURCE, null, 0, 20).entries();
         assertEquals(List.of(1L, 4L, 5L, 6L), entries.stream().map(TranscriptLine::sourceLine).toList());
@@ -129,7 +129,7 @@ class RoleplayPolicyMigrationTest {
         byte[] original = Files.readAllBytes(path());
         assertThrows(java.sql.SQLException.class, () -> new SqliteJournalStore(path(), new DialogueTextNormalizer()).initialize());
         assertArrayEquals(original, Files.readAllBytes(path()));
-        assertEquals(8, scalar(path(), "PRAGMA user_version"));
+        assertEquals(9, scalar(path(), "PRAGMA user_version"));
         assertFalse(Files.exists(directory.resolve("backups")), "Only an actual old-version upgrade creates a migration snapshot");
     }
 }

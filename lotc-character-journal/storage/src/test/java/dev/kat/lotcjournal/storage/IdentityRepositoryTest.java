@@ -17,6 +17,7 @@ class IdentityRepositoryTest {
     private static final String SOURCE = "e".repeat(64), POLICY = "0".repeat(64);
     @TempDir Path directory;
     private Path path() { return directory.resolve("journal.sqlite"); }
+    private Path charactersPath() { return directory.resolve("journal.sqlite.characters.sqlite"); }
     private SqliteJournalStore archive() throws Exception {
         var archive = new SqliteJournalStore(path(), new DialogueTextNormalizer()); archive.initialize(); return archive;
     }
@@ -35,10 +36,10 @@ class IdentityRepositoryTest {
         repository.saveIdentity(identity); var persona = new Persona(id(), identity.id(), label); repository.createPersona(persona); return persona;
     }
     private long scalar(String query) throws Exception {
-        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + path()); var sql = connection.createStatement(); var row = sql.executeQuery(query)) { return row.getLong(1); }
+        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + charactersPath()); var sql = connection.createStatement(); var row = sql.executeQuery(query)) { return row.getLong(1); }
     }
     private void execute(String command) throws Exception {
-        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + path()); var sql = connection.createStatement()) { sql.execute(command); }
+        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + charactersPath()); var sql = connection.createStatement()) { sql.execute(command); }
     }
 
     @Test void identicalNamesAndAliasesDoNotMergeAndManualCorrectionsReplaceOnlyTheChosenIdentity() throws Exception {

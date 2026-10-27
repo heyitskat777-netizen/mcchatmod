@@ -51,6 +51,12 @@ validation rather than treating a standalone task exit as a suite pass.
    Production runs exclude development application/domain/storage outputs and
    external SQLite JDBC so those cannot hide missing bundled classes.
 
+Both development and packaged runs also assert the physical archive/character
+SQLite split, historical/live character discovery, filtered related dialogue,
+paired backups and explicit persona isolation. Writers require 23 stages; readers
+require 24 including restart evidence. Worker liveness at shutdown remains a strict
+assertion, separate from Gradle process exit.
+
 Each suite run has a unique run ID. Graphics, development, and packaged game
 directories live separately under `fabric/build/client-smoke/profiles/<runId>/`.
 The writer and reader within a mode intentionally share a profile; different
