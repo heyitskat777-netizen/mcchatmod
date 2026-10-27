@@ -1,18 +1,29 @@
 {
-  "date": "2026-10-24",
+  "date": "2026-10-26",
+  "version": "0.1.0-alpha.9",
   "java_target": 21,
   "gradle": "9.7.1",
+  "command": "./gradlew check :fabric:build --no-daemon --console=plain",
   "core_gradle_result": "passed",
-  "architecture_negative_control": "passed",
   "suites": [
     {
-      "suite": "dev.kat.lotcjournal.application.JournalServiceTest",
-      "tests": 4,
+      "module": "domain",
+      "suite": "dev.kat.lotcjournal.domain.CharacterNameMatcherTest",
+      "tests": 5,
       "failures": 0,
       "errors": 0,
       "skipped": 0
     },
     {
+      "module": "domain",
+      "suite": "dev.kat.lotcjournal.domain.MessageReferenceTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "domain",
       "suite": "dev.kat.lotcjournal.domain.PrivacyPolicyTest",
       "tests": 1,
       "failures": 0,
@@ -20,6 +31,47 @@
       "skipped": 0
     },
     {
+      "module": "application",
+      "suite": "dev.kat.lotcjournal.application.IdentityAliasesTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "application",
+      "suite": "dev.kat.lotcjournal.application.IdentityServiceTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "application",
+      "suite": "dev.kat.lotcjournal.application.JournalServiceTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "parsing",
+      "suite": "dev.kat.lotcjournal.parsing.DialogueTextNormalizerTest",
+      "tests": 17,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "parsing",
+      "suite": "dev.kat.lotcjournal.parsing.LogLineParserPrivacyTest",
+      "tests": 21,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "parsing",
       "suite": "dev.kat.lotcjournal.parsing.LogLineParserTest",
       "tests": 18,
       "failures": 0,
@@ -27,15 +79,184 @@
       "skipped": 0
     },
     {
-      "suite": "dev.kat.lotcjournal.storage.SqliteJournalStoreTest",
+      "module": "parsing",
+      "suite": "dev.kat.lotcjournal.parsing.LongSystemNoticeTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "parsing",
+      "suite": "dev.kat.lotcjournal.parsing.RoleplayNoticeFilteringTest",
+      "tests": 58,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "parsing",
+      "suite": "dev.kat.lotcjournal.parsing.TitledPersonaNoticeTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "ingestion",
+      "suite": "dev.kat.lotcjournal.ingestion.BatchImportServiceTest",
       "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "ingestion",
+      "suite": "dev.kat.lotcjournal.ingestion.CharacterDiscoveryImportTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "ingestion",
+      "suite": "dev.kat.lotcjournal.ingestion.FolderWatchServiceTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "ingestion",
+      "suite": "dev.kat.lotcjournal.ingestion.LiveCaptureServiceTest",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "ingestion",
+      "suite": "dev.kat.lotcjournal.ingestion.LiveCrashRecoveryTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "ingestion",
+      "suite": "dev.kat.lotcjournal.ingestion.LogImportServiceTest",
+      "tests": 25,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "ingestion",
+      "suite": "dev.kat.lotcjournal.ingestion.RoleplayIngestionTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.BatchRepositoryTest",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.CaptureRepositoryTest",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.CharacterDiscoveryTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.DialogueMigrationTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.FavoritesStoreTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.IdentityRepositoryTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.LiveRepositoryTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.PairedDatabaseCrashTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.PairedDatabaseStoreTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.RoleplayPolicyMigrationTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.SqliteJournalStoreTest",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.TitledNoticeUpgradeTest",
+      "tests": 1,
       "failures": 0,
       "errors": 0,
       "skipped": 0
     }
   ],
-  "total_tests": 29,
-  "fabric_build": "blocked during Loom platform initialization; Unix-domain socket probe denied by host",
-  "client_game_test": "not run",
-  "user_test": "pending"
+  "total_tests": 278,
+  "fabric_build": "passed; client and game-test source compiled; packaged runtime dependencies verified",
+  "client_game_test": "pending alpha.9 runtime execution",
+  "user_test": "alpha.8 smoke passed per user; alpha.9 pending"
 }

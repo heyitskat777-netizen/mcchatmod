@@ -55,7 +55,27 @@ passed (domain 9 tests). First integrated `-PcoreOnly check` compiled storage an
 ran 72 storage tests with three failures: two backup exception-contract regressions
 fixed in production; the restore test correctly required updating to copy the
 complete pair rather than its archive member alone. The original snapshot assertions
-remain. Subsequent integrated and in-game results will be recorded below.
+remain. The subsequent integrated coordinator run passed:
+
+```sh
+./gradlew check :fabric:build --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+```
+
+Gradle **passed in 37s**, 30 tasks (13 executed/17 up-to-date). XML reports
+**278 tests, 0 failures/errors/skips**: domain 9, application 16, parsing 116,
+ingestion 57, storage 80. All 14 Python tests passed in 1.110s. The 21 new core
+cases cover matching boundaries, actual plain/gzip discovery/privacy, native-v8
+upgrade including committed uncheckpointed WAL, paired backup/restore/mismatch,
+transaction rollback and real child-process death before a coordinated undo commit.
+Fabric client and game-test compilation and bundled-runtime checks passed.
+`git diff --check` passed. Independent final source review found no blocker.
+
+The first asset-preparation process was deliberately stopped after slow serial
+cold-cache downloads; its verified cache was preserved. Resumed preparation with
+an environment-only Gradle init script setting 16 asset download threads and a
+600-second cap. This changes no source configuration or runtime acceptance criteria.
+Alpha.9 in-game runtime results remain pending; compilation alone is not a pass.
 
 ## Remaining acceptance and limits
 
