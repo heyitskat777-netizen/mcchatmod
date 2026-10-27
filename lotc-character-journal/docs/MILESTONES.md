@@ -221,6 +221,11 @@ that every archived or received event belongs to that persona.
 
 Character list/detail pages, manual notes, account observations, aliases, persona selection and reversible identity decisions in characters.sqlite. Historical log imports and live recording populate archive.sqlite. Automatically create observed characters from trusted speaker/action evidence; search existing dialogue for new names/aliases, distinguishing speech/actions from mentions. Preserve existing native records and back up before native schema migrations; an unrelated old-database importer is out of scope.
 
+**Identity denial** adds a persistent reversible keep-separate decision; enforce
+it across direct and indirect identity links. User reports persistence/persona
+separation positive so far. Durable automatic-tag corrections and scene/analysis
+acceptance remain separate work.
+
 Remaining after observed-character discovery: user correction/rejection of automatic
 archive tags with durable overrides, and a deliberate policy for displaying confirmed
 merge overlays in related dialogue. These are separate from explicit persona memory

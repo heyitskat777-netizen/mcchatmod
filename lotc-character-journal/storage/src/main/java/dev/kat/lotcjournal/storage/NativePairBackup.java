@@ -42,7 +42,7 @@ final class NativePairBackup {
         try {
             try {Files.createFile(companion);companionReserved=true;}
             catch(java.nio.file.FileAlreadyExistsException exists) {throw new IllegalArgumentException("Backup companion already exists",exists);}
-            try(var c=SplitJournalFiles.open(archive,characters)) {
+            try(var c=SplitJournalFiles.openCompatible(archive,characters)) {
                 c.setAutoCommit(false);
                 // The one statement obtains SHARED locks on both databases. Under DELETE
                 // journals no other connection can commit either member until these
@@ -54,13 +54,13 @@ final class NativePairBackup {
                 catch(Exception failure) {c.rollback();throw failure;}
             }
             String generation=UUID.randomUUID().toString(),pair;
-            try(var copy=SplitJournalFiles.open(target,companion)) {
+            try(var copy=SplitJournalFiles.openCompatible(target,companion)) {
                 copy.setAutoCommit(false);
                 for(String schema:java.util.List.of("main","characters")) {
                     try(var q=copy.prepareStatement("UPDATE "+schema+".storage_pair SET generation=? WHERE id=1")) {q.setString(1,generation);q.executeUpdate();}
                 }
                 try(var s=copy.createStatement()) {s.executeUpdate("DELETE FROM main.journal_settings WHERE key='adopted_backup_generation'");}
-                copy.commit();SplitJournalFiles.validatePair(copy);SplitJournalFiles.integrity(copy,"main");SplitJournalFiles.integrity(copy,"characters");
+                copy.commit();SplitJournalFiles.validatePair(copy,true);SplitJournalFiles.integrity(copy,"main");SplitJournalFiles.integrity(copy,"characters");
                 IdentitySchema.validate(copy); pair=SplitJournalFiles.pair(copy,"main")[0];
             }
             SplitJournalFiles.force(target);SplitJournalFiles.force(companion);

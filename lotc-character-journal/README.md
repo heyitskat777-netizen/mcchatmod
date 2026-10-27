@@ -10,7 +10,7 @@ The user has accepted the Phase 1 foundation smoke test. Press **J** in a world
 to open the journal; its key is rebindable in Controls. Layout settings and backup
 creation remain available. Characters now supports explicit names, aliases and notes; persona memories require manual message assignment.
 
-The `0.1.0-alpha.9` development build expands **Log import** for finished UTF-8 `.log`
+The `0.1.0-alpha.10` development build expands **Log import** for finished UTF-8 `.log`
 and `.log.gz` files, background validation, progress/cancellation, restart-safe
 checkpoints, repeat-import deduplication, and a transcript browser with literal
 text search. **Import all / dashboard** adds a read-only folder preview,
@@ -71,8 +71,10 @@ Aliases support escaped semicolons/backslashes and the full native field bounds.
 message asks for its owning persona, identity or unassigned choice, and whether it
 is a reference or speaker attribution. **Persona memories** shows only explicit
 assignments. Shared archive Transcripts remains separate. Review identity links
-supports explicit confirmation and persistent undo; duplicate names/aliases never
-merge automatically. The mod owns two bound SQLite files: `.log`/`.log.gz` imports and live recording
+supports explicit confirmation, **Deny link / keep separate**, and persistent undo.
+Denials block direct/indirect linking until **Clear selected denial**; clearing does
+not link automatically. Duplicate names/aliases never merge automatically.
+Characters schema 1 upgrades to schema 2 after a verified paired backup. The mod owns two bound SQLite files: `.log`/`.log.gz` imports and live recording
 populate `archive.sqlite`; character records and confirmed assignments use
 `characters.sqlite`. Upgrading copies native `journal.sqlite` without changing it,
 then migrates the copy. Backups contain both SQLite files and a `.pair.json`

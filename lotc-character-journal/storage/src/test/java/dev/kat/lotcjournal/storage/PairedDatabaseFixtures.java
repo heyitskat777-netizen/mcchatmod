@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.UUID;
 
 final class PairedDatabaseFixtures {
+    private static final List<String> NATIVE_EIGHT_IDENTITY_TABLES = List.of("character_identities", "character_aliases", "personas", "identity_state", "memory_assignments", "identity_merges", "identity_decisions");
     static final String SOURCE = "a".repeat(64), LIVE = "b".repeat(64), POLICY = "0".repeat(64);
     static final String FIRST = "10000000-0000-0000-0000-000000000001", SECOND = "10000000-0000-0000-0000-000000000002";
     static final String PERSONA_FIRST = "20000000-0000-0000-0000-000000000001", PERSONA_SECOND = "20000000-0000-0000-0000-000000000002";
@@ -72,7 +73,7 @@ final class PairedDatabaseFixtures {
             try (var attach = c.prepareStatement("ATTACH DATABASE ? AS legacy_characters")) { attach.setString(1, characters.toString()); attach.execute(); }
             c.setAutoCommit(false);
             try {
-                for (String table : IdentitySchema.ORDER) {
+                for (String table : NATIVE_EIGHT_IDENTITY_TABLES) {
                     s.execute(IdentitySchema.LEGACY_TABLES.get(table));
                     s.executeUpdate("INSERT INTO main." + table + " SELECT * FROM legacy_characters." + table);
                 }

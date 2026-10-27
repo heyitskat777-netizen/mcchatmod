@@ -169,6 +169,7 @@ public final class JournalClientGameTest implements FabricClientGameTest {
                 check(Files.isRegularFile(created.getFirst().resolveSibling(created.getFirst().getFileName()+".pair.json")),"Backup must include its pair manifest");
                 check(sqlCount(created.getFirst(),"SELECT count(*) FROM character_identities")==4,"Paired backup must preserve observed and manual characters");
                 check(sqlCount(created.getFirst(),"SELECT count(*) FROM memory_assignments")==2,"Paired backup must preserve explicit persona assignments");
+                check(sqlCount(created.getFirst(),"SELECT count(*) FROM identity_separations WHERE active=1")==1,"Paired backup must preserve the saved denial");
                 check(readLayout(created.getFirst()), "Backup must contain the selected compact layout");
                 toggle(context, false);
                 check(!readLayout(database), "Source setting must change after backup");
@@ -481,6 +482,70 @@ public final class JournalClientGameTest implements FabricClientGameTest {
             report.screenshot(context.takeScreenshot("lotc-persona-memories-"+report.phase()));
             context.clickScreenButton("Done");context.clickScreenButton("Done");waitForJournal(context);
         });
+        exerciseIdentityDenials(context,report,database);
+    }
+    private void exerciseIdentityDenials(ClientGameTestContext context,SmokeReport report,Path database) throws Exception {
+        report.stage("identity-denials",60_000,()->{
+            long messages=sqlCount(database,"SELECT count(*) FROM transcript_lines"),stars=sqlCount(database,"SELECT count(*) FROM message_favorites");
+            String active=sqlText(database,"SELECT active_persona FROM identity_state WHERE id=1");
+            String memories=sqlText(database,"SELECT group_concat(persona_id||':'||source_id||':'||source_line||':'||coalesce(identity_id,'unassigned')||':'||role,'|') FROM (SELECT * FROM memory_assignments ORDER BY persona_id,source_id,source_line)");
+            context.runOnClient(client -> search(client.screen).setValue(""));
+            context.clickScreenButton("Characters");waitForCharacterList(context,4);
+            context.clickScreenButton("Review links");waitForLinkReview(context);
+            selectLinkCharacter(context,"Link from: ","Synthetic Persona A");
+            selectLinkCharacter(context,"Link to: ","Synthetic Persona B");
+            if(report.phase().equals("read")) {
+                check(sqlCount(database,"SELECT count(*) FROM identity_separations WHERE active=1")==1,"Denial must survive a fresh Minecraft process");
+                context.runOnClient(client -> {
+                    check(!screenButtonActive(client.screen,"Confirm these are the same identity"),"Restart must not silently permit a denied link");
+                    check(screenButtonActive(client.screen,"Clear selected denial"),"Persisted denial must remain explicitly reversible");
+                });
+            } else {
+                context.clickScreenButton("Deny link / keep separate");
+                context.waitFor(client -> screenButtonActive(client.screen,"Clear selected denial")&&client.screen.getNarrationMessage().getString().contains("Selected identities are kept separate"),WAIT_TICKS);
+            }
+            context.runOnClient(client -> check(!screenButtonActive(client.screen,"Confirm these are the same identity"),"A saved denial must disable conflicting confirmation"));
+            context.getInput().resizeWindow(640,480);
+            context.waitFor(client -> client.screen.width==320&&client.screen.height==240&&screenButtonActive(client.screen,"Clear selected denial"),WAIT_TICKS);
+            context.runOnClient(client -> {
+                check(!screenButtonActive(client.screen,"Confirm these are the same identity"),"Resize must preserve the selected denied pair");
+                check(client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).allMatch(button -> button.getY()>=0&&button.getBottom()<=client.screen.height),"Link and denial controls must remain onscreen");
+            });
+            report.screenshot(context.takeScreenshot("lotc-identity-denial-small-"+report.phase()));
+            context.getInput().resizeWindow(854,480);
+            context.waitFor(client -> client.screen.width==427&&screenButtonActive(client.screen,"Clear selected denial"),WAIT_TICKS);
+            context.clickScreenButton("Done");waitForCharacterList(context,4);context.clickScreenButton("Review links");waitForLinkReview(context);
+            selectLinkCharacter(context,"Link from: ","Synthetic Persona A");selectLinkCharacter(context,"Link to: ","Synthetic Persona B");
+            context.runOnClient(client -> check(!screenButtonActive(client.screen,"Confirm these are the same identity"),"Closing and reopening review must preserve the denial"));
+            context.clickScreenButton("Clear selected denial");
+            context.waitFor(client -> screenButtonActive(client.screen,"Confirm these are the same identity"),WAIT_TICKS);
+            check(sqlCount(database,"SELECT count(*) FROM identity_merges WHERE active=1")==0,"Clearing a denial must not create an identity link");
+            context.clickScreenButton("Confirm these are the same identity");
+            context.waitFor(client -> screenButtonActive(client.screen,"Undo selected link"),WAIT_TICKS);
+            check(sqlCount(database,"SELECT count(*) FROM identity_merges WHERE active=1")==1,"Explicit confirmation after clearing must persist a link");
+            context.runOnClient(client -> check(!screenButtonActive(client.screen,"Deny link / keep separate"),"Already linked identities must be unlinked before denial"));
+            context.clickScreenButton("Undo selected link");
+            context.waitFor(client -> screenButtonActive(client.screen,"Deny link / keep separate"),WAIT_TICKS);
+            context.clickScreenButton("Deny link / keep separate");
+            context.waitFor(client -> screenButtonActive(client.screen,"Clear selected denial"),WAIT_TICKS);
+            check(sqlCount(database,"SELECT count(*) FROM identity_separations WHERE active=1")==1,"Writer and reader must leave one persisted denial");
+            check(sqlCount(database,"SELECT count(*) FROM identity_merges WHERE active=1")==0,"Undo must remove only the confirmed overlay");
+            check(messages==sqlCount(database,"SELECT count(*) FROM transcript_lines")&&stars==sqlCount(database,"SELECT count(*) FROM message_favorites"),"Identity decisions must preserve original dialogue and favorites");
+            check(active.equals(sqlText(database,"SELECT active_persona FROM identity_state WHERE id=1")),"Identity decisions must not switch the owning persona");
+            check(memories.equals(sqlText(database,"SELECT group_concat(persona_id||':'||source_id||':'||source_line||':'||coalesce(identity_id,'unassigned')||':'||role,'|') FROM (SELECT * FROM memory_assignments ORDER BY persona_id,source_id,source_line)")),"Identity decisions must not grant or rewrite persona memories");
+            context.clickScreenButton("Done");waitForCharacterList(context,4);context.clickScreenButton("Done");waitForJournal(context);
+        });
+    }
+    private static void waitForLinkReview(ClientGameTestContext context) {
+        context.waitFor(client -> isScreen(client.screen,"dev.kat.lotcjournal.fabric.IdentityMergeScreen")&&client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).anyMatch(button -> button.active&&button.getMessage().getString().startsWith("Link from: ")),WAIT_TICKS);
+    }
+    private static void selectLinkCharacter(ClientGameTestContext context,String prefix,String name) {
+        for(int attempt=0;attempt<4;attempt++) {
+            String label=context.computeOnClient(client -> client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).map(button -> button.getMessage().getString()).filter(text -> text.startsWith(prefix)).findFirst().orElseThrow());
+            if(label.startsWith(prefix+name+" #"))return;
+            context.clickScreenButton(label);
+        }
+        throw new AssertionError("Expected synthetic identity choice must be available");
     }
     private void exerciseCharacterDiscovery(ClientGameTestContext context,SmokeReport report,Path database) throws Exception {
         report.stage("storage-split",20_000,()->{
