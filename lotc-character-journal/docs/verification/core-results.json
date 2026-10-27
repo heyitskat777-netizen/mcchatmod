@@ -320,5 +320,48 @@
     "sha256": "9599f0430d2981e9f920d4c6bb83ec0c0ac0ad2a3555e16bb18054dd073add0b"
   },
   "user_test": "alpha.9 persistence/persona separation positive per user; alpha.10 denials pending",
-  "ci": "pending"
+  "ci": {
+    "functional_commit": "63bc1b84781ceb877ad27f5bb0d2f98f77827e04",
+    "run_id": 40508948065,
+    "url": "https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40508948065",
+    "verify": "passed",
+    "client_smoke": "passed",
+    "client_phases": [
+      {
+        "name": "graphics-preflight",
+        "seconds": 42.3,
+        "result": "PASSED",
+        "exit_code": 0
+      },
+      {
+        "name": "development-write",
+        "seconds": 47.8,
+        "result": "PASSED",
+        "exit_code": 0
+      },
+      {
+        "name": "development-read",
+        "seconds": 45.5,
+        "result": "PASSED",
+        "exit_code": 0
+      },
+      {
+        "name": "packaged-write",
+        "seconds": 54.3,
+        "result": "PASSED",
+        "exit_code": 0
+      },
+      {
+        "name": "packaged-read",
+        "seconds": 44.9,
+        "result": "PASSED",
+        "exit_code": 0
+      }
+    ],
+    "artifact_ids": {
+      "journal-jars": 12735748826,
+      "client-smoke-evidence": 12735939145,
+      "test-reports": 12735753903
+    }
+  }
 }
