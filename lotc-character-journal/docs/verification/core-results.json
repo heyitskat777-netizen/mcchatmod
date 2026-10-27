@@ -311,5 +311,49 @@
     "name": "lotc-character-journal-0.1.0-alpha.9.jar",
     "bytes": 14677910,
     "sha256": "36125ca0b9ecc9f7a19b1992bad13f33d98a4b804b4e3a7968bdb1e69b8238a1"
+  },
+  "ci": {
+    "functional_commit": "5bb41b43778b3efe9670cfd8d90894de519be72d",
+    "run_id": 40452649263,
+    "url": "https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40452649263",
+    "verify": "passed",
+    "client_smoke": "passed",
+    "client_phases": [
+      {
+        "name": "graphics-preflight",
+        "seconds": 35.3,
+        "result": "PASSED",
+        "exit_code": 0
+      },
+      {
+        "name": "development-write",
+        "seconds": 38.5,
+        "result": "PASSED",
+        "exit_code": 0
+      },
+      {
+        "name": "development-read",
+        "seconds": 36.8,
+        "result": "PASSED",
+        "exit_code": 0
+      },
+      {
+        "name": "packaged-write",
+        "seconds": 43.3,
+        "result": "PASSED",
+        "exit_code": 0
+      },
+      {
+        "name": "packaged-read",
+        "seconds": 35.5,
+        "result": "PASSED",
+        "exit_code": 0
+      }
+    ],
+    "artifact_ids": {
+      "journal-jars": 12710474939,
+      "client-smoke-evidence": 12711086981,
+      "test-reports": 12710709913
+    }
   }
 }

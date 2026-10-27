@@ -93,7 +93,7 @@ smoke preparation passed in 10s before that late-arriving test was compiled;
 its affected test run subsequently passed in 7s (17 application tests including
 the 128 real-thread lifecycles). Latest XML totals **279 core tests, zero failures/
 errors/skips** across integrated plus affected runs. One lifecycle repair was needed.
-The second full runtime passed all five phases:
+The second full runtime passed all five phases.
 Original failed evidence remains in `fabric/build/client-smoke/evidence/character-discovery-1/`.
 
 ```sh
@@ -127,7 +127,25 @@ SHA-256 `36125ca0b9ecc9f7a19b1992bad13f33d98a4b804b4e3a7968bdb1e69b8238a1`.
 PR [#10](https://github.com/heyitskat777-netizen/mcchatmod/pull/10) targets the
 previous feature branch; main is unchanged. GitHub Actions on the pre-repair
 feature commit passed both jobs ([run 40451878716](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40451878716));
-CI on the final lifetime repair is pending and will be recorded separately.
+**Final functional commit `5bb41b4` passed both verify and client-smoke jobs**:
+[GitHub Actions run 40452649263](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40452649263).
+
+| CI phase | Elapsed | Result |
+| --- | --- | --- |
+| graphics-preflight | 35.3s | PASSED |
+| development-write | 38.5s | PASSED |
+| development-read | 36.8s | PASSED |
+| packaged-write | 43.3s | PASSED |
+| packaged-read | 35.5s | PASSED |
+
+All five phase summaries were confirmed from the completed CI log, exit 0.
+Artifacts: [alpha.9 JAR ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40452649263/artifacts/12710474939),
+[client evidence](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40452649263/artifacts/12711086981),
+[test reports](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40452649263/artifacts/12710709913).
+Install `lotc-character-journal-0.1.0-alpha.9.jar` from the ZIP, not its sources JAR.
+The final documentation follow-up records this tested code commit; it changes no
+runtime source or acceptance criteria. PR #10 is ready for review; it is not merged.
+
 
 
 ## Remaining acceptance and limits
