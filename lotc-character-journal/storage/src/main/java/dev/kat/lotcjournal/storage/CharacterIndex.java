@@ -45,6 +45,7 @@ final class CharacterIndex {
     }
     private static boolean discover(Connection c,Names names,TranscriptLine line) throws SQLException {
         if(line.channel()!=Channel.ROLEPLAY) return false;
+        if(MessageTagReviews.overridden(c,MessageReference.of(line))) return false;
         var actor=CharacterNameMatcher.actor(line.text());
         if(actor.isEmpty()) return false;
         String name=actor.get().name(), key=CharacterNameMatcher.key(name);
@@ -111,7 +112,7 @@ final class CharacterIndex {
         if(channel==Channel.PRIVATE_MESSAGE || channel==Channel.OOC || channel==Channel.SYSTEM) throw new IllegalArgumentException("Excluded channel");
         String pattern="%"+query.replace("\\","\\\\").replace("%","\\%").replace("_","\\_")+"%";
         String star="EXISTS(SELECT 1 FROM main.message_favorites f WHERE f.source_id=t.source_id AND f.source_line=t.source_line)";
-        String where=" FROM main.transcript_lines t WHERE EXISTS(SELECT 1 FROM characters.character_evidence e WHERE e.source_id=t.source_id AND e.source_line=t.source_line AND e.identity_id=? AND (? IS NULL OR e.kind=?)) AND t.text LIKE ? ESCAPE '\\' AND (? IS NULL OR t.channel=?)"+(favorites?" AND "+star:"");
+        String where=" FROM main.transcript_lines t WHERE EXISTS(SELECT 1 FROM ("+MessageTagReviews.EFFECTIVE_SQL+") e WHERE e.source_id=t.source_id AND e.source_line=t.source_line AND e.identity_id=? AND (? IS NULL OR e.kind=?)) AND t.text LIKE ? ESCAPE '\\' AND (? IS NULL OR t.channel=?)"+(favorites?" AND "+star:"");
         long total;
         try(var q=c.prepareStatement("SELECT count(*)"+where)) {bind(q,identity,pattern,channel,kind);try(var r=q.executeQuery()){total=r.getLong(1);}}
         var entries=new ArrayList<TranscriptLine>();var stars=new HashSet<MessageReference>();

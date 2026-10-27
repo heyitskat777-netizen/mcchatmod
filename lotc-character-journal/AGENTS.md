@@ -111,6 +111,12 @@ Target Minecraft 1.21.11, Fabric, Java 21. Do not silently upgrade Minecraft.
   `journal.sqlite` during upgrade. Back up/restore both members together.
 - Cross-file changes use one attached connection, rollback journals and FULL sync
   on both files; validate pair bindings. Never silently replace a missing member.
+- Message tag reviews store an exact per-message set separately from automatic
+  evidence. Reviewed-empty means reject all; only explicit Restore automatic may
+  resume suggestions. Preserve reviews across imports/reindex/backups. Compare
+  revisions under the write lock, retain automatic revision markers after restore,
+  and reject stale saves. UNKNOWN allows manual MENTION only; never promote channel
+  or grant persona knowledge. Undo removes review rows at exact owned coordinates.
 - New characters/aliases search existing dialogue; preserve source observations,
   manual persona assignments and ambiguity. Automatic tags never grant memories,
   infer accounts, select personas or merge identities. An unrelated legacy

@@ -123,10 +123,10 @@ class IdentitySeparationTest {
         var store = seed(archive(), characters()); var repository = repository();
         var before = store.transcript(null, null, 0, 20); var identities = repository.identities(""); var personas = repository.personas();
         var merges = repository.merges(); var progress = store.progress(SOURCE); var sources = store.sources();
-        sql(characters(), "DROP TABLE identity_separations"); sql(characters(), "PRAGMA user_version=1");
+        characterVersion(characters(), 1);
         assertEquals(1, scalar(characters(), "PRAGMA user_version"));
         var upgraded = open(archive(), characters()); var upgradedRepository = repository();
-        assertEquals(9, scalar(archive(), "PRAGMA user_version")); assertEquals(2, scalar(characters(), "PRAGMA user_version"));
+        assertEquals(9, scalar(archive(), "PRAGMA user_version")); assertEquals(3, scalar(characters(), "PRAGMA user_version"));
         assertEquals(before, upgraded.transcript(null, null, 0, 20)); assertEquals(identities, upgradedRepository.identities(""));
         assertEquals(personas, upgradedRepository.personas()); assertEquals(merges, upgradedRepository.merges());
         assertEquals(progress, upgraded.progress(SOURCE)); assertEquals(sources, upgraded.sources());
@@ -147,13 +147,13 @@ class IdentitySeparationTest {
     }
 
     @Test void failedUpgradeBackupLeavesBothOriginalMembersAtTheOldSchemaWithoutPartialDenialState() throws Exception {
-        seed(archive(), characters()); sql(characters(), "DROP TABLE identity_separations"); sql(characters(), "PRAGMA user_version=1");
+        seed(archive(), characters()); characterVersion(characters(), 1);
         byte[] beforeArchive = Files.readAllBytes(archive()), beforeCharacters = Files.readAllBytes(characters());
         Path obstruction = Files.writeString(directory.resolve("backups"), "synthetic obstruction");
         assertThrows(java.nio.file.FileAlreadyExistsException.class, () -> open(archive(), characters()));
         assertArrayEquals(beforeArchive, Files.readAllBytes(archive())); assertArrayEquals(beforeCharacters, Files.readAllBytes(characters()));
         assertEquals(1, scalar(characters(), "PRAGMA user_version")); assertFalse(tables(characters()).contains("identity_separations"));
-        Files.delete(obstruction); open(archive(), characters()); assertEquals(2, scalar(characters(), "PRAGMA user_version"));
+        Files.delete(obstruction); open(archive(), characters()); assertEquals(3, scalar(characters(), "PRAGMA user_version"));
     }
 
     @Test void failedDenialWriteRollsBackWithoutAffectingOtherDecisions() throws Exception {
@@ -170,7 +170,7 @@ class IdentitySeparationTest {
     @Test void previousCharacterSchemaBackupRestoresAndUpgradesWithoutChangingTheBackupTrio() throws Exception {
         var source = seed(archive(), characters());
         var original = source.transcript(null, null, 0, 20);
-        sql(characters(), "DROP TABLE identity_separations"); sql(characters(), "PRAGMA user_version=1");
+        characterVersion(characters(), 1);
         open(archive(), characters());
         Path backup;
         try (var files = Files.list(directory.resolve("backups"))) {
@@ -183,7 +183,7 @@ class IdentitySeparationTest {
         var restored = open(restoredArchive, restoredCharacters);
         var identities = new SqliteIdentityRepository(restoredArchive, restoredCharacters);
         assertEquals(original, restored.transcript(null, null, 0, 20));
-        assertEquals(2, scalar(restoredCharacters, "PRAGMA user_version"));
+        assertEquals(3, scalar(restoredCharacters, "PRAGMA user_version"));
         assertNotNull(identities.assignment(ref(2), PERSONA_SECOND)); assertEquals(PERSONA_SECOND, identities.activePersona());
         identities.undoMerge(identities.merges().getFirst().id()); identities.denyIdentityLink(FIRST, SECOND);
         open(restoredArchive, restoredCharacters);

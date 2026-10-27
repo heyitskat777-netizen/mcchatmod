@@ -198,5 +198,16 @@ public final class SqliteIdentityRepository implements IdentityRepository {
             c.commit();return result;
         }
     }
+    @Override public MessageTagReview reviewTags(MessageReference message) throws Exception {
+        try(var c=open()) {
+            c.setAutoCommit(false);var review=MessageTagReviews.review(c,message);c.commit();return review;
+        }
+    }
+    @Override public MessageTagReview saveReviewedTags(MessageReference message,long expectedRevision,List<CharacterTag> tags) throws Exception {
+        return write(c -> MessageTagReviews.save(c,message,expectedRevision,tags));
+    }
+    @Override public MessageTagReview restoreAutomaticTags(MessageReference message,long expectedRevision) throws Exception {
+        return write(c -> MessageTagReviews.restore(c,message,expectedRevision));
+    }
     @FunctionalInterface private interface Operation<T> {T run(Connection c) throws Exception;}
 }

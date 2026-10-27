@@ -1,6 +1,6 @@
 {
   "date": "2026-10-27",
-  "version": "0.1.0-alpha.10",
+  "version": "0.1.0-alpha.11",
   "java_target": 21,
   "gradle": "9.7.1",
   "command": "./gradlew check :fabric:build :fabric:prepareClientSmoke --no-daemon --console=plain",
@@ -24,6 +24,14 @@
     },
     {
       "module": "domain",
+      "suite": "dev.kat.lotcjournal.domain.MessageTagReviewTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "domain",
       "suite": "dev.kat.lotcjournal.domain.PrivacyPolicyTest",
       "tests": 1,
       "failures": 0,
@@ -41,7 +49,7 @@
     {
       "module": "application",
       "suite": "dev.kat.lotcjournal.application.IdentityServiceTest",
-      "tests": 4,
+      "tests": 5,
       "failures": 0,
       "errors": 0,
       "skipped": 0
@@ -152,6 +160,14 @@
     },
     {
       "module": "ingestion",
+      "suite": "dev.kat.lotcjournal.ingestion.MessageTagReviewImportTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "ingestion",
       "suite": "dev.kat.lotcjournal.ingestion.RoleplayIngestionTest",
       "tests": 4,
       "failures": 0,
@@ -224,6 +240,14 @@
     },
     {
       "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.MessageTagReviewTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
       "suite": "dev.kat.lotcjournal.storage.PairedDatabaseCrashTest",
       "tests": 1,
       "failures": 0,
@@ -263,105 +287,62 @@
       "skipped": 0
     }
   ],
-  "total_tests": 291,
+  "total_tests": 305,
   "fabric_build": "passed; actual packaged JAR writer/reader passed",
   "python_runner_tests": 14,
-  "client_game_test": "passed all five isolated JVMs in identity-denials-1 without repairs",
+  "client_game_test": "passed all five isolated JVMs in message-tag-review-2 including stale-edit fault",
   "client_phases": [
     {
       "name": "graphics-preflight",
       "status": "PASSED",
-      "duration": 19.25810119900416,
+      "duration": 21.3329548279944,
       "returncode": 0,
       "timedOut": false,
-      "processId": 32618,
+      "processId": 41637,
       "errors": []
     },
     {
       "name": "development-write",
       "status": "PASSED",
-      "duration": 27.431737320999673,
+      "duration": 28.56856551799865,
       "returncode": 0,
       "timedOut": false,
-      "processId": 32929,
+      "processId": 41916,
       "errors": []
     },
     {
       "name": "development-read",
       "status": "PASSED",
-      "duration": 25.833885154999734,
+      "duration": 27.529176522999478,
       "returncode": 0,
       "timedOut": false,
-      "processId": 33231,
+      "processId": 42234,
       "errors": []
     },
     {
       "name": "packaged-write",
       "status": "PASSED",
-      "duration": 29.10080933899735,
+      "duration": 30.36260627199954,
       "returncode": 0,
       "timedOut": false,
-      "processId": 33532,
+      "processId": 42537,
       "errors": []
     },
     {
       "name": "packaged-read",
       "status": "PASSED",
-      "duration": 26.231951604000642,
+      "duration": 28.69811711300281,
       "returncode": 0,
       "timedOut": false,
-      "processId": 33833,
+      "processId": 42842,
       "errors": []
     }
   ],
   "artifact": {
-    "name": "lotc-character-journal-0.1.0-alpha.10.jar",
-    "bytes": 14690652,
-    "sha256": "9599f0430d2981e9f920d4c6bb83ec0c0ac0ad2a3555e16bb18054dd073add0b"
+    "name": "lotc-character-journal-0.1.0-alpha.11.jar",
+    "bytes": 14710888,
+    "sha256": "8bd7cbeb0f80f5191dfafe42ccfa9b0b87ca88c75a915401c57a8c65314ed42e"
   },
-  "user_test": "alpha.9 persistence/persona separation positive per user; alpha.10 denials pending",
-  "ci": {
-    "functional_commit": "63bc1b84781ceb877ad27f5bb0d2f98f77827e04",
-    "run_id": 40508948065,
-    "url": "https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40508948065",
-    "verify": "passed",
-    "client_smoke": "passed",
-    "client_phases": [
-      {
-        "name": "graphics-preflight",
-        "seconds": 42.3,
-        "result": "PASSED",
-        "exit_code": 0
-      },
-      {
-        "name": "development-write",
-        "seconds": 47.8,
-        "result": "PASSED",
-        "exit_code": 0
-      },
-      {
-        "name": "development-read",
-        "seconds": 45.5,
-        "result": "PASSED",
-        "exit_code": 0
-      },
-      {
-        "name": "packaged-write",
-        "seconds": 54.3,
-        "result": "PASSED",
-        "exit_code": 0
-      },
-      {
-        "name": "packaged-read",
-        "seconds": 44.9,
-        "result": "PASSED",
-        "exit_code": 0
-      }
-    ],
-    "artifact_ids": {
-      "journal-jars": 12735748826,
-      "client-smoke-evidence": 12735939145,
-      "test-reports": 12735753903
-    }
-  }
+  "user_test": "alpha.10 smoke passed per user; alpha.11 tag review pending",
+  "ci": "pending"
 }
