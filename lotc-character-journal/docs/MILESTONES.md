@@ -234,7 +234,8 @@ assignments; discovery alone does not close Phase 3.
 Future favorites, scene participants and extracted records must use these identity
 contracts. The user can explicitly tie a bookmark/record to a specific identity;
 unknown or ambiguous attribution requires a confirmation prompt with evidence,
-plus an unassigned/skip choice. Confirmed links are reversible and persona-scoped.
+plus an unassigned/skip choice. Identity link decisions are reversible; message assignments remain persona-scoped.
+A link or denial grants no additional persona knowledge.
 Never create a persona/account identity link from a command reply automatically.
 
 Store raw observations separately from attribution decisions. A shared archive must not make all of its facts available to every persona. Ambiguous historical ownership stays unassigned until reviewed.

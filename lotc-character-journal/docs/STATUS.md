@@ -78,7 +78,28 @@ remains separate: [denial checklist](USER_TEST_IDENTITY_DENIALS.md).
 
 Local artifact: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.10.jar`, **14,690,652 bytes**,
 SHA-256 `9599f0430d2981e9f920d4c6bb83ec0c0ac0ad2a3555e16bb18054dd073add0b`.
-GitHub Actions validation and pull-request publication are pending.
+Functional commit `63bc1b8` **passed both verify and client-smoke jobs** in
+[GitHub Actions run 40508948065](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40508948065).
+
+| CI phase | Elapsed | Result |
+| --- | --- | --- |
+| graphics-preflight | 42.3s | PASSED |
+| development-write | 47.8s | PASSED |
+| development-read | 45.5s | PASSED |
+| packaged-write | 54.3s | PASSED |
+| packaged-read | 44.9s | PASSED |
+
+All five exit-0 phase summaries were confirmed from the completed CI log.
+[PR #11](https://github.com/heyitskat777-netizen/mcchatmod/pull/11) targets
+feature/character-browser, which now contains merged PR #10. Main stays unchanged.
+The PR is ready for review; alpha.10 user acceptance remains pending.
+Artifacts: [alpha.10 JAR ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40508948065/artifacts/12735748826),
+[client evidence](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40508948065/artifacts/12735939145),
+[test reports](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40508948065/artifacts/12735753903).
+Install lotc-character-journal-0.1.0-alpha.10.jar, without the -sources suffix.
+This documentation follow-up records the tested functional code; runtime sources
+and acceptance criteria are unchanged.
+
 
 ## What remains
 
