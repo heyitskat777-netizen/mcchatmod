@@ -90,7 +90,28 @@ JUnit XML, selected screenshots, logs and separate launch/shutdown witnesses.
 
 Local artifact: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.11.jar`, **14,710,888 bytes**,
 SHA-256 `8bd7cbeb0f80f5191dfafe42ccfa9b0b87ca88c75a915401c57a8c65314ed42e`.
-GitHub Actions and PR publication are pending.
+Functional commit `77695fd` **passed both verify and client-smoke jobs** in
+[GitHub Actions run 40524151013](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40524151013).
+
+| CI phase | Elapsed | Result |
+| --- | --- | --- |
+| graphics-preflight | 28.4s | PASSED |
+| development-write | 34.3s | PASSED |
+| development-read | 31.5s | PASSED |
+| packaged-write | 36.4s | PASSED |
+| packaged-read | 32.1s | PASSED |
+
+All five exit-0 summaries were confirmed from the completed CI log.
+[PR #12](https://github.com/heyitskat777-netizen/mcchatmod/pull/12) targets the
+previous feature/identity-denials branch. Main is unchanged. The PR is ready for
+review; alpha.11 user acceptance remains pending.
+Artifacts: [alpha.11 JAR ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40524151013/artifacts/12743670433),
+[client evidence](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40524151013/artifacts/12742948559),
+[test reports](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40524151013/artifacts/12742607722).
+Install lotc-character-journal-0.1.0-alpha.11.jar without the -sources suffix.
+The final documentation follow-up records the tested functional commit and changes
+no runtime source or acceptance criteria.
+
 
 
 ## Acceptance and remaining work
