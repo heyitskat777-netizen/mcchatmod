@@ -69,16 +69,16 @@ entries were present. Narration now includes the visible notice. Later phases we
 blocked in both failed runs. These are application/UI regressions, not graphics
 failures. Evidence remains under their respective client-smoke/evidence directories.
 
-`alpha13-3`: graphics PASS25.7s, development writer PASS38.0s (**28 assertion
-stages**), reader FAIL26.6s at batch-workflow before later reader stages. Reassessment
-was performed before another launch: new scene fixture deliberately adds40 historical
-observations, while an old global restart assertion still expected62. Inspection of
-the isolated database independently confirms original source62, scene source40,
-undone batch source0, one removed coordinate and UNDONE batch. All reader constants
+`alpha13-3`: graphics PASS 25.7s, development writer PASS 38.0s (**28 assertion
+stages**), reader FAIL 26.6s at batch-workflow before later reader stages. Reassessment
+was performed before another launch: new scene fixture deliberately adds 40 historical
+observations, while an old global restart assertion still expected 62. Inspection of
+the isolated database independently confirms original source 62, scene source 40,
+undone batch source 0, one removed coordinate and UNDONE batch. All reader constants
 were audited: original-source channel/payload/cursor counts, filtered Visitor views,
 favorites, four identities, two personas/memories and tag/denial counts are unchanged.
-The correction preserves the exact original62 assertion by content hash, separately
-requires scene40 and undone0, and checks global historical total62+40. Writer62/63
+The correction preserves the exact original 62 assertion by content hash, separately
+requires scene 40 and undone 0, and checks global historical total 62+40. Writer62/63
 checks remain unchanged. This is a fixture-contract correction, not a production
 count adjustment. No assertion was removed or budget increased.
 
@@ -91,8 +91,8 @@ performed this audit directly. No additional native agents were simulated.
 
 ## Final verified local result
 
-Final integrated-6 command above **PASS in13s**,34 tasks(10 executed/24 up-to-date), after
-all production fixes and fixture audit. **352 core tests and15 runner tests pass**;
+Final integrated-6 command above **PASS in 13s**,34 tasks(10 executed/24 up-to-date), after
+all production fixes and fixture audit. **352 core tests and 15 runner tests pass**;
 Fabric compilation/build, architecture and packaged dependencies pass. Production
 has not changed after this preparation. Both separated suites passed unchanged
 300-second launch limits and all required report/launch/shutdown contracts:
@@ -106,9 +106,9 @@ has not changed after this preparation. Both separated suites passed unchanged
 | alpha13-packaged-audited | packaged-write | 43.0 | PASSED |
 | alpha13-packaged-audited | packaged-read | 36.2 | PASSED |
 
-Writers passed28 assertion stages, readers29. Tests include default auto-confirmation,
-low-confidence priority and Suggested-only filtering; actual20→10+10→20 split/combine;
-rejected1+19 split retaining the20 saved coordinates; manual skip/restart/reimport;
+Writers passed 28 assertion stages, readers 29. Tests include default auto-confirmation,
+low-confidence priority and Suggested-only filtering; actual 20→10+10→20 split/combine;
+rejected 1+19 split retaining the 20 saved coordinates; manual skip/restart/reimport;
 exact source/favorite/persona digests; long-query/Enter home search; queue deny
 advancement while a synthetic archive lock guarantees resize during the pending
 write; confirm/undo, rooted denials and completion. Packaged runs load the remapped
@@ -122,7 +122,31 @@ SHA-256 `bf72ba886417c9a87c23209efda9ef38e0685a12118bbddeab7b43d13e980d29`. Dist
 [Machine-readable evidence](verification/core-results.json).
 
 The documented three-run reassessment was completed before the audited passes;
-no assertion, acceptance criterion or budget was relaxed. Publication follows below.
+no assertion, acceptance criterion or budget was relaxed. Verified implementation **`7f771d1b86d626b429b0dbaef630c1ebb701fee5`** is pushed to
+`feature/scene-review-refinements`; main is unchanged. A documentation-only
+follow-up records the publication outcome without changing tested production code.
+
+PR creation attempted using `gh pr create --base feature/scenes --head
+feature/scene-review-refinements --title "Refine scene qualification, review queues
+and home search" --body-file docs/PR_SCENE_REFINEMENTS.md`; environment proxy
+rejected GitHub GraphQL API with HTTP 403. No PR is claimed open. This is a network
+blocker, not an automatic approval-review rejection. [Prepared description](PR_SCENE_REFINEMENTS.md).
+
+GitHub's normal website is readable. Push workflow run
+[40649605532](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40649605532)
+belongs to the verified `7f771d1` source. **Overall SUCCESS; verify and client-smoke
+both passed.** Completed normal run/job HTML confirms the full isolated graphics,
+development writer/reader and installed-JAR writer/reader step succeeded. CI runner
+uses all required assertions, budgets, origins and shutdown checks. The GraphQL API
+remains blocked, so no per-phase CI timings are invented from the job summary.
+Artifacts (matched by name and ID in the completed public run): Download:
+[alpha.13 journal-jars ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40649605532/artifacts/12799111435).
+Use `lotc-character-journal-0.1.0-alpha.13.jar`, not the sources JAR. [CI client evidence](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40649605532/artifacts/12798768726),
+[test reports](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40649605532/artifacts/12798468603).
+Local and CI checks pass; focused real-log/modpack acceptance remains pending.
+[Review/create comparison](https://github.com/heyitskat777-netizen/mcchatmod/compare/feature%2Fscenes...feature%2Fscene-review-refinements?expand=1).
+A documentation-only follow-up records this completed evidence; it changes no
+runtime source or tested acceptance criteria.
 See [USER_TEST_ALPHA13.md](USER_TEST_ALPHA13.md) for focused acceptance.
 Large-archive/queue latency and concurrent independent global-tag interpretation
 versioning remain limitations; actual scene correctness is a user test, not a

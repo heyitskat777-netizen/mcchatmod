@@ -467,10 +467,26 @@
     "sha256": "bf72ba886417c9a87c23209efda9ef38e0685a12118bbddeab7b43d13e980d29"
   },
   "publication": {
-    "status": "pending verified commit/push"
+    "push": "succeeded",
+    "pull_request": "blocked",
+    "reason": "GitHub GraphQL API request rejected by environment proxy HTTP403",
+    "base": "feature/scenes",
+    "prepared_description": "docs/PR_SCENE_REFINEMENTS.md"
   },
   "ci": {
-    "status": "not yet observed"
+    "run_id": 40649605532,
+    "url": "https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40649605532",
+    "status": "passed",
+    "functional_commit": "7f771d1b86d626b429b0dbaef630c1ebb701fee5",
+    "artifact_ids": {
+      "client-smoke-evidence": 12798768726,
+      "journal-jars": 12799111435,
+      "test-reports": 12798468603
+    },
+    "evidence_source": "Completed public run HTML confirms overall Success and both jobs successful; client job HTML step confirms full graphics/development/packaged smoke success. API remains blocked.",
+    "verify": "passed",
+    "client_smoke": "passed"
   },
-  "user_test": "Alpha.13 real-log accuracy, confidence usefulness and actual modpack acceptance pending USER_TEST_ALPHA13.md"
+  "user_test": "Alpha.13 real-log accuracy, confidence usefulness and actual modpack acceptance pending USER_TEST_ALPHA13.md",
+  "functional_commit": "7f771d1b86d626b429b0dbaef630c1ebb701fee5"
 }
