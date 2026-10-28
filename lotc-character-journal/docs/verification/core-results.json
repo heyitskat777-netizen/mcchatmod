@@ -389,7 +389,9 @@
   "user_test": "Prior alpha.10 smoke accepted; alpha.11 tags and alpha.12 linked-history/real scenes/modpack restore acceptance pending",
   "ci": {
     "result": "unobserved",
-    "reason": "Environment proxy refuses GitHub API CONNECT with HTTP 403; no CI result claimed"
+    "reason": "Environment proxy refuses GitHub API CONNECT with HTTP 403; no CI result claimed",
+    "trigger": "configured on push; status not observable",
+    "functional_commit": "b23c8d2454ab436a0c66c8b8fa6949e42a77d4c2"
   },
   "client_phases": [
     {
@@ -441,5 +443,15 @@
   "client_evidence": "fabric/build/client-smoke/evidence/phase-four-3/",
   "client_writer_stages": 26,
   "client_reader_stages": 27,
-  "core_execution": "333 tests executed successfully in integrated-3 (21s); UI-only final integrated-4 (12s), core tasks up-to-date"
+  "core_execution": "333 tests executed successfully in integrated-3 (21s); UI-only final integrated-4 (12s), core tasks up-to-date",
+  "functional_commit": "b23c8d2454ab436a0c66c8b8fa6949e42a77d4c2",
+  "branch": "feature/scenes",
+  "publication": {
+    "push": "succeeded",
+    "pull_request": "blocked",
+    "base": "feature/message-tag-review",
+    "reason": "GitHub API POST graphql forbidden by environment proxy HTTP 403",
+    "prepared_description": "docs/PR_PHASE4.md",
+    "compare_url": "https://github.com/heyitskat777-netizen/mcchatmod/compare/feature%2Fmessage-tag-review...feature%2Fscenes?expand=1"
+  }
 }

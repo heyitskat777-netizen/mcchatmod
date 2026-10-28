@@ -131,11 +131,27 @@ regrouping latency/memory remain unmeasured against real archives. Phase 2 priva
 reference/performance acceptance is also distinct. Do not mark all milestone user
 acceptance complete from synthetic tests. Phases 5/6 AI and extraction remain later.
 
-GitHub API requests currently fail at the environment proxy (CONNECT HTTP 403),
-even the escalated read-only attempt; git read access succeeds. Publication is
-pending a verified commit/push/PR attempt. The existing Actions workflow includes
-all required checks and the extended client stage; no CI result is claimed until
-observed. [Prepared pull-request description](PR_PHASE4.md).
+Verified implementation commit **`b23c8d2454ab436a0c66c8b8fa6949e42a77d4c2`** was
+successfully pushed to **`feature/scenes`**. Main is unchanged. A documentation-only
+follow-up records this publication outcome and changes no tested runtime source.
+
+Pull-request creation was attempted with the exact prepared body:
+
+```sh
+gh pr create --base feature/message-tag-review --head feature/scenes --title "Add reversible linked history and reviewable scenes" --body-file docs/PR_PHASE4.md
+```
+
+It **failed**: `Post "https://api.github.com/graphql": Forbidden`. The environment
+proxy refuses GitHub API CONNECT with **HTTP 403**, including an escalated read-only
+check; this is an environment/network blocker, not a failed mod check or an
+automatic approval-review rejection. No PR is claimed open. The existing GitHub
+Actions push workflow includes all checks and the extended scene client stage,
+but current CI status/artifact URLs cannot be observed through the blocked API;
+local verification above is the established evidence.
+[Prepared pull-request description](PR_PHASE4.md) and
+[review/create comparison](https://github.com/heyitskat777-netizen/mcchatmod/compare/feature%2Fmessage-tag-review...feature%2Fscenes?expand=1).
+The PR is deliberately based on the preceding feature branch, preserving the
+reviewed main baseline and the existing stacked review workflow.
 
 ---
 
