@@ -487,18 +487,122 @@ public final class JournalClientGameTest implements FabricClientGameTest {
         });
         exerciseIdentityDenials(context,report,database);
         exerciseMessageTagReview(context,report,database);
+        exerciseIdentityQueue(context,report,database);
+        exerciseMainSearch(context,report);
+    }
+    private void exerciseMainSearch(ClientGameTestContext context,SmokeReport report) throws Exception {
+        report.stage("main-search",40_000,()->{
+            context.runOnClient(client->{search(client.screen).setValue("Shared Alias");client.screen.setFocused(search(client.screen));search(client.screen).setFocused(true);});
+            context.waitFor(client->client.screen.getNarrationMessage().getString().contains("2 character matches"),WAIT_TICKS);
+            context.getInput().pressKey(GLFW.GLFW_KEY_ENTER);waitForCharacterList(context,2);
+            context.runOnClient(client->check(editBoxes(client.screen).getFirst().getValue().equals("Shared Alias"),"Enter must open the actual filtered character list"));
+            context.clickScreenButton("Done");waitForJournal(context);
+            String longQuery="NO_CHARACTER_MATCH_"+"x".repeat(45);
+            context.runOnClient(client->search(client.screen).setValue(longQuery));
+            context.getInput().resizeWindow(640,480);
+            context.waitFor(client->client.screen.width==320&&client.screen.getNarrationMessage().getString().contains("No characters found"),WAIT_TICKS);
+            context.runOnClient(client->check(search(client.screen).getValue().equals(longQuery),"Long main-screen queries must survive resize without EditBox default32 truncation"));
+            context.runOnClient(client->search(client.screen).setValue("Shared Alias"));
+            context.waitFor(client->client.screen.getNarrationMessage().getString().contains("2 character matches"),WAIT_TICKS);
+            report.screenshot(context.takeScreenshot("lotc-main-search-"+report.phase()));
+            context.getInput().resizeWindow(854,480);context.waitFor(client->client.screen.width==427,WAIT_TICKS);
+            context.runOnClient(client->search(client.screen).setValue(""));
+        });
+    }
+    private void exerciseIdentityQueue(ClientGameTestContext context,SmokeReport report,Path database) throws Exception {
+        report.stage("identity-review-queue",90_000,()->{
+            String visitor=sqlText(database,"SELECT id FROM character_identities WHERE name='Synthetic Visitor'");
+            long messages=sqlCount(database,"SELECT count(*) FROM transcript_lines"),memories=sqlCount(database,"SELECT count(*) FROM memory_assignments");
+            String oldAliases=setVisitorAliases(context,visitor,"Shared Alias");
+            context.clickScreenButton("Characters");waitForCharacterList(context,4);context.clickScreenButton("Review links");waitForLinkReview(context);
+            context.waitFor(client->client.screen.getNarrationMessage().getString().contains("2 pending"),WAIT_TICKS);
+            String first=selectedLinkPair(context);
+            // Hold only this synthetic archive writer briefly so resizing definitely
+            // occurs while the real asynchronous Deny action is pending.
+            try(var locked=DriverManager.getConnection("jdbc:sqlite:"+database);var statement=locked.createStatement()) {
+                statement.execute("BEGIN IMMEDIATE");
+                try {
+                    context.clickScreenButton("Deny link / keep separate");
+                    context.getInput().resizeWindow(640,480);
+                    context.waitFor(client->client.screen.width==320,WAIT_TICKS);
+                    context.runOnClient(client->check(!screenButtonActive(client.screen,"Deny link / keep separate"),"Deny must remain pending through widget reinitialization"));
+                } finally {statement.execute("ROLLBACK");}
+            }
+            context.waitFor(client->screenButtonActive(client.screen,"Deny link / keep separate")&&client.screen.getNarrationMessage().getString().contains("1 pending"),WAIT_TICKS);
+            check(!first.equals(selectedLinkPair(context)),"Saved denial must automatically advance to a different unresolved pair after resize");
+            context.clickScreenButton("Deny link / keep separate");
+            context.waitFor(client->client.screen.getNarrationMessage().getString().contains("0 pending")&&screenButtonActive(client.screen,"Clear selected denial"),WAIT_TICKS);
+            context.runOnClient(client->check(client.screen.getNarrationMessage().getString().contains("queue complete"),"An exhausted queue must be clearly distinguished from a load failure"));
+            String[] custom=sqlText(database,"SELECT group_concat(id,',') FROM identity_separations WHERE active=1 AND (first_id='"+visitor+"' OR second_id='"+visitor+"')").split(",");
+            check(custom.length==2,"Each queue decision must save its own reversible denial");
+            for(String id:custom) {selectLinkDecision(context,id);context.clickScreenButton("Clear selected denial");waitForLinkReview(context);}
+            context.clickScreenButton("Next queued pair");
+            context.clickScreenButton("Confirm these are the same identity");
+            context.waitFor(client->screenButtonActive(client.screen,"Undo selected link")&&client.screen.getNarrationMessage().getString().contains("0 pending"),WAIT_TICKS);
+            check(sqlCount(database,"SELECT count(*) FROM identity_merges WHERE active=1")==1,"Confirm must persist the selected queue pair and remove resolved/denied rooted candidates");
+            context.clickScreenButton("Undo selected link");
+            context.waitFor(client->client.screen.getNarrationMessage().getString().contains("2 pending"),WAIT_TICKS);
+            report.screenshot(context.takeScreenshot("lotc-identity-queue-"+report.phase()));
+            context.getInput().resizeWindow(854,480);context.waitFor(client->client.screen.width==427,WAIT_TICKS);
+            context.clickScreenButton("Done");waitForCharacterList(context,4);context.clickScreenButton("Done");waitForJournal(context);
+            setVisitorAliases(context,visitor,oldAliases);
+            check(sqlCount(database,"SELECT count(*) FROM identity_merges WHERE active=1")==0&&sqlCount(database,"SELECT count(*) FROM identity_separations WHERE active=1")==1,"Queue review must retain the original denial and support exact reversals of test decisions");
+            check(messages==sqlCount(database,"SELECT count(*) FROM transcript_lines")&&memories==sqlCount(database,"SELECT count(*) FROM memory_assignments"),"Queue decisions must preserve original dialogue and persona ownership");
+        });
+    }
+    private static String selectedLinkPair(ClientGameTestContext context) {
+        return context.computeOnClient(client->client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).map(b->b.getMessage().getString()).filter(t->t.startsWith("Link from: ")||t.startsWith("Link to: ")).collect(java.util.stream.Collectors.joining(" | ")));
+    }
+    private static void selectLinkDecision(ClientGameTestContext context,String id) {
+        for(int attempt=0;attempt<10;attempt++) {
+            if(context.computeOnClient(client->client.screen.getNarrationMessage().getString().contains("Selected decision "+id)))return;
+            String history=context.computeOnClient(client->client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).filter(b->b.getY()==140&&b.getX()<client.screen.width/2).map(b->b.getMessage().getString()).findFirst().orElseThrow());
+            context.clickScreenButton(history);
+        }
+        throw new AssertionError("Saved queue decision must remain selectable in history");
+    }
+    private static String setVisitorAliases(ClientGameTestContext context,String visitor,String aliases) {
+        context.runOnClient(client->search(client.screen).setValue(""));context.clickScreenButton("Characters");waitForCharacterList(context,4);
+        context.runOnClient(client->editBoxes(client.screen).getFirst().setValue("Synthetic Visitor"));waitForCharacterList(context,1);openCharacter(context,"Synthetic Visitor",visitor);
+        context.waitFor(client->screenButtonActive(client.screen,"Use as persona"),WAIT_TICKS);
+        String previous=context.computeOnClient(client->editBoxes(client.screen).get(1).getValue());
+        context.runOnClient(client->editBoxes(client.screen).get(1).setValue(aliases));context.clickScreenButton("Save character");
+        context.waitFor(client->screenButtonActive(client.screen,"Use as persona"),WAIT_TICKS);
+        context.clickScreenButton("Done");waitForCharacterList(context,1);context.clickScreenButton("Done");waitForJournal(context);return previous;
     }
     private void exerciseScenes(ClientGameTestContext context,SmokeReport report,Path database) throws Exception {
         report.stage("scene-review",90_000,()->{
+            Path sceneLog=FabricLoader.getInstance().getGameDir().resolve("synthetic-scenes.log").toAbsolutePath();
+            var sceneText=new StringBuilder();
+            for(int i=1;i<=40;i++) {
+                int second=i<=20?i-1:i<=30?i-21:i-20;
+                String clock=i<=20?String.format(java.util.Locale.ROOT,"12:00:%02d",second):i<=30?String.format(java.util.Locale.ROOT,"13:00:%02d",second):String.format(java.util.Locale.ROOT,"13:05:%02d",second);
+                String actor=i%2==1?"Synthetic Persona A":"Synthetic Persona B";
+                sceneText.append("[").append(clock).append("] [Render thread/INFO]: [System] [CHAT][Quiet] ").append(actor).append(" says: Synthetic scene ").append(i<=20?"clear ":"uncertain ").append(i).append(".\n");
+            }
+            if(report.phase().equals("read"))check(Files.readString(sceneLog).equals(sceneText.toString()),"Scene fixture must survive restart without modifications");else Files.writeString(sceneLog,sceneText.toString());
+            context.clickScreenButton("Log import");context.waitFor(client->isScreen(client.screen,IMPORT_SCREEN),WAIT_TICKS);
+            context.runOnClient(client->editBoxes(client.screen).getFirst().setValue(sceneLog.toString()));context.clickScreenButton("Import log");waitForImportComplete(context);
+            context.clickScreenButton("Done");waitForJournal(context);
+            check(sqlCount(database,"SELECT count(*) FROM transcript_lines WHERE text LIKE '%Synthetic scene %'")==40,"Two qualifying scene windows must import exactly40 observations");
             long observations=sqlCount(database,"SELECT count(*) FROM transcript_lines"),favorites=sqlCount(database,"SELECT count(*) FROM message_favorites");
             String memories=sqlText(database,"SELECT group_concat(persona_id||source_id||source_line,'|') FROM (SELECT * FROM memory_assignments ORDER BY persona_id,source_id,source_line)");
             context.clickScreenButton("Scenes");
             context.waitFor(client->isScreen(client.screen,"dev.kat.lotcjournal.fabric.SceneScreen")&&screenButtonActive(client.screen,"Suggest / refresh"),WAIT_TICKS);
             if(report.phase().equals("read"))check(sqlCount(database,"SELECT count(*) FROM scenes WHERE active=1 AND title='Synthetic Reviewed Scene' AND location='Synthetic Hall' AND state='SKIPPED'")==1,"Reviewed location and explicit skip must survive a new JVM and repeated imports");
-            context.clickScreenButton("Suggest / refresh");
-            context.waitFor(client->screenButtonActive(client.screen,"Suggest / refresh"),WAIT_TICKS);
+            context.runOnClient(client->editBoxes(client.screen).getFirst().setValue("Synthetic scene "));
+            context.waitFor(client->screenButtonActive(client.screen,"Suggest / refresh")&&client.screen.getNarrationMessage().getString().contains(report.phase().equals("read")?"1 scenes.":"2 scenes."),WAIT_TICKS);
+            if(!report.phase().equals("read")) {
+                String first=context.computeOnClient(client->client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).filter(b->b.visible&&b.active&&b.getY()==103).map(b->b.getMessage().getString()).findFirst().orElseThrow());
+                check(first.startsWith("SUGGESTED"),"Low-confidence scenes must precede automatically confirmed scenes");
+                check(sqlCount(database,"SELECT count(*) FROM scenes WHERE active=1 AND origin='AUTO' AND qualified=1 AND state='CONFIRMED'")==1,"Clear two-actor20-message scene must confirm automatically");
+            }
+            context.clickScreenButton("Suggested: All");
+            context.waitFor(client->screenButtonActive(client.screen,"Suggested: Only")&&client.screen.getNarrationMessage().getString().contains("1 scenes."),WAIT_TICKS);
+            context.runOnClient(client->check(client.screen.getNarrationMessage().getString().contains("SUGGESTED")&&!client.screen.getNarrationMessage().getString().contains("CONFIRMED"),"Suggested filter must exclude confirmed scene rows"));
+            context.clickScreenButton("Suggested: Only");context.waitFor(client->screenButtonActive(client.screen,"Suggested: All"),WAIT_TICKS);
             if(report.phase().equals("read"))context.clickScreenButton("Skipped: Hide");
-            context.runOnClient(client->editBoxes(client.screen).getFirst().setValue(report.phase().equals("read")?"Synthetic Reviewed Scene":"A wrapped message for individual selection."));
+            context.runOnClient(client->editBoxes(client.screen).getFirst().setValue(report.phase().equals("read")?"Synthetic Reviewed Scene":"Synthetic scene clear "));
             context.waitFor(client->client.screen.getNarrationMessage().getString().contains("1 scenes."),WAIT_TICKS);
             clickSceneRow(context);waitForScene(context);
             context.runOnClient(client->{var fields=editBoxes(client.screen);fields.getFirst().setValue("Synthetic Reviewed Scene");fields.get(1).setValue("Synthetic Hall");});
@@ -521,11 +625,16 @@ public final class JournalClientGameTest implements FabricClientGameTest {
             context.clickScreenButton("Confirm / save scene");
             context.waitFor(client->client.screen.getNarrationMessage().getString().contains("Scene confirmed"),WAIT_TICKS);
             check(sqlCount(database,"SELECT count(*) FROM scenes WHERE active=1 AND title='Synthetic Reviewed Scene' AND location='Synthetic Hall' AND state='CONFIRMED'")==1,"Scene Save must persist reviewed metadata");
-            context.clickScreenButton("Scene dialogue / split");context.waitFor(client->isScreen(client.screen,TRANSCRIPT_SCREEN)&&client.screen.getNarrationMessage().getString().contains("Messages 1 to 50 of 50"),WAIT_TICKS);
-            context.runOnClient(client->editBoxes(client.screen).getFirst().setValue("Synthetic Visitor says dialogue 4."));
+            context.clickScreenButton("Scene dialogue / split");context.waitFor(client->isScreen(client.screen,TRANSCRIPT_SCREEN)&&client.screen.getNarrationMessage().getString().contains("Messages 1 to 20 of 20"),WAIT_TICKS);
+            context.runOnClient(client->editBoxes(client.screen).getFirst().setValue("Synthetic scene clear 2."));
+            context.waitFor(client->client.screen.getNarrationMessage().getString().contains("Messages 1 to 1 of 1"),WAIT_TICKS);
+            transcriptClick(context,45,8);context.clickScreenButton("Split before selected");context.clickScreenButton("Confirm split here");
+            context.waitFor(client->client.screen.getNarrationMessage().getString().contains("Each half needs 10 RP messages and 2 actors"),WAIT_TICKS);
+            check(sqlCount(database,"SELECT count(*) FROM scene_members m JOIN scenes s ON s.id=m.scene_id WHERE s.active=1 AND s.title='Synthetic Reviewed Scene'")==20,"Rejected undersized split must preserve the exact saved scene");
+            context.runOnClient(client->editBoxes(client.screen).getFirst().setValue("Synthetic scene clear 11."));
             context.waitFor(client->client.screen.getNarrationMessage().getString().contains("Messages 1 to 1 of 1"),WAIT_TICKS);
             transcriptClick(context,45,8);context.clickScreenButton("Split before selected");context.clickScreenButton("Confirm split here");waitForScene(context);
-            String splitPeer=sqlText(database,"SELECT s.id FROM scenes s JOIN scene_members m ON m.scene_id=s.id JOIN transcript_lines t ON t.source_id=m.source_id AND t.source_line=m.source_line WHERE s.active=1 AND t.text='Synthetic Visitor says dialogue 4.'");
+            String splitPeer=sqlText(database,"SELECT s.id FROM scenes s JOIN scene_members m ON m.scene_id=s.id JOIN transcript_lines t ON t.source_id=m.source_id AND t.source_line=m.source_line WHERE s.active=1 AND t.text='Synthetic Persona A says: Synthetic scene clear 11.'");
             String peerSuffix="#"+splitPeer.substring(0,8);
             for(int attempt=0;attempt<30;attempt++) {
                 String label=context.computeOnClient(client->client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).filter(b->b.getY()==125&&b.getX()<client.screen.width/2).map(b->b.getMessage().getString()).findFirst().orElseThrow());
@@ -535,7 +644,7 @@ public final class JournalClientGameTest implements FabricClientGameTest {
             context.clickScreenButton("Combine scenes");context.clickScreenButton("Confirm combine");waitForScene(context);
             context.runOnClient(client->{editBoxes(client.screen).getFirst().setValue("Synthetic Reviewed Scene");editBoxes(client.screen).get(1).setValue("Synthetic Hall");});
             context.clickScreenButton("Confirm / save scene");context.waitFor(client->client.screen.getNarrationMessage().getString().contains("Scene confirmed"),WAIT_TICKS);
-            check(sqlCount(database,"SELECT count(*) FROM scene_members m JOIN scenes s ON s.id=m.scene_id WHERE s.active=1 AND s.title='Synthetic Reviewed Scene'")==50,"Split/combine must preserve exactly 50 source coordinates without duplication");
+            check(sqlCount(database,"SELECT count(*) FROM scene_members m JOIN scenes s ON s.id=m.scene_id WHERE s.active=1 AND s.title='Synthetic Reviewed Scene'")==20,"Split/combine must preserve exactly20 source coordinates without duplication");
             report.screenshot(context.takeScreenshot("lotc-scene-reviewed-"+report.phase()));
             context.clickScreenButton("Skip for now");context.waitFor(client->isScreen(client.screen,"dev.kat.lotcjournal.fabric.SceneScreen"),WAIT_TICKS);
             check(sqlCount(database,"SELECT count(*) FROM scenes WHERE active=1 AND title='Synthetic Reviewed Scene' AND state='SKIPPED'")==1,"Skip must be a durable reversible review decision");
@@ -851,8 +960,16 @@ public final class JournalClientGameTest implements FabricClientGameTest {
                     "Undone batch must survive process restart");
                 check(sqlCount(database, "SELECT count(*) FROM removed_observations") == 1,
                     "Removed observations need durable payload-free accounting");
-                check(sqlCount(database, "SELECT count(*) FROM transcript_lines WHERE source_id NOT IN (SELECT source_id FROM live_sessions)") == 62,
-                    "Restart must retain older records and not resurrect undone batch rows");
+                // The later scene stage adds a separate40-message source to the
+                // same writer profile. Keep the original62-row reference strict,
+                // and account for the additional fixture without hiding resurrection.
+                String originalSource=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(profile.resolve("synthetic-import.log"))));
+                String sceneSource=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(profile.resolve("synthetic-scenes.log"))));
+                String undoneSource=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(unique.getBytes(StandardCharsets.UTF_8)));
+                check(sqlCount(database,"SELECT count(*) FROM transcript_lines WHERE source_id='"+originalSource+"'")==62,"Restart must retain all62 original observations");
+                check(sqlCount(database,"SELECT count(*) FROM transcript_lines WHERE source_id='"+sceneSource+"'")==40,"Restart must retain the40 new scene observations under their own source");
+                check(sqlCount(database,"SELECT count(*) FROM transcript_lines WHERE source_id='"+undoneSource+"'")==0,"Restart must never resurrect the undone batch source");
+                check(sqlCount(database,"SELECT count(*) FROM transcript_lines WHERE source_id NOT IN (SELECT source_id FROM live_sessions)")==(62+40),"Historical total must contain exactly the original and scene fixtures, without unexpected sources");
                 check(sqlCount(database, "SELECT count(*) FROM watch_settings WHERE enabled=1") == 1,
                     "Explicit watch opt-in must persist across JVMs");
             }

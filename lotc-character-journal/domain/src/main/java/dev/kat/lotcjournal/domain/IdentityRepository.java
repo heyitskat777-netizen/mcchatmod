@@ -16,6 +16,7 @@ public interface IdentityRepository {
                                               boolean favoritesOnly, int offset, int limit) throws Exception {
         throw new UnsupportedOperationException("Character evidence is unavailable");
     }
+    default IdentityReviewData reviewData() throws Exception {return new IdentityReviewData(identities(""),merges(),separations());}
     List<IdentityMerge> merges() throws Exception;
     String mergeIdentity(String fromIdentity, String toIdentity) throws Exception;
     void undoMerge(String decisionId) throws Exception;

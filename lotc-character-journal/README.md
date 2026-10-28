@@ -7,10 +7,11 @@ actually been verified. It is not the complete character-memory mod yet.
 ## Current build
 
 The user has accepted the Phase 1 foundation smoke test. Press **J** in a world
-to open the journal; its key is rebindable in Controls. Layout settings and backup
+to open the journal; its key is rebindable in Controls. Home search shows name/alias
+match feedback; press Enter to open the filtered Characters list. Queries survive resize. Layout settings and backup
 creation remain available. Characters now supports explicit names, aliases and notes; persona memories require manual message assignment.
 
-The `0.1.0-alpha.12` development build expands **Log import** for finished UTF-8 `.log`
+The `0.1.0-alpha.13` development build expands **Log import** for finished UTF-8 `.log`
 and `.log.gz` files, background validation, progress/cancellation, restart-safe
 checkpoints, repeat-import deduplication, and a transcript browser with literal
 text search. **Import all / dashboard** adds a read-only folder preview,
@@ -80,10 +81,12 @@ keep the draft and require explicit reload. These controls leave original dialog
 and persona memories intact. See [the tag-review checklist](docs/USER_TEST_MESSAGE_TAGS.md).
 **Persona memories** shows only explicit
 assignments. Shared archive Transcripts remains separate. Review identity links
-supports explicit confirmation, **Deny link / keep separate**, and persistent undo.
+now has a shared-name/alias queue: each successful Confirm or **Deny link / keep separate**
+advances to the next unresolved pair. Tooltips explain matching names; manual choices
+and persistent undo remain available. Queue failure is distinct from completion.
 Denials block direct/indirect linking until **Clear selected denial**; clearing does
 not link automatically. Duplicate names/aliases never merge automatically.
-Characters schemas 1/2/3 upgrade to schema 4 after a verified paired backup. The mod owns two bound SQLite files: `.log`/`.log.gz` imports and live recording
+Characters schemas 1/2/3/4 upgrade to schema 5 after a verified paired backup. The mod owns two bound SQLite files: `.log`/`.log.gz` imports and live recording
 populate `archive.sqlite`; character records and confirmed assignments use
 `characters.sqlite`. Upgrading copies native `journal.sqlite` without changing it,
 then migrates the copy. Backups contain both SQLite files and a `.pair.json`
@@ -95,7 +98,11 @@ with live events remain separate when their identity cannot be proved; genuine
 repeated text is not discarded.
 
 **Scenes** on the main journal suggests source/session-local RP windows, with a
-configurable 15-minute gap. Import screens offer **Review scenes / skip** after
+configurable 15-minute gap. New shared automatic scenes require **10 RP messages
+and two distinct observed actors**. Clear groups default to **CONFIRMED(auto)**;
+low-confidence qualifying groups remain **SUGGESTED**, listed first. **Suggested:
+Only** filters the review queue independently of Skipped. Explicit Save/Skip makes
+scene membership fixed; automatic confirmations remain reassessable. Import screens offer **Review scenes / skip** after
 commits. Review participants, enter a title/location, and **Confirm / save scene**;
 **Skip for now** is durable. **Scene dialogue / split** provides bounded searchable,
 scrollable messages and exact-message split confirmation. Choose and combine saved
@@ -107,7 +114,8 @@ Persona scene views use only explicitly assigned evidence and speaker identities
 without inheriting shared identity tags, merges, titles, locations or attendees.
 Missing clocks/locations stay unknown; crowded conversation windows need review.
 Counts are observations, and active time estimates cap each gap at 60 seconds.
-See [the Phase 3/4 checklist](docs/USER_TEST_SCENES.md) for controls and limitations.
+See [the alpha.13 checklist](docs/USER_TEST_ALPHA13.md) and
+[the Phase 3/4 checklist](docs/USER_TEST_SCENES.md) for controls and limitations.
 Nearby recognition, AI and favorite-driven extraction remain future work.
 See [docs/USER_TEST_CHARACTER_BROWSER.md](docs/USER_TEST_CHARACTER_BROWSER.md) for alpha.8
 and [docs/USER_TEST_LIVE_PERSONAS.md](docs/USER_TEST_LIVE_PERSONAS.md) for alpha.7

@@ -7,14 +7,14 @@ import java.util.*;
 
 /** Read-snapshot projections; persona views are derived exclusively from assigned scene evidence. */
 final class SceneProjection {
-    record Header(String id,String title,String location,SceneState state,boolean active,long revision,boolean participantsReviewed) {}
+    record Header(String id,String title,String location,SceneState state,boolean active,long revision,boolean participantsReviewed,boolean automatic,boolean qualified) {}
     private SceneProjection() {}
     static Header header(Connection c,String id,boolean requireActive) throws SQLException {
         SceneParticipant.requireUuid(id);
         try(var q=c.prepareStatement("SELECT * FROM characters.scenes WHERE id=?")) {
             q.setString(1,id);try(var r=q.executeQuery()) {
                 if(!r.next()){if(requireActive)throw new SQLException("Scene is no longer available");return null;}
-                var value=new Header(id,r.getString("title"),r.getString("location"),SceneState.valueOf(r.getString("state")),r.getInt("active")==1,r.getLong("revision"),r.getInt("participants_reviewed")==1);
+                var value=new Header(id,r.getString("title"),r.getString("location"),SceneState.valueOf(r.getString("state")),r.getInt("active")==1,r.getLong("revision"),r.getInt("participants_reviewed")==1,r.getString("origin").equals("AUTO"),r.getInt("qualified")==1);
                 if(requireActive&&!value.active())throw new SQLException("Scene is no longer available");return value;
             }
         }
@@ -48,6 +48,22 @@ final class SceneProjection {
         return new SceneObservation(line,time,String.join(",",owners));
     }
     static List<MessageReference> refs(List<SceneObservation> rows){return rows.stream().map(r->MessageReference.of(r.message())).toList();}
+    static List<Set<String>> actorsByMessage(Connection c,List<SceneObservation> rows) throws SQLException {
+        var result=new ArrayList<Set<String>>();var resolved=new HashMap<String,String>();
+        try(var q=c.prepareStatement("SELECT identity_id FROM ("+MessageTagReviews.EFFECTIVE_SQL+") WHERE source_id=? AND source_line=? AND kind IN ('SPEAKER','ACTION')")) {
+            for(var row:rows){q.setString(1,row.message().sourceId());q.setLong(2,row.message().sourceLine());var actors=new HashSet<String>();
+                try(var r=q.executeQuery()){while(r.next()){String raw=r.getString(1),id=resolved.get(raw);if(id==null){id=SqliteIdentityRepository.resolve(c,raw);resolved.put(raw,id);}actors.add(id);}}
+                result.add(Set.copyOf(actors));
+            }
+        }
+        return List.copyOf(result);
+    }
+    static SceneAssessment assessment(Connection c,List<SceneObservation> rows) throws SQLException {
+        return SceneConfidence.assess(rows,actorsByMessage(c,rows));
+    }
+    static void visible(Header header,String persona) throws SQLException {
+        if(persona==null&&header.automatic()&&!header.qualified())throw new SQLException("Automatic window does not meet scene requirements");
+    }
     static String name(Connection c,String id) throws SQLException {
         try(var q=c.prepareStatement("SELECT name FROM characters.character_identities WHERE id=?")){q.setString(1,id);try(var r=q.executeQuery()){if(!r.next())throw new SQLException("Unknown scene participant");return r.getString(1);}}
     }
@@ -63,6 +79,7 @@ final class SceneProjection {
         return detail(c,header,persona,rows);
     }
     static SceneDetail detail(Connection c,Header header,String persona,List<SceneObservation> rows) throws SQLException {
+        visible(header,persona);
         var actors=new TreeSet<String>();var speech=new HashSet<MessageReference>();var action=new HashSet<MessageReference>();var mention=new HashSet<MessageReference>();
         try(var q=c.prepareStatement("SELECT identity_id,kind FROM ("+MessageTagReviews.EFFECTIVE_SQL+") WHERE source_id=? AND source_line=?")) {
             for(var row:rows){var ref=MessageReference.of(row.message());q.setString(1,ref.sourceId());q.setLong(2,ref.sourceLine());
@@ -97,11 +114,11 @@ final class SceneProjection {
             }
             participants=List.copyOf(values);
         }
-        var summary=new SceneSummary(header.id(),persona==null?header.title():"Assigned scene",persona==null?header.location():"",persona==null?header.state():SceneState.SUGGESTED,rows.size(),header.revision());
-        return new SceneDetail(summary,participants,new SceneStatistics(rows.size(),speech.size(),action.size(),mention.size(),SceneGrouper.elapsed(rows),SceneGrouper.active(rows)));
+        var summary=new SceneSummary(header.id(),persona==null?header.title():"Assigned scene",persona==null?header.location():"",persona==null?header.state():SceneState.SUGGESTED,rows.size(),header.revision(),persona==null&&header.automatic()?SceneOrigin.AUTO:SceneOrigin.MANUAL);
+        return new SceneDetail(summary,participants,new SceneStatistics(rows.size(),speech.size(),action.size(),mention.size(),SceneGrouper.elapsed(rows),SceneGrouper.active(rows)),persona==null?assessment(c,rows):SceneAssessment.unassessed());
     }
     static TranscriptPage transcript(Connection c,String id,String persona,String query,int offset,int limit) throws SQLException {
-        header(c,id,true);persona(c,persona);if(query==null)query="";
+        visible(header(c,id,true),persona);persona(c,persona);if(query==null)query="";
         if(offset<0||limit<1||limit>200||query.length()>256)throw new IllegalArgumentException("Invalid scene transcript bounds");
         var rows=members(c,id,persona);if(rows.isEmpty())throw new SQLException("Scene has no assigned evidence for this view");
         String filter=query.toLowerCase(Locale.ROOT);

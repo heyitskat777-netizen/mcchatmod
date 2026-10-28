@@ -21,7 +21,7 @@ class PairedDatabaseStoreTest {
     @Test void archiveAndCharactersArePhysicallySeparatedAndBoundToOneRollbackJournalPair() throws Exception {
         var store = seed(archive(), characters()); var repository = new SqliteIdentityRepository(archive(), characters());
         assertTrue(Files.isRegularFile(archive())); assertTrue(Files.isRegularFile(characters()));
-        assertEquals(9, scalar(archive(), "PRAGMA user_version")); assertEquals(4, scalar(characters(), "PRAGMA user_version"));
+        assertEquals(9, scalar(archive(), "PRAGMA user_version")); assertEquals(5, scalar(characters(), "PRAGMA user_version"));
         assertEquals("delete", text(archive(), "PRAGMA journal_mode")); assertEquals("delete", text(characters(), "PRAGMA journal_mode"));
         assertEquals(text(archive(), "SELECT pair_uuid FROM storage_pair"), text(characters(), "SELECT pair_uuid FROM storage_pair"));
         assertEquals(text(archive(), "SELECT generation FROM storage_pair"), text(characters(), "SELECT generation FROM storage_pair"));

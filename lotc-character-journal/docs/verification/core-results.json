@@ -1,15 +1,25 @@
 {
-  "date": "2026-10-27",
-  "version": "0.1.0-alpha.12",
+  "date": "2026-10-28",
+  "version": "0.1.0-alpha.13",
+  "branch": "feature/scene-review-refinements",
+  "base_commit": "c3d9ee189744f508bd454b505b280cfee2ecbfe5",
   "java_target": 21,
   "gradle": "9.7.1",
-  "command": "./gradlew check :fabric:build :fabric:prepareClientSmoke --no-daemon --console=plain",
+  "command": "./gradlew --offline check :fabric:build :fabric:prepareClientSmoke --no-daemon --console=plain",
   "core_gradle_result": "passed",
-  "core_gradle_seconds": 12,
+  "core_gradle_seconds": 13,
   "suites": [
     {
       "module": "domain",
       "suite": "dev.kat.lotcjournal.domain.CharacterNameMatcherTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "domain",
+      "suite": "dev.kat.lotcjournal.domain.IdentityReviewQueueTest",
       "tests": 5,
       "failures": 0,
       "errors": 0,
@@ -35,6 +45,14 @@
       "module": "domain",
       "suite": "dev.kat.lotcjournal.domain.PrivacyPolicyTest",
       "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "domain",
+      "suite": "dev.kat.lotcjournal.domain.SceneConfidenceTest",
+      "tests": 5,
       "failures": 0,
       "errors": 0,
       "skipped": 0
@@ -241,6 +259,14 @@
     },
     {
       "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.IdentityReviewQueueStoreTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
       "suite": "dev.kat.lotcjournal.storage.IdentitySeparationTest",
       "tests": 11,
       "failures": 0,
@@ -297,6 +323,14 @@
     },
     {
       "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.SceneQualificationTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
       "suite": "dev.kat.lotcjournal.storage.SceneRepositoryTest",
       "tests": 13,
       "failures": 0,
@@ -321,137 +355,122 @@
     }
   ],
   "totals": {
-    "tests": 333,
+    "tests": 352,
     "failures": 0,
     "errors": 0,
     "skipped": 0
   },
   "runner_tests": {
     "result": "passed",
-    "tests": 14,
-    "seconds": 1.117
+    "tests": 15,
+    "seconds": 1.12
   },
-  "previous_client_run": "phase-four-2",
-  "previous_client_phases": [
-    {
-      "name": "graphics-preflight",
-      "status": "PASSED",
-      "duration": 25.518745527000647,
-      "returncode": 0,
-      "timedOut": false,
-      "processId": 7221,
-      "errors": []
-    },
-    {
-      "name": "development-write",
-      "status": "PASSED",
-      "duration": 35.25113061100092,
-      "returncode": 0,
-      "timedOut": false,
-      "processId": 7500,
-      "errors": []
-    },
-    {
-      "name": "development-read",
-      "status": "PASSED",
-      "duration": 33.79076547799923,
-      "returncode": 0,
-      "timedOut": false,
-      "processId": 7865,
-      "errors": []
-    },
-    {
-      "name": "packaged-write",
-      "status": "PASSED",
-      "duration": 40.02836144799949,
-      "returncode": 0,
-      "timedOut": false,
-      "processId": 8278,
-      "errors": []
-    },
-    {
-      "name": "packaged-read",
-      "status": "PASSED",
-      "duration": 34.567051268000796,
-      "returncode": 0,
-      "timedOut": false,
-      "processId": 8601,
-      "errors": []
-    }
-  ],
-  "client_smoke_run": "phase-four-3",
   "client_smoke_result": "passed",
-  "artifact": {
-    "name": "lotc-character-journal-0.1.0-alpha.12.jar",
-    "bytes": 14780536,
-    "sha256": "230becc88d8a6304d2c089df186116ee7467f7ef2e982ba1c98d12e47b871689"
+  "client_runs": {
+    "alpha13-dev-audited": {
+      "runId": "alpha13-dev-audited",
+      "outcomes": [
+        {
+          "name": "graphics-preflight",
+          "status": "PASSED",
+          "duration": 25.413991770001303,
+          "returncode": 0,
+          "timedOut": false,
+          "processId": 26240,
+          "errors": []
+        },
+        {
+          "name": "development-write",
+          "status": "PASSED",
+          "duration": 36.86383553300038,
+          "returncode": 0,
+          "timedOut": false,
+          "processId": 26455,
+          "errors": []
+        },
+        {
+          "name": "development-read",
+          "status": "PASSED",
+          "duration": 34.6021229379985,
+          "returncode": 0,
+          "timedOut": false,
+          "processId": 26690,
+          "errors": []
+        }
+      ],
+      "passed": true,
+      "scope": "graphics + development write/read"
+    },
+    "alpha13-packaged-audited": {
+      "runId": "alpha13-packaged-audited",
+      "outcomes": [
+        {
+          "name": "graphics-preflight",
+          "status": "PASSED",
+          "duration": 23.84461069900135,
+          "returncode": 0,
+          "timedOut": false,
+          "processId": 26962,
+          "errors": []
+        },
+        {
+          "name": "packaged-write",
+          "status": "PASSED",
+          "duration": 42.98892181799965,
+          "returncode": 0,
+          "timedOut": false,
+          "processId": 27176,
+          "errors": []
+        },
+        {
+          "name": "packaged-read",
+          "status": "PASSED",
+          "duration": 36.18087172800006,
+          "returncode": 0,
+          "timedOut": false,
+          "processId": 27581,
+          "errors": []
+        }
+      ],
+      "passed": true,
+      "scope": "graphics + packaged write/read"
+    }
   },
-  "user_test": "Prior alpha.10 smoke accepted; alpha.11 tags and alpha.12 linked-history/real scenes/modpack restore acceptance pending",
-  "ci": {
-    "result": "unobserved",
-    "reason": "Environment proxy refuses GitHub API CONNECT with HTTP 403; no CI result claimed",
-    "trigger": "configured on push; status not observable",
-    "functional_commit": "b23c8d2454ab436a0c66c8b8fa6949e42a77d4c2"
-  },
-  "client_phases": [
+  "writer_assertion_stages": 28,
+  "reader_assertion_stages": 29,
+  "repair_history": [
     {
-      "name": "graphics-preflight",
-      "status": "PASSED",
-      "duration": 25.19712696500028,
-      "returncode": 0,
-      "timedOut": false,
-      "processId": 9162,
-      "errors": []
+      "run": "alpha13-1",
+      "result": "failed",
+      "reason": "Stale scene count/rows during persona query; loading/debounce hides previous results"
     },
     {
-      "name": "development-write",
-      "status": "PASSED",
-      "duration": 34.957166463998874,
-      "returncode": 0,
-      "timedOut": false,
-      "processId": 9453,
-      "errors": []
+      "run": "alpha13-2",
+      "result": "failed",
+      "reason": "Visible typed split rejection omitted from narration; preserved20 refs/rev2, narration fixed"
     },
     {
-      "name": "development-read",
-      "status": "PASSED",
-      "duration": 34.79364787600025,
-      "returncode": 0,
-      "timedOut": false,
-      "processId": 9784,
-      "errors": []
-    },
-    {
-      "name": "packaged-write",
-      "status": "PASSED",
-      "duration": 39.13837719500043,
-      "returncode": 0,
-      "timedOut": false,
-      "processId": 10116,
-      "errors": []
-    },
-    {
-      "name": "packaged-read",
-      "status": "PASSED",
-      "duration": 34.1068630890004,
-      "returncode": 0,
-      "timedOut": false,
-      "processId": 10492,
-      "errors": []
+      "run": "alpha13-3",
+      "result": "writer passed, reader failed",
+      "reason": "Added40-message fixture invalidated old global62 count; reassessed every reader constant and asserted original62+scene40+undone0+global102 separately"
     }
   ],
-  "client_evidence": "fabric/build/client-smoke/evidence/phase-four-3/",
-  "client_writer_stages": 26,
-  "client_reader_stages": 27,
-  "core_execution": "333 tests executed successfully in integrated-3 (21s); UI-only final integrated-4 (12s), core tasks up-to-date",
-  "functional_commit": "b23c8d2454ab436a0c66c8b8fa6949e42a77d4c2",
-  "branch": "feature/scenes",
+  "reassessment": "Audited persisted source identities/counts before rerun; separated development and packaged suites; no assertion removal or timeout changes",
+  "environment": {
+    "online_build": "blocked before compilation by proxy HTTP403 to Fabric Maven",
+    "repair": "Restored same verified cached POM into Loom cache; offline only, no dependency/pin changes",
+    "fabric_pom_sha1": "739a20baafcaed1258c21152e55ad138d5b3b7dd"
+  },
+  "artifact": {
+    "name": "lotc-character-journal-0.1.0-alpha.13.jar",
+    "bytes": 14801455,
+    "sha256": "bf72ba886417c9a87c23209efda9ef38e0685a12118bbddeab7b43d13e980d29"
+  },
   "publication": {
-    "push": "succeeded",
-    "pull_request": "blocked",
-    "base": "feature/message-tag-review",
-    "reason": "GitHub API POST graphql forbidden by environment proxy HTTP 403",
-    "prepared_description": "docs/PR_PHASE4.md",
-    "compare_url": "https://github.com/heyitskat777-netizen/mcchatmod/compare/feature%2Fmessage-tag-review...feature%2Fscenes?expand=1"
-  }
+    "status": "pending verified commit/push"
+  },
+  "ci": {
+    "status": "not yet observed"
+  },
+  "user_test": "Alpha.13 real-log accuracy, confidence usefulness and actual modpack acceptance pending USER_TEST_ALPHA13.md"
 }

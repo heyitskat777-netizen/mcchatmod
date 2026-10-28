@@ -47,6 +47,30 @@ public final class SqliteIdentityRepository implements IdentityRepository {
             try(var r=q.executeQuery()) {while(r.next()) result.add(readIdentity(c,r));} return List.copyOf(result);
         }
     }
+    @Override public IdentityReviewData reviewData() throws Exception {
+        try(var c=open()) {
+            c.setAutoCommit(false);
+            var identities=new ArrayList<CharacterIdentity>();
+            try(var q=c.createStatement();var r=q.executeQuery("SELECT i.id,i.name,a.alias FROM characters.character_identities i LEFT JOIN characters.character_aliases a ON a.identity_id=i.id ORDER BY i.name,i.id,a.alias")) {
+                String id=null,name=null;var aliases=new HashSet<String>();
+                while(r.next()) {
+                    String next=r.getString("id");
+                    if(!next.equals(id)) {
+                        if(id!=null)identities.add(new CharacterIdentity(id,name,"",aliases,""));
+                        id=next;name=r.getString("name");aliases=new HashSet<>();
+                    }
+                    if(r.getString("alias")!=null)aliases.add(r.getString("alias"));
+                }
+                if(id!=null)identities.add(new CharacterIdentity(id,name,"",aliases,""));
+            }
+            var merges=new ArrayList<IdentityMerge>();
+            try(var q=c.createStatement();var r=q.executeQuery("SELECT * FROM characters.identity_merges ORDER BY created_at,id")) {
+                while(r.next())merges.add(new IdentityMerge(r.getString("id"),r.getString("from_id"),r.getString("to_id"),r.getInt("active")==1));
+            }
+            var result=new IdentityReviewData(identities,merges,IdentitySeparations.all(c));
+            c.commit();return result;
+        }
+    }
     static CharacterIdentity readIdentity(Connection c,ResultSet row) throws SQLException { return readIdentity(c,row,"characters"); }
     static CharacterIdentity readIdentity(Connection c,ResultSet row,String schema) throws SQLException {
         var aliases=new HashSet<String>();String id=row.getString("id");

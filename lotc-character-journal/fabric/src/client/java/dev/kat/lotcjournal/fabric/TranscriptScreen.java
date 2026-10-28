@@ -165,7 +165,12 @@ public final class TranscriptScreen extends Screen {
         pending=true;long token=++request;tick();
         scenes.splitScene(sceneId,sceneRevision,selected).whenComplete((ids,error)->minecraft.execute(()->{
             if(token!=request||minecraft.screen!=this)return;pending=false;confirmSplit=false;
-            if(error!=null){sceneStale=true;notice="Split failed or scene changed. Return and reload saved scene";source.active=false;tick();}
+            if(error!=null){
+                Throwable cause=error;while(cause.getCause()!=null&&(cause instanceof java.util.concurrent.CompletionException||cause instanceof java.util.concurrent.ExecutionException))cause=cause.getCause();
+                if(cause instanceof dev.kat.lotcjournal.domain.SceneCreationException){notice="Each half needs 10 RP messages and 2 actors. Choose another split";}
+                else {sceneStale=true;notice="Split failed or scene changed. Return and reload saved scene";}
+                tick();
+            }
             else ((SceneDetailScreen)parent).openSplit(ids);
         }));
     }
@@ -215,6 +220,7 @@ public final class TranscriptScreen extends Screen {
     @Override public Component getNarrationMessage() {
         return Component.literal((scenes==null?title.getString():personaId==null?"Scene dialogue — shared archive":"Scene dialogue — assigned only") + ". " + (entries.isEmpty() ? notice : "Messages " + (offset + 1)
             + " to " + (offset + entries.size()) + " of " + total) + (selected == null ? "" : ". Selected line " + selected.sourceLine() + ". Favorite: " + (favorites.contains(selected) ? "yes" : "no"))
+            + (entries.isEmpty()||notice.isBlank()?"":". "+notice)
             + ". Scroll " + (int) pane.scrollAmount()
             + " of " + pane.maxScrollAmount() + ". " + pane.visibleText()
             + (details ? ". Removed for selected source(s), all text/channels: " + removed : ""));

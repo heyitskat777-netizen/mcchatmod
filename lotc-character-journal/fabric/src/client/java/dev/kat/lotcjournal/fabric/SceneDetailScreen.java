@@ -57,7 +57,7 @@ final class SceneDetailScreen extends Screen {
         service.scene(id,personaId).whenComplete((value,error)->minecraft.execute(()->{
             if(token!=request||minecraft.screen!=this)return;pending=false;
             if(error!=null){stale=true;status="Scene unavailable or changed; reload or return to scenes";}
-            else {loaded=value;stale=false;titleDraft=value.summary().title();locationDraft=value.summary().location();draft.clear();draft.addAll(value.participants());name.setValue(titleDraft);location.setValue(locationDraft);status="Uncertain grouping/participants can be corrected or skipped";}
+            else {loaded=value;stale=false;titleDraft=value.summary().title();locationDraft=value.summary().location();draft.clear();draft.addAll(value.participants());name.setValue(titleDraft);location.setValue(locationDraft);status=personaId!=null?"Explicitly assigned evidence; shared grouping confidence is hidden":value.summary().origin()==SceneOrigin.AUTO?(value.assessment().highConfidence()?"Automatically confirmed grouping; Save to keep this exact scene":"Suggested: "+String.join("; ",value.assessment().reasons())):"User-reviewed scene; corrections stay fixed";}
             combineTarget=null;combineChoices=List.of();confirmCombine=false;update();
         }));
     }
@@ -97,7 +97,12 @@ final class SceneDetailScreen extends Screen {
         long token=++request;pending=true;update();
         service.combineScenes(id,loaded.summary().revision(),combineTarget.id(),combineTarget.revision()).whenComplete((newId,error)->minecraft.execute(()->{
             if(token!=request||minecraft.screen!=this)return;pending=false;
-            if(error!=null){stale=true;status="Combine failed/changed elsewhere; reload saved scenes";update();}
+            if(error!=null){
+                Throwable cause=error;while(cause.getCause()!=null&&(cause instanceof java.util.concurrent.CompletionException||cause instanceof java.util.concurrent.ExecutionException))cause=cause.getCause();
+                if(cause instanceof SceneCreationException rejected)status=rejected.reason()==SceneCreationException.Reason.MINIMUM?"Combine needs 10 RP messages and 2 observed actors":"Combined scenes exceed 5000 messages";
+                else {stale=true;status="Combine failed/changed elsewhere; reload saved scenes";}
+                confirmCombine=false;update();
+            }
             else minecraft.setScreen(new SceneDetailScreen(parent,service,identities,newId,null));
         }));
     }
@@ -106,7 +111,8 @@ final class SceneDetailScreen extends Screen {
     private void update() {
         if(save==null)return;boolean ready=loaded!=null&&!pending,editable=ready&&!stale&&personaId==null;
         name.active=location.active=editable;participants.active=ready;dialogue.active=ready&&!stale;
-        save.active=editable&&!titleDraft.isBlank()&&draft.size()<=64;skip.active=choose.active=editable;combine.active=editable&&combineTarget!=null;
+        save.active=editable&&!titleDraft.isBlank()&&draft.size()<=64;
+        save.setTooltip(Tooltip.create(Component.literal(loaded==null?"Loading scene":personaId!=null?"Assigned evidence only":(loaded.summary().origin()==SceneOrigin.AUTO?"Automatic grouping confidence. Explicit Save freezes this exact scene.\n":"User-reviewed membership is protected.\n")+String.join("\n",loaded.assessment().reasons()))));skip.active=choose.active=editable;combine.active=editable&&combineTarget!=null;
         reload.active=!pending;combine.setMessage(Component.literal(confirmCombine?"Confirm combine":"Combine scenes"));
         choose.setMessage(Component.literal(combineTarget==null?"Choose scene to combine":font.plainSubstrByWidth("#"+combineTarget.id().substring(0,8)+" "+combineTarget.title(),choose.getWidth()-12)));
         choose.setTooltip(combineTarget==null?null:Tooltip.create(Component.literal(combineTarget.id()+"\n"+combineTarget.title()+"\n"+combineTarget.messageCount()+" messages")));
@@ -124,7 +130,7 @@ final class SceneDetailScreen extends Screen {
         graphics.drawString(font,font.plainSubstrByWidth(stale?"Draft kept. Reload required; scene may have changed":draft.size()>64?"Save limit: 64 participants. Remove extras to save":status,w),left,201,0xFF93C5FD);
     }
     private static String time(Long seconds){return seconds==null?"unknown":seconds+"s";}
-    @Override public Component getNarrationMessage(){return Component.literal(title.getString()+". "+status+(stale?". Reload required":"")+(loaded==null?"":". "+loaded.summary().state()+". Messages "+loaded.statistics().messages()+". Speech observations "+loaded.statistics().speechObservations()+". Action observations "+loaded.statistics().actionObservations()+". Mentions or references "+loaded.statistics().mentionObservations()+". Elapsed "+time(loaded.statistics().elapsedSeconds())+". Estimated active time "+time(loaded.statistics().estimatedActiveSeconds())+", adjacent gaps capped at 60 seconds. Participants "+draft.size()+". Location "+(locationDraft.isBlank()?"unknown":locationDraft)));}
+    @Override public Component getNarrationMessage(){return Component.literal(title.getString()+". "+status+(loaded==null||personaId!=null?"":". "+loaded.summary().origin()+" grouping. "+String.join(". ",loaded.assessment().reasons()))+(stale?". Reload required":"")+(loaded==null?"":". "+loaded.summary().state()+". Messages "+loaded.statistics().messages()+". Speech observations "+loaded.statistics().speechObservations()+". Action observations "+loaded.statistics().actionObservations()+". Mentions or references "+loaded.statistics().mentionObservations()+". Elapsed "+time(loaded.statistics().elapsedSeconds())+". Estimated active time "+time(loaded.statistics().estimatedActiveSeconds())+", adjacent gaps capped at 60 seconds. Participants "+draft.size()+". Location "+(locationDraft.isBlank()?"unknown":locationDraft)));}
     @Override public void onClose(){request++;minecraft.setScreen(parent);}
     @Override public boolean isPauseScreen(){return false;}
 }

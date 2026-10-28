@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 import client_smoke as smoke
 
@@ -109,6 +110,21 @@ class EvidenceContractTest(unittest.TestCase):
         root = smoke.ET.parse(output).getroot()
         self.assertEqual("1", root.attrib["failures"])
         self.assertEqual("1", root.attrib["skipped"])
+
+
+class OfflineRunnerTest(unittest.TestCase):
+    def test_offline_reaches_preparation_and_launch_without_excusing_missing_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            commands=[]
+            def run(command,log_path,timeout,env):
+                commands.append(command);log_path.write_text("BUILD SUCCESSFUL\n");return 0,False,0.01
+            with mock.patch.object(smoke,"BASE",Path(directory)), mock.patch.object(smoke,"run_process",side_effect=run), \
+                 mock.patch.object(sys,"argv",["client_smoke.py","--offline","--preflight-only","--eula-accepted","--run-id","offline-contract"]):
+                self.assertEqual(1,smoke.main(),"Offline mode must still reject missing reports/shutdown evidence")
+            self.assertEqual(2,len(commands))
+            self.assertTrue(all("--offline" in command for command in commands))
+            self.assertIn(":fabric:prepareClientSmoke",commands[0])
+            self.assertIn(":fabric:runGraphicsPreflight",commands[1])
 
 
 @unittest.skipUnless(sys.platform == "linux", "Linux process containment contract")

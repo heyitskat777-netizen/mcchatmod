@@ -121,8 +121,12 @@ Target Minecraft 1.21.11, Fabric, Java 21. Do not silently upgrade Minecraft.
   observation coordinates deduplicate the union, undo changes it immediately, and
   no group or shared tag correction grants persona knowledge.
 - Scenes are revisioned interpretations with exact message references. Keep
-  confirmed/skipped groups and manual participants across automatic refresh;
-  protected coordinates are hard boundaries. Unknown clocks/locations stay unknown.
+  explicitly reviewed/skipped MANUAL groups and participants across automatic refresh;
+  protected coordinates are hard boundaries. AUTO confirmed groups stay reassessable.
+  Shared automatic creation and new split/combine results need 10 RP observations
+  and 2 distinct resolved effective actors; mentions/manual inherited attendees do
+  not prove participation. Preserve existing reviewed small scenes. Neutral windows
+  may retain persona evidence while failing shared qualification. Unknown clocks/locations stay unknown.
   Split/combine and source undo use the paired transaction without rewriting text.
   Retain revision tombstones against stale/ABA writes. Mentions are not attendees.
 - Persona scene projections use only explicit owned RP observations and their own
@@ -130,6 +134,11 @@ Target Minecraft 1.21.11, Fabric, Java 21. Do not silently upgrade Minecraft.
   link resolution. Never expose shared titles, locations, silent attendees or
   shared tag interpretations through persona results/counts/search. DIRECT/OVERHEARD
   needs an explicit perspective, never an implicit grant of memories.
+- Automatic scene confirmation records grouping confidence only. Persona views
+  hide shared origin/confidence/qualification and ignore shared state filters.
+  Shared-name/alias identity review queues require explicit Confirm/Deny and advance
+  only after durable success. Empty and failed queues must remain distinguishable;
+  never propose every unrelated character pair or infer account/persona identity.
 - New characters/aliases search existing dialogue; preserve source observations,
   manual persona assignments and ambiguity. Automatic tags never grant memories,
   infer accounts, select personas or merge identities. An unrelated legacy

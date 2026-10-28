@@ -258,3 +258,48 @@ unknown for missing, mixed-source/context or reversed chronology. Cross-source
 manual combine is allowed explicitly but cannot invent a common clock/location.
 AI remains off/unimplemented; scenes work entirely offline. Real-scene acceptance,
 large-archive budgets and actual modpack backup restoration are separate checks.
+
+## Alpha.13 scene/review refinements — October 28, 2026
+
+Kat requests minimum 10 messages and 2 participants for creating a scene, automatic
+confirmation except low confidence, Suggested-first listing and an explicit
+Suggested filter; identity review must advance through a queue; main search must
+respond visibly. These supersede the prior all-suggestions automatic scene policy.
+
+Shared automatic eligibility counts trusted RP observation coordinates and distinct
+resolved effective SPEAKER/ACTION identities. Mentions and inherited/manual silent
+attendees do not prove actors. Newly split halves and combined scenes also meet the
+minimum; preserve existing explicit small scenes instead of deleting user work.
+
+High confidence means every message has one resolved actor, complete common-context
+monotonic timing, no gap over 300 seconds and at most8 distinct actors. Eligible
+uncertain groups remain Suggested with reasons; high-confidence groups are
+Confirmed(auto). This confirms grouping only. Default15-minute boundary remains
+configurable; missing dates/locations and identities are never fabricated. Shared
+lists order Suggested first, then newest within status; Suggested-only intersects
+search/skip filters. Automatic confirmed groups can be reassessed until an explicit
+Save/Skip/split/combine sets MANUAL provenance. Explicit Save of an unchanged AUTO
+scene still freezes it. Schema5 persists AUTO/MANUAL origin and shared qualification.
+
+Neutral automatic windows remain internally for persona projections, including
+windows never eligible as shared scenes. Shared tag/merge changes therefore cannot
+remove a persona's assigned evidence window or disclose shared confidence. Persona
+views ignore shared qualification/status filters, retain raw explicit attribution,
+and expose generic origin/assessment. Character schemas 1–4 upgrade with a verified
+paired backup; native archive schema 9/parser policy 4 stay unchanged.
+
+Identity review queues only literal normalized saved-name/alias overlaps between
+unlinked groups, excludes rooted keep-separate decisions and collapses confirmed
+components. It never queues the Cartesian product of unrelated characters or uses
+account observations as identity proof. Full queue metadata is read in one storage
+snapshot, separately from the 1000-row character-browser limit. Only 100 pending
+pairs are returned at once, with a more flag and exact matching-name hints; saved
+decisions exclude processed pairs after restart. Confirmation/denial refreshes
+persistent state before advancing; failure retains selection, undo reopens eligible
+candidates. Pending actions survive resize. Manual selectors remain available.
+
+Main search now provides debounced match feedback and Enter navigation into the
+actual filtered Characters list. Queries survive resize, including beyond the
+EditBox default 32-character limit. Editing a query clears completed operation
+feedback; a fresh operation result remains visible until the next query edit.
+Search/list work stays on bounded workers and loading hides stale scene results.

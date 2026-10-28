@@ -19,7 +19,7 @@ import xml.etree.ElementTree as ET
 
 PROJECT = Path(__file__).resolve().parents[1]
 BASE = PROJECT / "fabric/build/client-smoke"
-COMMON_STAGES = {"startup", "local-world", "keybind-open", "search-widget", "layout-save", "import-ui", "batch-workflow", "dialogue-scroll", "roleplay-filter", "message-favorites", "message-row-selection", "live-startup", "live-capture", "identity-personas", "character-browser", "storage-split", "character-discovery", "identity-denials", "message-tag-review", "scene-review",
+COMMON_STAGES = {"startup", "local-world", "keybind-open", "search-widget", "layout-save", "import-ui", "batch-workflow", "dialogue-scroll", "roleplay-filter", "message-favorites", "message-row-selection", "live-startup", "live-capture", "identity-personas", "character-browser", "storage-split", "character-discovery", "identity-denials", "message-tag-review", "scene-review", "main-search", "identity-review-queue",
                  "backup", "journal-close", "keybind-rebind", "world-leave", "shutdown"}
 GRAPHICS_ERRORS = ("Failed to create window", "Failed to initialize GLFW", "GLFW error 65542",
                    "GLFW error 65543", "GLXBadFBConfig", "No X11 DISPLAY")
@@ -277,6 +277,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--eula-accepted", action="store_true", help="Caller explicitly accepts Minecraft EULA for these isolated test runtimes")
     parser.add_argument("--preflight-only", action="store_true")
+    parser.add_argument("--offline", action="store_true", help="Use cached Gradle dependencies without network access; all assertions remain required")
     parser.add_argument("--prepared", action="store_true", help="Reuse prepareClientSmoke outputs from an earlier successful invocation")
     parser.add_argument("--mode", choices=("all", "development", "packaged"), default="all", help="Select affected client checks; graphics preflight still runs first")
     parser.add_argument("--run-id", default=str(uuid.uuid4()))
@@ -295,7 +296,7 @@ def main() -> int:
     env.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
     env.setdefault("ALSOFT_DRIVERS", "null")
     launcher = ["bash", "./gradlew"]
-    gradle_flags = ["--no-daemon", "--console=plain"]
+    gradle_flags = ["--no-daemon", "--console=plain"] + (["--offline"] if args.offline else [])
     outcomes = []
     planned = [("graphics", "preflight", ":fabric:runGraphicsPreflight")]
     if not args.preflight_only:

@@ -6,6 +6,10 @@ public interface SceneRepository {
     void saveSettings(SceneSettings settings) throws Exception;
     int refreshSuggestions() throws Exception;
     ScenePage scenes(String personaId, boolean includeSkipped, String query, int offset, int limit) throws Exception;
+    default ScenePage scenes(String personaId,boolean includeSkipped,boolean suggestedOnly,String query,int offset,int limit) throws Exception {
+        if(suggestedOnly)throw new UnsupportedOperationException("Suggested scene filter unavailable");
+        return scenes(personaId,includeSkipped,query,offset,limit);
+    }
     SceneDetail scene(String id, String personaId) throws Exception;
     TranscriptPage transcript(String id, String personaId, String query, int offset, int limit) throws Exception;
     SceneDetail saveScene(String id, long expectedRevision, String title, String location, List<SceneParticipant> participants) throws Exception;

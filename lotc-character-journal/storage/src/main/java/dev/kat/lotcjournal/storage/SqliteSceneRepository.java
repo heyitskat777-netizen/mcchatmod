@@ -27,7 +27,7 @@ public final class SqliteSceneRepository implements SceneRepository {
     @Override public int refreshSuggestions()throws Exception{return write(this::refresh);}
     private int refresh(Connection c)throws SQLException{
         var old=new HashSet<String>();
-        try(var s=c.createStatement();var r=s.executeQuery("SELECT id FROM characters.scenes WHERE active=1 AND state='SUGGESTED'")){while(r.next())old.add(r.getString(1));}
+        try(var s=c.createStatement();var r=s.executeQuery("SELECT id FROM characters.scenes WHERE active=1 AND origin='AUTO'")){while(r.next())old.add(r.getString(1));}
         var seen=new HashSet<String>();var current=new ArrayList<SceneObservation>();SceneObservation previous=null;long barrier=0;int changed=0;var settings=SceneProjection.settings(c);
         try(var s=c.createStatement();var r=s.executeQuery("SELECT t.*,e.received_at FROM main.transcript_lines t LEFT JOIN main.live_events e ON e.source_id=t.source_id AND e.sequence=t.source_line WHERE t.channel='ROLEPLAY' ORDER BY t.source_id,t.source_line")){
             while(r.next()){
@@ -40,11 +40,11 @@ public final class SqliteSceneRepository implements SceneRepository {
             }
         }
         if(!current.isEmpty())changed+=suggest(c,current,seen);
-        for(String id:old)if(!seen.contains(id)){retire(c,SceneProjection.header(c,id,true),false);changed++;}
+        for(String id:old)if(!seen.contains(id))retire(c,SceneProjection.header(c,id,true),false);
         return changed;
     }
     private static boolean protectedMember(Connection c,MessageReference ref)throws SQLException{
-        try(var q=c.prepareStatement("SELECT 1 FROM characters.scene_members m JOIN characters.scenes s ON s.id=m.scene_id WHERE m.source_id=? AND m.source_line=? AND s.active=1 AND s.state!='SUGGESTED' LIMIT 1")){
+        try(var q=c.prepareStatement("SELECT 1 FROM characters.scene_members m JOIN characters.scenes s ON s.id=m.scene_id WHERE m.source_id=? AND m.source_line=? AND s.active=1 AND s.origin='MANUAL' LIMIT 1")){
             q.setString(1,ref.sourceId());q.setLong(2,ref.sourceLine());try(var r=q.executeQuery()){return r.next();}
         }
     }
@@ -52,19 +52,23 @@ public final class SqliteSceneRepository implements SceneRepository {
         var refs=SceneProjection.refs(observations);var first=refs.getFirst();
         String id=UUID.nameUUIDFromBytes(("lotc-scene-v1:"+first.sourceId()+":"+first.sourceLine()).getBytes(StandardCharsets.UTF_8)).toString();seen.add(id);
         var old=SceneProjection.header(c,id,false);
-        if(old!=null&&old.state()!=SceneState.SUGGESTED)return 0; // A manual tombstone is never resurrected.
-        if(old!=null&&old.active()&&refs.equals(SceneProjection.refs(SceneProjection.members(c,id,null))))return 0;
-        header(c,id,"Suggested scene","",SceneState.SUGGESTED,old==null?1:Math.addExact(old.revision(),1),false);
-        members(c,id,refs);return 1;
+        if(old!=null&&!old.automatic())return 0; // A manual tombstone is never resurrected.
+        var assessment=SceneProjection.assessment(c,observations);SceneState state=assessment.highConfidence()?SceneState.CONFIRMED:SceneState.SUGGESTED;
+        if(old!=null&&old.active()&&old.state()==state&&old.qualified()==assessment.eligible()&&refs.equals(SceneProjection.refs(SceneProjection.members(c,id,null))))return 0;
+        header(c,id,state==SceneState.CONFIRMED?"Automatic scene":"Suggested scene","",state,old==null?1:Math.addExact(old.revision(),1),false,true,assessment.eligible());
+        members(c,id,refs);return assessment.eligible()?1:0;
     }
     @Override public ScenePage scenes(String persona,boolean includeSkipped,String query,int offset,int limit)throws Exception{
+        return scenes(persona,includeSkipped,false,query,offset,limit);
+    }
+    @Override public ScenePage scenes(String persona,boolean includeSkipped,boolean suggestedOnly,String query,int offset,int limit)throws Exception{
         String filter=query==null?"":query.toLowerCase(Locale.ROOT);
         if(offset<0||limit<1||limit>100||filter.length()>256)throw new IllegalArgumentException("Invalid scene page");
         return read(c->{
             SceneProjection.persona(c,persona);
-            if(filter.isEmpty())return summaryPage(c,persona,includeSkipped,offset,limit);
+            if(filter.isEmpty())return summaryPage(c,persona,includeSkipped,suggestedOnly,offset,limit);
             var entries=new ArrayList<SceneSummary>();long total=0;
-            try(var q=c.prepareStatement("SELECT id FROM characters.scenes WHERE active=1 AND (?=1 OR state!='SKIPPED') ORDER BY created_at,id")){
+            try(var q=c.prepareStatement("SELECT id FROM characters.scenes WHERE active=1 AND (?=1 OR state!='SKIPPED')"+(persona==null?" AND (origin='MANUAL' OR qualified=1)":"")+(persona==null&&suggestedOnly?" AND state='SUGGESTED'":"")+listOrder(persona,""))){
                 q.setInt(1,persona!=null||includeSkipped?1:0);try(var r=q.executeQuery()){while(r.next()){
                     var h=SceneProjection.header(c,r.getString(1),true);long count=memberCount(c,h.id(),persona);if(count==0)continue;
                     String title=persona==null?h.title():"Assigned scene",location=persona==null?h.location():"";
@@ -78,23 +82,26 @@ public final class SqliteSceneRepository implements SceneRepository {
             return new ScenePage(entries,total,offset,limit);
         });
     }
-    private static ScenePage summaryPage(Connection c,String persona,boolean includeSkipped,int offset,int limit)throws SQLException{
+    private static ScenePage summaryPage(Connection c,String persona,boolean includeSkipped,boolean suggestedOnly,int offset,int limit)throws SQLException{
         String owned=persona==null?"":" AND EXISTS(SELECT 1 FROM characters.scene_members m JOIN characters.memory_assignments a ON a.source_id=m.source_id AND a.source_line=m.source_line WHERE m.scene_id=s.id AND a.persona_id=?)";
-        String scope=" FROM characters.scenes s WHERE s.active=1 AND (?=1 OR s.state!='SKIPPED')"+owned;
+        String scope=" FROM characters.scenes s WHERE s.active=1 AND (?=1 OR s.state!='SKIPPED')"+owned+(persona==null?" AND (s.origin='MANUAL' OR s.qualified=1)":"")+(persona==null&&suggestedOnly?" AND s.state='SUGGESTED'":"");
         int visibleSkipped=persona!=null||includeSkipped?1:0;long total;
         try(var q=c.prepareStatement("SELECT count(*)"+scope)){
             q.setInt(1,visibleSkipped);if(persona!=null)q.setString(2,persona);try(var r=q.executeQuery()){total=r.getLong(1);}
         }
         String count=persona==null?"(SELECT count(*) FROM characters.scene_members m WHERE m.scene_id=s.id)":"(SELECT count(*) FROM characters.scene_members m JOIN characters.memory_assignments a ON a.source_id=m.source_id AND a.source_line=m.source_line WHERE m.scene_id=s.id AND a.persona_id=?)";
         var entries=new ArrayList<SceneSummary>();
-        try(var q=c.prepareStatement("SELECT s.*,"+count+" AS visible_count"+scope+" ORDER BY s.created_at,s.id LIMIT ? OFFSET ?")){
+        try(var q=c.prepareStatement("SELECT s.*,"+count+" AS visible_count"+scope+listOrder(persona,"s.")+" LIMIT ? OFFSET ?")){
             int at=1;if(persona!=null)q.setString(at++,persona);q.setInt(at++,visibleSkipped);if(persona!=null)q.setString(at++,persona);q.setInt(at++,limit);q.setInt(at,offset);
-            try(var r=q.executeQuery()){while(r.next())entries.add(new SceneSummary(r.getString("id"),persona==null?r.getString("title"):"Assigned scene",persona==null?r.getString("location"):"",persona==null?SceneState.valueOf(r.getString("state")):SceneState.SUGGESTED,r.getLong("visible_count"),r.getLong("revision")));}
+            try(var r=q.executeQuery()){while(r.next())entries.add(new SceneSummary(r.getString("id"),persona==null?r.getString("title"):"Assigned scene",persona==null?r.getString("location"):"",persona==null?SceneState.valueOf(r.getString("state")):SceneState.SUGGESTED,r.getLong("visible_count"),r.getLong("revision"),persona==null?SceneOrigin.valueOf(r.getString("origin")):SceneOrigin.MANUAL));}
         }
         return new ScenePage(entries,total,offset,limit);
     }
+    private static String listOrder(String persona,String prefix){
+        return " ORDER BY "+(persona==null?"CASE WHEN "+prefix+"state='SUGGESTED' THEN 0 ELSE 1 END,":"")+prefix+"created_at"+(persona==null?" DESC":"")+","+prefix+"id";
+    }
     private static SceneSummary summary(SceneProjection.Header h,String persona,long count){
-        return new SceneSummary(h.id(),persona==null?h.title():"Assigned scene",persona==null?h.location():"",persona==null?h.state():SceneState.SUGGESTED,count,h.revision());
+        return new SceneSummary(h.id(),persona==null?h.title():"Assigned scene",persona==null?h.location():"",persona==null?h.state():SceneState.SUGGESTED,count,h.revision(),persona==null&&h.automatic()?SceneOrigin.AUTO:SceneOrigin.MANUAL);
     }
     private static String memberScope(String persona){
         return persona==null?"":" AND EXISTS(SELECT 1 FROM characters.memory_assignments a WHERE a.source_id=m.source_id AND a.source_line=m.source_line AND a.persona_id=?)";
@@ -125,22 +132,23 @@ public final class SqliteSceneRepository implements SceneRepository {
         var snapshot=participants==null?null:List.copyOf(participants);
         return write(c->{var h=expect(c,id,expected);var rows=SceneProjection.members(c,id,null);
             new SceneSummary(id,title,location,SceneState.CONFIRMED,rows.size(),h.revision());var chosen=checkedParticipants(c,snapshot);
-            if(h.state()==SceneState.CONFIRMED&&h.participantsReviewed()&&h.title().equals(title)&&h.location().equals(location)&&new HashSet<>(chosen).equals(new HashSet<>(SceneProjection.manualParticipants(c,id))))return SceneProjection.detail(c,h,null,rows);
-            header(c,id,title,location,SceneState.CONFIRMED,Math.addExact(h.revision(),1),true);participants(c,id,chosen);
+            if(!h.automatic()&&h.state()==SceneState.CONFIRMED&&h.participantsReviewed()&&h.title().equals(title)&&h.location().equals(location)&&new HashSet<>(chosen).equals(new HashSet<>(SceneProjection.manualParticipants(c,id))))return SceneProjection.detail(c,h,null,rows);
+            header(c,id,title,location,SceneState.CONFIRMED,Math.addExact(h.revision(),1),true,false,true);participants(c,id,chosen);
             return SceneProjection.detail(c,SceneProjection.header(c,id,true),null,rows);
         });
     }
     @Override public void skipScene(String id,long expected)throws Exception{
-        write(c->{var h=expect(c,id,expected);if(h.state()!=SceneState.SKIPPED)header(c,id,h.title(),h.location(),SceneState.SKIPPED,Math.addExact(h.revision(),1),h.participantsReviewed());return null;});
+        write(c->{var h=expect(c,id,expected);if(h.state()!=SceneState.SKIPPED||h.automatic())header(c,id,h.title(),h.location(),SceneState.SKIPPED,Math.addExact(h.revision(),1),h.participantsReviewed(),false,true);return null;});
     }
     @Override public List<String> splitScene(String id,long expected,MessageReference firstOfSecond)throws Exception{
         Objects.requireNonNull(firstOfSecond);
-        return write(c->{var h=expect(c,id,expected);var refs=SceneProjection.refs(SceneProjection.members(c,id,null));int at=refs.indexOf(firstOfSecond);
+        return write(c->{var h=expect(c,id,expected);var rows=SceneProjection.members(c,id,null);var refs=SceneProjection.refs(rows);int at=refs.indexOf(firstOfSecond);
             if(at<=0)throw new IllegalArgumentException("Split must start at an existing nonfirst member");
+            if(!SceneProjection.assessment(c,rows.subList(0,at)).eligible()||!SceneProjection.assessment(c,rows.subList(at,rows.size())).eligible())throw new SceneCreationException(SceneCreationException.Reason.MINIMUM);
             var manual=h.participantsReviewed()?SceneProjection.manualParticipants(c,id):List.<SceneParticipant>of();
             retire(c,h,true);var result=new ArrayList<String>();
             for(int part=0;part<2;part++){String next=UUID.randomUUID().toString();
-                header(c,next,h.title(),h.location(),SceneState.CONFIRMED,1,h.participantsReviewed());
+                header(c,next,h.title(),h.location(),SceneState.CONFIRMED,1,h.participantsReviewed(),false,true);
                 members(c,next,part==0?refs.subList(0,at):refs.subList(at,refs.size()));if(h.participantsReviewed())participants(c,next,manual);result.add(next);
             }
             return List.copyOf(result);
@@ -150,26 +158,29 @@ public final class SqliteSceneRepository implements SceneRepository {
         if(Objects.equals(first,second))throw new IllegalArgumentException("Choose two different scenes");
         return write(c->{var a=expect(c,first,firstRevision);var b=expect(c,second,secondRevision);
             var refs=new TreeSet<MessageReference>(Comparator.comparing(MessageReference::sourceId).thenComparingLong(MessageReference::sourceLine));
-            refs.addAll(SceneProjection.refs(SceneProjection.members(c,first,null)));refs.addAll(SceneProjection.refs(SceneProjection.members(c,second,null)));
-            if(refs.size()>SceneGrouper.MAX_MESSAGES)throw new IllegalArgumentException("Combined scene exceeds 5000 observations");
+            var observations=new HashMap<MessageReference,SceneObservation>();
+            for(var row:concatObservations(SceneProjection.members(c,first,null),SceneProjection.members(c,second,null))){var ref=MessageReference.of(row.message());refs.add(ref);observations.put(ref,row);}
+            if(refs.size()>SceneGrouper.MAX_MESSAGES)throw new SceneCreationException(SceneCreationException.Reason.TOO_LARGE);
+            if(!SceneProjection.assessment(c,refs.stream().map(observations::get).toList()).eligible())throw new SceneCreationException(SceneCreationException.Reason.MINIMUM);
             boolean reviewed=a.participantsReviewed()||b.participantsReviewed();var chosen=new LinkedHashMap<String,SceneParticipant>();
             if(reviewed)for(var p:concat(SceneProjection.detail(c,a,null).participants(),SceneProjection.detail(c,b,null).participants())){
                 String key=participantKey(p);var prior=chosen.get(key);chosen.put(key,prior!=null&&prior.role()!=p.role()?new SceneParticipant(p.identityId(),p.name(),EncounterRole.UNCERTAIN,p.perspectivePersonaId()):p);
             }
             var manual=reviewed?checkedParticipants(c,new ArrayList<>(chosen.values())):List.<SceneParticipant>of();
             retire(c,a,true);retire(c,b,true);String id=UUID.randomUUID().toString();
-            header(c,id,a.title().equals(b.title())?a.title():shorten(a.title()+" + "+b.title(),160),a.location().equals(b.location())?a.location():"",SceneState.CONFIRMED,1,reviewed);
+            header(c,id,a.title().equals(b.title())?a.title():shorten(a.title()+" + "+b.title(),160),a.location().equals(b.location())?a.location():"",SceneState.CONFIRMED,1,reviewed,false,true);
             members(c,id,new ArrayList<>(refs));if(reviewed)participants(c,id,manual);return id;
         });
     }
+    private static List<SceneObservation> concatObservations(List<SceneObservation> first,List<SceneObservation> second){var result=new ArrayList<>(first);result.addAll(second);return result;}
     private static List<SceneParticipant> concat(List<SceneParticipant> first,List<SceneParticipant> second){var result=new ArrayList<>(first);result.addAll(second);return result;}
     private static SceneProjection.Header expect(Connection c,String id,long expected)throws SQLException{
-        if(expected<1)throw new IllegalArgumentException("Invalid scene revision");var h=SceneProjection.header(c,id,true);if(h.revision()!=expected)throw new SQLException("Scene changed; reload before editing");return h;
+        if(expected<1)throw new IllegalArgumentException("Invalid scene revision");var h=SceneProjection.header(c,id,true);SceneProjection.visible(h,null);if(h.revision()!=expected)throw new SQLException("Scene changed; reload before editing");return h;
     }
-    private static void header(Connection c,String id,String title,String location,SceneState state,long revision,boolean reviewed)throws SQLException{
+    private static void header(Connection c,String id,String title,String location,SceneState state,long revision,boolean reviewed,boolean automatic,boolean qualified)throws SQLException{
         String now=Instant.now().toString();
-        try(var q=c.prepareStatement("INSERT INTO characters.scenes VALUES (?,?,?,?,1,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,location=excluded.location,state=excluded.state,active=1,revision=excluded.revision,participants_reviewed=excluded.participants_reviewed,updated_at=excluded.updated_at")){
-            q.setString(1,id);q.setString(2,title);q.setString(3,location);q.setString(4,state.name());q.setLong(5,revision);q.setInt(6,reviewed?1:0);q.setString(7,now);q.setString(8,now);q.executeUpdate();
+        try(var q=c.prepareStatement("INSERT INTO characters.scenes VALUES (?,?,?,?,1,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,location=excluded.location,state=excluded.state,active=1,revision=excluded.revision,participants_reviewed=excluded.participants_reviewed,updated_at=excluded.updated_at,origin=excluded.origin,qualified=excluded.qualified")){
+            q.setString(1,id);q.setString(2,title);q.setString(3,location);q.setString(4,state.name());q.setLong(5,revision);q.setInt(6,reviewed?1:0);q.setString(7,now);q.setString(8,now);q.setString(9,automatic?"AUTO":"MANUAL");q.setInt(10,qualified?1:0);q.executeUpdate();
         }
     }
     private static void members(Connection c,String id,List<MessageReference> refs)throws SQLException{
@@ -180,8 +191,8 @@ public final class SqliteSceneRepository implements SceneRepository {
         }
     }
     private static void retire(Connection c,SceneProjection.Header h,boolean manual)throws SQLException{
-        try(var q=c.prepareStatement("UPDATE characters.scenes SET active=0,state=?,revision=?,updated_at=? WHERE id=?")){
-            q.setString(1,manual?SceneState.CONFIRMED.name():h.state().name());q.setLong(2,Math.addExact(h.revision(),1));q.setString(3,Instant.now().toString());q.setString(4,h.id());q.executeUpdate();
+        try(var q=c.prepareStatement("UPDATE characters.scenes SET active=0,state=?,revision=?,updated_at=?,origin=? WHERE id=?")){
+            q.setString(1,manual?SceneState.CONFIRMED.name():h.state().name());q.setLong(2,Math.addExact(h.revision(),1));q.setString(3,Instant.now().toString());q.setString(4,manual?"MANUAL":h.automatic()?"AUTO":"MANUAL");q.setString(5,h.id());q.executeUpdate();
         }
         try(var q=c.prepareStatement("DELETE FROM characters.scene_members WHERE scene_id=?")){q.setString(1,h.id());q.executeUpdate();}
     }

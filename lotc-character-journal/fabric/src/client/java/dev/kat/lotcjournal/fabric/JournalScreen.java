@@ -14,6 +14,8 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.client.input.KeyEvent;
+import org.lwjgl.glfw.GLFW;
 import net.fabricmc.loader.api.FabricLoader;
 
 /** Phase 1 shell. Reads snapshots only; SQL and backup work run in JournalService. */
@@ -28,6 +30,9 @@ public final class JournalScreen extends Screen {
     private final LiveCaptureService live;
     private final LiveChatAdapter liveAdapter;
     private EditBox search;
+    private String searchQuery="",searchFeedback="";
+    private int searchDelay;
+    private long searchRequest;
     private Button layout;
     private Button backup;
     private Button importLogs, transcripts, characters, memories, capture, scenesButton;
@@ -54,8 +59,10 @@ public final class JournalScreen extends Screen {
         int panel = Math.min(340, width - 32);
         int left = (width - panel) / 2;
         search = new EditBox(font, left, 55, panel, 20, Component.literal("Search characters"));
-        search.setHint(Component.literal("Search names / aliases, then Characters"));
+        search.setHint(Component.literal("Search characters — press Enter"));
         search.setMaxLength(120);
+        search.setValue(searchQuery);
+        search.setResponder(value->{searchQuery=value;if(!savingLayout&&!creatingBackup&&!loadingTranscripts)operation="";searchRequest++;searchDelay=3;searchFeedback=value.isBlank()?"":"Searching characters...";});
         addRenderableWidget(search);
         importLogs = addRenderableWidget(Button.builder(Component.literal("Log import"), button ->
             minecraft.setScreen(new LogImportScreen(this, importer, batches, watcher, FabricLoader.getInstance().getGameDir(), live, identities, scenes)))
@@ -70,7 +77,7 @@ public final class JournalScreen extends Screen {
             }));
         }).bounds(left + panel / 2 + 4, 115, panel / 2 - 4, 20).build());
         characters = addRenderableWidget(Button.builder(Component.literal("Characters"), button ->
-            minecraft.setScreen(new IdentityScreen(this, identities, search.getValue(), importer))).bounds(left,140,panel/2-4,20).build());
+            openCharacters()).bounds(left,140,panel/2-4,20).build());
         memories = addRenderableWidget(Button.builder(Component.literal("Persona memories"), button ->
             minecraft.setScreen(new PersonaScreen(this, identities, importer))).bounds(left+panel/2+4,140,panel/2-4,20).build());
         capture = addRenderableWidget(Button.builder(Component.literal("Pause live capture"), button -> {
@@ -106,10 +113,27 @@ public final class JournalScreen extends Screen {
         if(scenes!=null)scenesButton=addRenderableWidget(Button.builder(Component.literal("Scenes"),button->minecraft.setScreen(new SceneScreen(this,scenes,identities))).bounds(left+panel/2+4,190,panel/2-4,20).build());
         addRenderableWidget(Button.builder(Component.literal("Done"), button -> onClose())
             .bounds(left, height - 24, panel, 20).build());
+        if(!searchQuery.isBlank())searchDelay=1;
         tick();
     }
 
+    private void openCharacters(){minecraft.setScreen(new IdentityScreen(this,identities,searchQuery,importer));}
+    private void lookupCharacters(){
+        String query=searchQuery;long token=++searchRequest;
+        if(query.isBlank()){searchFeedback="";return;}
+        identities.identities(query).whenComplete((values,error)->minecraft.execute(()->{
+            if(token!=searchRequest||minecraft.screen!=this||!query.equals(searchQuery))return;
+            searchFeedback=error!=null?"Search unavailable; Enter opens character search":values.isEmpty()?"No characters found — Enter to browse":(values.size()==1000?"First 1000 matches":values.size()+" character match"+(values.size()==1?"":"es"))+" — Enter to view";
+        }));
+    }
+    @Override public boolean keyPressed(KeyEvent event){
+        if((event.key()==GLFW.GLFW_KEY_ENTER||event.key()==GLFW.GLFW_KEY_KP_ENTER)&&search!=null&&search.isFocused()&&characters.active){openCharacters();return true;}
+        return super.keyPressed(event);
+    }
+    @Override public void onClose(){searchRequest++;super.onClose();}
+
     @Override public void tick() {
+        if(searchDelay>0&&--searchDelay==0)lookupCharacters();
         var state = service.snapshot();
         boolean ready = state.status() == JournalSnapshot.Status.READY;
         layout.active = ready && !savingLayout && !creatingBackup;
@@ -129,7 +153,7 @@ public final class JournalScreen extends Screen {
         graphics.drawCenteredString(font, title, width / 2, 20, 0xFFE5E7EB);
         graphics.drawCenteredString(font, "Journal " + version + " | MC 1.21.11", width / 2, 36, 0xFF9CA3AF);
         int left = (width - Math.min(340, width - 32)) / 2;
-        graphics.drawString(font, font.plainSubstrByWidth(operation.isBlank() ? service.snapshot().message() : operation, Math.min(340, width-32)), left, 87, 0xFFD1D5DB);
+        graphics.drawString(font, font.plainSubstrByWidth(visibleStatus(), Math.min(340, width-32)), left, 87, 0xFFD1D5DB);
         var state = live.snapshot();
         String captureStatus = "Live: " + state.state() + " | Saved " + state.saved() + " | Pending " + state.pending();
         if (state.errorCode() != null) captureStatus = "Live error: " + state.errorCode();
@@ -137,10 +161,14 @@ public final class JournalScreen extends Screen {
         graphics.drawString(font, font.plainSubstrByWidth(captureStatus, Math.min(340, width-32)), left, 100, 0xFF93C5FD);
     }
 
+    private String visibleStatus(){
+        if(!operation.isBlank())return operation;
+        return searchQuery.isBlank()?service.snapshot().message():searchFeedback;
+    }
     @Override public Component getNarrationMessage() {
         var value = live.snapshot();
         return Component.literal(title.getString() + ". Live " + value.state() + "; saved " + value.saved()
-            + "; pending " + value.pending() + "; " + operation);
+            + "; pending " + value.pending() + "; " + visibleStatus());
     }
     @Override public boolean isPauseScreen() { return false; }
 }

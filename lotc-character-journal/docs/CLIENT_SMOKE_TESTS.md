@@ -56,8 +56,9 @@ SQLite split, historical/live character discovery, filtered related dialogue,
 paired backups, persistent reversible link denials, durable message-tag reviews and explicit persona
 isolation. The tag-review stage includes multitag drafts, resize, save/reject/restore,
 a simulated newer review revision, stale-save rejection and explicit reload. The scene-review stage adds saved metadata/participants, resize, exact-message
-split, confirmed combine, durable skip, restart and paired-backup checks. Writers
-require 26 stages; readers require 27 including restart evidence. Worker liveness at shutdown remains a strict
+split, confirmed combine, durable skip, restart and paired-backup checks. The main-search and identity-review-queue stages check feedback/Enter, long-query
+resize, and durable advancement while a controlled synthetic write lock keeps Deny
+pending during resize. Writers require 28 stages; readers require 29 including restart evidence. Worker liveness at shutdown remains a strict
 assertion, separate from Gradle process exit.
 
 Each suite run has a unique run ID. Graphics, development, and packaged game
@@ -166,3 +167,25 @@ then reopens/filters/selects another character and checks no duplicate identitie
 or personas were created. Reader JVMs reuse persisted records. Existing Assign and
 persona memory assertions follow. Lossless full-size/escaped alias form handling
 is separately covered by application tests. Native schema and parser policy stay 8/4.
+
+
+## Cached offline environments
+
+`--offline` forwards Gradle offline mode to preparation and every launch. It changes
+no assertion, timeout, origin or shutdown requirement. Use only with the exact
+pinned dependencies and game assets already cached. Missing dependencies fail;
+compilation and graphics/environment failures remain distinct from application
+assertions. Example: `python3 scripts/client_smoke.py --offline --eula-accepted`.
+
+Alpha.13 scene fixtures now contain two 20-message/two-actor windows: clear timing
+and a 302-second internal gap. The suite asserts default auto-confirmation, low
+confidence priority, Suggested-only filtering,20→10+10→20 membership, rejected
+undersized split with intact data, manual skip/restart and persona projection.
+The old 50-message/one-actor fixture no longer qualifies as a shared automatic scene
+under the user's new minimum; all its original import/favorite/tag assertions remain.
+
+The alpha.13 restart audit keeps the original62-observation source assertion exact
+by content hash, independently requires40 scene-fixture observations and0 undone
+batch observations, and requires historical total62+40. This replaces only the
+obsolete global62 count after adding that separate test source; original parser
+channels, payloads, checkpoints, favorites and persona/identity expectations remain.

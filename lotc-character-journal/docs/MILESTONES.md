@@ -256,6 +256,16 @@ Identity decisions are reversible without losing source dialogue; the reviewed p
 
 ## Phase 4 — Encounters, transcripts, and statistics
 
+Alpha.13 user refinements: shared automatic/new split/combine scenes need 10 RP
+messages and 2 actual actors; existing reviewed small scenes survive. Clear automatic
+groups default Confirmed, low-confidence groups Suggested. Suggested-first/newest
+ordering and a Suggested-only filter complement Skipped review. AUTO/MANUAL origin
+keeps explicit decisions fixed while automatic confirmations can be reassessed.
+Neutral windows preserve assigned persona evidence without leaking shared confidence.
+Identity review now queues shared name/alias candidates and advances on durable
+Confirm/Deny; main search provides match feedback and Enter navigation. See
+[USER_TEST_ALPHA13.md](USER_TEST_ALPHA13.md) for focused acceptance.
+
 Alpha.12 implements conservative deterministic suggestions, scene browser,
 post-import review/skip access, exact participant corrections, manual location,
 searchable/scrollable scene dialogue, split/combine, configurable inactivity gap,

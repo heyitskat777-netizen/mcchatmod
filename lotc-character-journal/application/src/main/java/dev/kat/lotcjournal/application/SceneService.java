@@ -21,6 +21,9 @@ public final class SceneService implements AutoCloseable {
     public CompletableFuture<ScenePage> scenes(String persona,boolean skipped,String query,int offset,int limit) {
         return submit(()->repository.scenes(persona,skipped,query,offset,limit));
     }
+    public CompletableFuture<ScenePage> scenes(String persona,boolean skipped,boolean suggestedOnly,String query,int offset,int limit) {
+        return submit(()->repository.scenes(persona,skipped,suggestedOnly,query,offset,limit));
+    }
     public CompletableFuture<SceneDetail> scene(String id,String persona) {return submit(()->repository.scene(id,persona));}
     public CompletableFuture<TranscriptPage> transcript(String id,String persona,String query,int offset,int limit) {
         return submit(()->repository.transcript(id,persona,query,offset,limit));

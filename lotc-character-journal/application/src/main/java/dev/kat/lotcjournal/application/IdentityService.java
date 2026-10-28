@@ -24,6 +24,8 @@ public final class IdentityService implements AutoCloseable {
     public CompletableFuture<TranscriptPage> transcript(String persona,String query,Channel channel,boolean favorites,int offset,int limit) {
         return submit(() -> repository.memoryTranscript(persona,query,channel,favorites,offset,limit));
     }
+    public CompletableFuture<IdentityReviewData> reviewData() {return submit(repository::reviewData);}
+    public CompletableFuture<IdentityReviewBatch> reviewQueue(IdentityReviewData snapshot) {return submit(()->IdentityReviewQueue.pending(snapshot,100));}
     public CompletableFuture<List<IdentityMerge>> merges() { return submit(repository::merges); }
     public CompletableFuture<TranscriptPage> characterTranscript(String identity,String query,Channel channel,CharacterEvidenceKind kind,boolean favorites,int offset,int limit) {
         return submit(() -> repository.characterTranscript(identity,query,channel,kind,favorites,offset,limit));

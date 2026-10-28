@@ -245,7 +245,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                     if(oldVersion<7) {statement.execute(LIVE_SESSIONS_SQL);statement.execute(LIVE_EVENTS_SQL);}
                     if(oldVersion==8) IdentitySchema.migrate(connection); else IdentitySchema.create(connection);
                     SplitJournalFiles.createPair(connection);
-                    statement.execute("PRAGMA main.user_version=9");statement.execute("PRAGMA characters.user_version=4");
+                    statement.execute("PRAGMA main.user_version=9");statement.execute("PRAGMA characters.user_version=5");
                     CharacterIndex.reindex(connection);
                     validateSchema(connection,9);validateCharacters(connection);verifyIntegrity(connection);SplitJournalFiles.integrity(connection,"characters");
                     connection.commit();
@@ -253,7 +253,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 finally {connection.setAutoCommit(true);}
             }
             NativePairBackup.verifyForAdoption(connection,database,characters);
-            if(version(connection,"characters")<4) upgradeCharacters(connection);
+            if(version(connection,"characters")<5) upgradeCharacters(connection);
             SplitJournalFiles.validatePair(connection);
             validateSchema(connection,9);validateCharacters(connection);verifyIntegrity(connection);SplitJournalFiles.integrity(connection,"characters");
             if(!startupRecovered) {
@@ -273,7 +273,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
 
     private void upgradeCharacters(Connection connection) throws Exception {
         int previousVersion=version(connection,"characters");
-        Path backup=database.getParent().resolve("backups").resolve(database.getFileName()+"-pre-characters4-"+UUID.randomUUID()+".sqlite");
+        Path backup=database.getParent().resolve("backups").resolve(database.getFileName()+"-pre-characters5-"+UUID.randomUUID()+".sqlite");
         NativePairBackup.pair(database,characters,backup);
         try(var saved=SplitJournalFiles.openCompatible(backup,SplitJournalFiles.charactersFor(backup))) {
             validateSchema(saved,9);validateCharacters(saved);verifyIntegrity(saved);SplitJournalFiles.integrity(saved,"characters");
@@ -282,8 +282,8 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
         try {
             if(previousVersion<2) IdentitySeparations.create(connection);
             if(previousVersion<3) MessageTagReviews.create(connection);
-            SceneSchema.create(connection);
-            try(var s=connection.createStatement()) {s.execute("PRAGMA characters.user_version=4");}
+            if(previousVersion<4) SceneSchema.create(connection); else SceneSchema.upgradeOrigin(connection);
+            try(var s=connection.createStatement()) {s.execute("PRAGMA characters.user_version=5");}
             validateSchema(connection,9);validateCharacters(connection);SplitJournalFiles.integrity(connection,"characters");
             connection.commit();
         } catch(Exception failure) {connection.rollback();throw failure;}

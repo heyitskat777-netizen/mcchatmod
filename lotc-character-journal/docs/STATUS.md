@@ -1,3 +1,135 @@
+# Current work — October 28, 2026: scene minimums, confidence, review queue and search
+
+User requests: minimum 10 RP messages and 2 participants to create shared scenes;
+automatically confirm clear groups, keep low-confidence groups Suggested and list
+those first with a Suggested filter; advance identity review after Confirm/Deny;
+make the home search visibly useful. Branch `feature/scene-review-refinements`
+continues `c3d9ee1`, target Fabric/Minecraft 1.21.11/Java 21; alpha.13. Main unchanged.
+
+Implementation: shared minimum counts distinct source coordinates and resolved
+SPEAKER/ACTION actors, excluding mentions and inherited silent-attendee lists.
+High confidence requires one resolved actor per message, complete common-context
+timing, gaps no greater than 300s and no more than 8 actors; other eligible groups
+stay Suggested with reasons. Shared ordering is Suggested first, then newest within
+status; Suggested-only combines with search/skip. New splits require 10/2 in each
+half and combine requires 10/2 in the union. Rejections leave editors reusable.
+Existing reviewed small scenes remain. Explicit Save/Skip promotes AUTO to MANUAL,
+even unchanged Save; automatic confirmations remain reassessable.
+
+Characters schema 5 records origin and shared qualification, with exact prior 1–4
+validation and verified paired pre-upgrade backups. Archive 9/parser policy 4 stay
+unchanged. Neutral unqualified windows remain internal so shared actor edits cannot
+remove or expose a persona's assigned evidence; persona views hide shared status,
+origin/assessment and filters. Default home scene open refreshes off-thread before
+listing. Debouncing/loading hides stale rows and narration, including scope changes.
+
+Identity queue uses shared normalized saved names/aliases, collapsed confirmed
+components and rooted denial exclusions; it does not propose every unrelated pair
+or use account observations. Full queue metadata is one redacted storage snapshot,
+independent of the 1000-character browser cap. Batches hold 100 candidates plus a
+more flag and exact matching-name hints. Durable decisions advance the queue after
+success; failures retain the chosen pair, Undo restores eligible candidates and
+resize preserves pending decisions. Main search provides debounced match feedback,
+Enter navigation and retained long queries; operation/search feedback sequencing
+keeps fresh failures visible.
+
+Native build/storage, verification and read-only review agents were available and
+completed their work. Coordinator owns domain/application/Fabric/client assertions,
+docs and integration. Reviewer findings on resize advancement, search restoration,
+operation feedback and stale scope rows were fixed. Source/knowledge rules were
+preserved; no assertion or time budget was weakened.
+
+## Checks so far
+
+- Initial online full build failed during Loom configuration in 5s: environment
+  proxy CONNECT 403 to maven.fabricmc.net, before any compilation/test failure.
+- Correct cached Fabric API 0.141.6+1.21.11 POM SHA1 matches its Gradle cache key
+  `739a20baafcaed1258c21152e55ad138d5b3b7dd`. Copied that same 10363-byte POM to
+  Loom's separate cache; no versions or repository configuration changed.
+- `./gradlew -PcoreOnly check --offline --no-daemon --console=plain`: PASS 18s.
+- `./gradlew --offline check :fabric:build :fabric:prepareClientSmoke --no-daemon --console=plain`:
+  full passes 17s, 12s, 22s and 11s during integration; final narration preparation passed; fixture-audit preparation pending.
+- Latest core XML: **352 tests, 0 failures/errors/skips** (domain 27, application 22,
+  parsing 116, ingestion 58, storage 129), including 19 new policy/queue/storage cases.
+  Existing scene fixtures expanded to qualifying 20-message/two-actor groups while
+  retaining their original privacy/undo/backup/rollback invariants.
+- `python3 -m unittest discover -s scripts -p 'test_*.py' -v`: **15 PASS in 1.120s**.
+  New offline contract proves preparation and launch receive --offline while absent
+  reports still fail. Offline mode changes no assertion, deadline or isolation.
+- Packaged metadata and all six runtime JAR dependencies verified.
+
+Actual isolated suite uses prior EULA acceptance, synthetic local worlds and no
+live LoTC. `alpha13-1`: graphics PASS 25.1s, development writer FAIL 35.9s on stale
+scene result activation during persona navigation. Search/queue stages passed.
+Production now hides stale counts, rows, tooltips and entry narration during loading
+and debounce. `alpha13-2`: graphics PASS 23.7s, development writer FAIL 55.7s on the new
+undersized split's accessibility notice wait. Stored MANUAL scene revision 2 and all
+20 refs remained exact; the visual notice existed but narration omitted it when
+entries were present. Narration now includes the visible notice. Later phases were
+blocked in both failed runs. These are application/UI regressions, not graphics
+failures. Evidence remains under their respective client-smoke/evidence directories.
+
+`alpha13-3`: graphics PASS25.7s, development writer PASS38.0s (**28 assertion
+stages**), reader FAIL26.6s at batch-workflow before later reader stages. Reassessment
+was performed before another launch: new scene fixture deliberately adds40 historical
+observations, while an old global restart assertion still expected62. Inspection of
+the isolated database independently confirms original source62, scene source40,
+undone batch source0, one removed coordinate and UNDONE batch. All reader constants
+were audited: original-source channel/payload/cursor counts, filtered Visitor views,
+favorites, four identities, two personas/memories and tag/denial counts are unchanged.
+The correction preserves the exact original62 assertion by content hash, separately
+requires scene40 and undone0, and checks global historical total62+40. Writer62/63
+checks remain unchanged. This is a fixture-contract correction, not a production
+count adjustment. No assertion was removed or budget increased.
+
+This fulfills the three-run reassessment rule: diagnosis and persisted-source audit
+replace blind full-suite repetition. Next validation is an isolated development
+write/read run first, then a separate packaged write/read run, both with graphics
+preflight and the same assertions. Build/verification/review agents completed main
+work; their final optional restart-audit turns hit usage limits, so coordinator
+performed this audit directly. No additional native agents were simulated.
+
+## Final verified local result
+
+Final integrated-6 command above **PASS in13s**,34 tasks(10 executed/24 up-to-date), after
+all production fixes and fixture audit. **352 core tests and15 runner tests pass**;
+Fabric compilation/build, architecture and packaged dependencies pass. Production
+has not changed after this preparation. Both separated suites passed unchanged
+300-second launch limits and all required report/launch/shutdown contracts:
+
+| Run | Phase | Seconds | Result |
+| --- | --- | --- | --- |
+ | alpha13-dev-audited | graphics-preflight | 25.4 | PASSED |
+| alpha13-dev-audited | development-write | 36.9 | PASSED |
+| alpha13-dev-audited | development-read | 34.6 | PASSED |
+| alpha13-packaged-audited | graphics-preflight | 23.8 | PASSED |
+| alpha13-packaged-audited | packaged-write | 43.0 | PASSED |
+| alpha13-packaged-audited | packaged-read | 36.2 | PASSED |
+
+Writers passed28 assertion stages, readers29. Tests include default auto-confirmation,
+low-confidence priority and Suggested-only filtering; actual20→10+10→20 split/combine;
+rejected1+19 split retaining the20 saved coordinates; manual skip/restart/reimport;
+exact source/favorite/persona digests; long-query/Enter home search; queue deny
+advancement while a synthetic archive lock guarantees resize during the pending
+write; confirm/undo, rooted denials and completion. Packaged runs load the remapped
+mod, SQLite and all nested modules from JARs. Shutdown includes scene/identity worker
+liveness. Queue, main-search and small-editor packaged screenshots were inspected;
+they supplement explicit assertions. JSON/JUnit/logs/screenshots and separate
+launch/shutdown witnesses are in each run's client-smoke/evidence folder.
+
+Local artifact: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.13.jar`, **14,801,455bytes**,
+SHA-256 `bf72ba886417c9a87c23209efda9ef38e0685a12118bbddeab7b43d13e980d29`. Distribution ZIP integrity is checked separately.
+[Machine-readable evidence](verification/core-results.json).
+
+The documented three-run reassessment was completed before the audited passes;
+no assertion, acceptance criterion or budget was relaxed. Publication follows below.
+See [USER_TEST_ALPHA13.md](USER_TEST_ALPHA13.md) for focused acceptance.
+Large-archive/queue latency and concurrent independent global-tag interpretation
+versioning remain limitations; actual scene correctness is a user test, not a
+synthetic confidence accuracy claim. Publication follows verified checks.
+
+---
+
 # Current work — October 27, 2026: Phase 3 linked history and Phase 4 scenes
 
 User authorizes proceeding through Phase 4. Branch `feature/scenes` continues
