@@ -15,7 +15,7 @@ import java.util.UUID;
 /** One attached connection is the only transaction boundary for a native storage pair. */
 final class SplitJournalFiles {
     static final String PAIR_SQL = "CREATE TABLE storage_pair (id INTEGER PRIMARY KEY CHECK(id=1),pair_uuid TEXT NOT NULL,generation TEXT NOT NULL)";
-    static final int ARCHIVE_VERSION = 9, CHARACTERS_VERSION = 3;
+    static final int ARCHIVE_VERSION = 9, CHARACTERS_VERSION = 4;
     private SplitJournalFiles() {}
     static Path charactersFor(Path archive) { return archive.resolveSibling(archive.getFileName() + ".characters.sqlite"); }
     static Path manifestFor(Path archive) { return archive.resolveSibling(archive.getFileName() + ".pair.json"); }

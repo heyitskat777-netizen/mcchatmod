@@ -3,6 +3,7 @@ package dev.kat.lotcjournal.fabric;
 import dev.kat.lotcjournal.domain.Channel;
 import dev.kat.lotcjournal.domain.CharacterEvidenceKind;
 import dev.kat.lotcjournal.application.IdentityService;
+import dev.kat.lotcjournal.application.SceneService;
 import dev.kat.lotcjournal.domain.MessageReference;
 import java.util.Set;
 import dev.kat.lotcjournal.domain.ImportSource;
@@ -32,6 +33,10 @@ public final class TranscriptScreen extends Screen {
     private final IdentityService identities;
     private final String personaId;
     private final String characterId;
+    private SceneService scenes;
+    private String sceneId;
+    private long sceneRevision;
+    private boolean confirmSplit,sceneStale;
     private static final CharacterEvidenceKind[] EVIDENCE = {null, CharacterEvidenceKind.SPEAKER, CharacterEvidenceKind.ACTION, CharacterEvidenceKind.MENTION};
     private int evidenceIndex;
     private final LogImportService importer;
@@ -57,10 +62,15 @@ public final class TranscriptScreen extends Screen {
         this.parent = parent; this.importer = importer; this.sources = List.copyOf(sources);
         this.identities = identities; this.personaId = personaId; this.characterId = characterId;
     }
+    public TranscriptScreen(SceneDetailScreen parent, SceneService scenes, IdentityService identities, String sceneId, String personaId, long revision) {
+        this(parent, null, List.of(), identities, personaId, null);
+        this.scenes=scenes;this.sceneId=sceneId;this.sceneRevision=revision;channelIndex=1;
+    }
     @Override protected void init() {
         int panel = Math.min(600, width - 32), left = (width - panel) / 2;
         Anchor anchor = pane == null ? null : pane.anchor();
         source = addRenderableWidget(Button.builder(Component.literal("All sources"), button -> {
+            if (scenes != null) { splitScene(); return; }
             if (characterId != null) evidenceIndex = (evidenceIndex + 1) % EVIDENCE.length;
             else sourceIndex = sourceIndex + 1 >= sources.size() ? -1 : sourceIndex + 1;
             offset = 0; load(false);
@@ -74,12 +84,13 @@ public final class TranscriptScreen extends Screen {
         var search = new EditBox(font, left, 49, panel - 212, 20, Component.literal("Transcript search"));
         search.setMaxLength(200); search.setHint(Component.literal("Search dialogue")); search.setValue(query);
         search.setResponder(value -> { query = value; offset = 0; load(false); }); addRenderableWidget(search);
-        addRenderableWidget(Button.builder(Component.literal("Roleplay only"), button -> {
+        var rpOnly=addRenderableWidget(Button.builder(Component.literal("Roleplay only"), button -> {
             channelIndex = 1; offset = 0; load(false);
         }).bounds(left + panel - 206, 49, 100, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("UNKNOWN review"), button -> {
+        var unknownReview=addRenderableWidget(Button.builder(Component.literal("UNKNOWN review"), button -> {
             channelIndex = 2; sourceIndex = -1; offset = 0; load(false);
         }).bounds(left + panel - 100, 49, 100, 20).build());
+        rpOnly.active=unknownReview.active=scenes==null;
         int favoriteWidth=identities==null?panel/2:panel/3;
         favoritesFilter = addRenderableWidget(Button.builder(Component.literal("Favorites: All"), button -> {
             favoritesOnly = !favoritesOnly; offset = 0; load(false);
@@ -118,13 +129,13 @@ public final class TranscriptScreen extends Screen {
         pending = true; entries = List.of(); favorites = Set.of(); pane.setEntries(entries, null, false);
         notice = "Loading dialogue"; tick();
         String sourceId = sourceIndex < 0 ? null : sources.get(sourceIndex).id();
-        importer.removedRecords(sourceId).whenComplete((count, error) -> minecraft.execute(() -> {
+        if(importer!=null)importer.removedRecords(sourceId).whenComplete((count, error) -> minecraft.execute(() -> {
             if (sequence == request && error == null) {
                 removed = count;
                 if (details) pane.setEntries(entries, pane.anchor(), false);
             }
         }));
-        var pageRequest = characterId != null
+        var pageRequest = scenes != null ? scenes.transcript(sceneId,personaId,query,offset,PAGE_SIZE) : characterId != null
             ? identities.characterTranscript(characterId, query, CHANNELS[channelIndex], EVIDENCE[evidenceIndex], favoritesOnly, offset, PAGE_SIZE)
             : personaId == null
             ? importer.transcript(sourceId, query, CHANNELS[channelIndex], favoritesOnly, offset, PAGE_SIZE)
@@ -148,8 +159,18 @@ public final class TranscriptScreen extends Screen {
                 pane.setEntries(entries, anchor, bottom); tick();
             }));
     }
+    private void splitScene() {
+        if(selected==null||pending||personaId!=null)return;
+        if(!confirmSplit){confirmSplit=true;notice="Confirm splitting the saved scene before the selected message";tick();return;}
+        pending=true;long token=++request;tick();
+        scenes.splitScene(sceneId,sceneRevision,selected).whenComplete((ids,error)->minecraft.execute(()->{
+            if(token!=request||minecraft.screen!=this)return;pending=false;confirmSplit=false;
+            if(error!=null){sceneStale=true;notice="Split failed or scene changed. Return and reload saved scene";source.active=false;tick();}
+            else ((SceneDetailScreen)parent).openSplit(ids);
+        }));
+    }
     private void saveFavorite() {
-        if (pending || selected == null || !pane.selectedVisible()) return;
+        if (importer == null || pending || selected == null || !pane.selectedVisible()) return;
         MessageReference message = selected;
         boolean desired = !favorites.contains(message);
         Anchor anchor = pane.anchor();
@@ -164,30 +185,35 @@ public final class TranscriptScreen extends Screen {
     @Override public void tick() {
         previous.active = !pending && offset > 0;
         next.active = !pending && offset + (long) entries.size() < total && offset <= Integer.MAX_VALUE - PAGE_SIZE;
-        source.active = !pending && (characterId != null || (!sources.isEmpty() && personaId == null)); channel.active = !pending;
+        source.active = !pending && (scenes != null
+            ? !sceneStale && personaId==null && selected!=null && pane.selectedVisible()
+                && (offset>0 || !query.isBlank() || !selected.equals(entries.isEmpty()?null:MessageReference.of(entries.getFirst())) )
+            : characterId != null || (!sources.isEmpty() && personaId == null));
+        channel.active = !pending && scenes==null;
         detail.active = !pending;
-        favoritesFilter.active = !pending;
+        favoritesFilter.active = !pending && importer!=null;
         favoritesFilter.setMessage(Component.literal(favoritesOnly ? "Favorites: Only" : "Favorites: All"));
         favorite.active = !pending && selected != null && pane.selectedVisible();
         if (assign != null) assign.active = favorite.active;
         if (reviewTags != null) reviewTags.active = favorite.active;
         favorite.setTooltip(selected == null ? null : Tooltip.create(Component.literal("Selected source "
             + selected.sourceId().substring(0, 12) + ", line " + selected.sourceLine() + ". Click a dialogue message to select it; F or its star toggles favorite.")));
+        if(importer==null){favorite.active=false;favoritesFilter.setMessage(Component.literal("Stars in Transcripts"));}
         favorite.setMessage(Component.literal(selected != null && favorites.contains(selected) ? "Unfavorite selected" : "Favorite selected"));
         channel.setMessage(Component.literal("Channel: " + (CHANNELS[channelIndex] == null ? "ALL" : CHANNELS[channelIndex])));
-        source.setMessage(Component.literal(characterId != null ? "Evidence: " + (EVIDENCE[evidenceIndex] == null ? "All" : EVIDENCE[evidenceIndex]) : personaId != null ? "Persona-scoped memories" : sourceIndex < 0 ? "All sources (click to filter)" : font.plainSubstrByWidth(
+        source.setMessage(Component.literal(scenes!=null?(confirmSplit?"Confirm split here":"Split before selected"):characterId != null ? "Evidence: " + (EVIDENCE[evidenceIndex] == null ? "All" : EVIDENCE[evidenceIndex]) : personaId != null ? "Persona-scoped memories" : sourceIndex < 0 ? "All sources (click to filter)" : font.plainSubstrByWidth(
             sources.get(sourceIndex).label(), source.getWidth() - 12)));
     }
     @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
         super.render(graphics, mouseX, mouseY, delta);
-        graphics.drawCenteredString(font, title, width / 2, 8, 0xFFE5E7EB);
+        graphics.drawCenteredString(font, scenes==null?title:Component.literal(personaId==null?"Scene dialogue — shared archive":"Scene dialogue — assigned only"), width / 2, 8, 0xFFE5E7EB);
         int panel = Math.min(600, width - 32), left = (width - panel) / 2;
         String status = pending || entries.isEmpty() || !notice.isBlank() ? notice : (selected == null ? "Click an individual message | " : "Selected message " + selected.sourceLine() + " | ") + "Messages " + (offset + 1) + "–" + (offset + entries.size())
             + " of " + total + " | Scroll or drag the bar";
         graphics.drawString(font, font.plainSubstrByWidth(status, panel), left, 100, 0xFF93C5FD);
     }
     @Override public Component getNarrationMessage() {
-        return Component.literal(title.getString() + ". " + (entries.isEmpty() ? notice : "Messages " + (offset + 1)
+        return Component.literal((scenes==null?title.getString():personaId==null?"Scene dialogue — shared archive":"Scene dialogue — assigned only") + ". " + (entries.isEmpty() ? notice : "Messages " + (offset + 1)
             + " to " + (offset + entries.size()) + " of " + total) + (selected == null ? "" : ". Selected line " + selected.sourceLine() + ". Favorite: " + (favorites.contains(selected) ? "yes" : "no"))
             + ". Scroll " + (int) pane.scrollAmount()
             + " of " + pane.maxScrollAmount() + ". " + pane.visibleText()
@@ -269,7 +295,7 @@ public final class TranscriptScreen extends Screen {
                         getRight() - innerPadding(), getInnerTop() + row.y() + row.height() - 4,
                         chosen ? 0xFF244B70 : 0xFF101720);
                     int markerY = getInnerTop() + row.y();
-                    if (withinContentAreaTopBottom(markerY, markerY + 10)) graphics.drawString(font,
+                    if (importer!=null && withinContentAreaTopBottom(markerY, markerY + 10)) graphics.drawString(font,
                         favorites.contains(MessageReference.of(entries.get(row.entry()))) ? "[*]" : "[ ]",
                         getInnerLeft(), markerY, 0xFFFDE68A);
                 }
@@ -287,8 +313,8 @@ public final class TranscriptScreen extends Screen {
                 && event.x() < getInnerLeft() + getWidth() - totalInnerPadding()) {
                 double contentY = event.y() - getInnerTop() + scrollAmount();
                 for (var row : rows) if (row.entry() < entries.size() && contentY >= row.y() && contentY < row.y() + row.height()) {
-                    selected = MessageReference.of(entries.get(row.entry())); tick();
-                    if (event.x() >= getInnerLeft() && event.x() < getInnerLeft() + 18) saveFavorite();
+                    selected = MessageReference.of(entries.get(row.entry())); confirmSplit=false; tick();
+                    if (importer!=null && event.x() >= getInnerLeft() && event.x() < getInnerLeft() + 18) saveFavorite();
                     return true;
                 }
             }
@@ -316,7 +342,7 @@ public final class TranscriptScreen extends Screen {
         }
         @Override protected void updateWidgetNarration(NarrationElementOutput output) {
             output.add(NarratedElementType.TITLE, getMessage());
-            output.add(NarratedElementType.HINT, Component.literal(visibleText() + ". Click a message to select it, then Favorite selected, or press F. Click its star to toggle directly."));
+            output.add(NarratedElementType.HINT, Component.literal(visibleText() + (scenes==null?". Click a message to select it, then Favorite selected, or press F. Click its star to toggle directly.":". Click an individual message to select it. Shared scenes can split before a selected message; source provenance is in Details.")));
         }
     }
 }

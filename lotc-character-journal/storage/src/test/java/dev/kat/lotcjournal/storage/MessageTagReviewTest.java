@@ -235,7 +235,7 @@ class MessageTagReviewTest {
         var before = store.transcript(null, null, 0, 20); var progress = store.progress(SOURCE); characterVersion(characters(), 2);
         assertFalse(tables(characters()).contains("message_tag_reviews")); assertEquals(2, scalar(characters(), "PRAGMA user_version"));
         var upgraded = open(archive(), characters()); var upgradedRepository = repository();
-        assertEquals(9, scalar(archive(), "PRAGMA user_version")); assertEquals(3, scalar(characters(), "PRAGMA user_version"));
+        assertEquals(9, scalar(archive(), "PRAGMA user_version")); assertEquals(4, scalar(characters(), "PRAGMA user_version"));
         assertEquals(before, upgraded.transcript(null, null, 0, 20)); assertEquals(progress, upgraded.progress(SOURCE));
         assertEquals(identities, upgradedRepository.identities("")); assertEquals(memories, upgradedRepository.memoryTranscript(PERSONA_SECOND, "", null, false, 0, 20));
         assertEquals(PERSONA_SECOND, upgradedRepository.activePersona()); assertEquals(denied, upgradedRepository.separations().getFirst().id());

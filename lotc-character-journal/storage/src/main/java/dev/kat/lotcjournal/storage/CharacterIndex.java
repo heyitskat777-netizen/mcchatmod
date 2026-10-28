@@ -112,11 +112,15 @@ final class CharacterIndex {
         if(channel==Channel.PRIVATE_MESSAGE || channel==Channel.OOC || channel==Channel.SYSTEM) throw new IllegalArgumentException("Excluded channel");
         String pattern="%"+query.replace("\\","\\\\").replace("%","\\%").replace("_","\\_")+"%";
         String star="EXISTS(SELECT 1 FROM main.message_favorites f WHERE f.source_id=t.source_id AND f.source_line=t.source_line)";
-        String where=" FROM main.transcript_lines t WHERE EXISTS(SELECT 1 FROM ("+MessageTagReviews.EFFECTIVE_SQL+") e WHERE e.source_id=t.source_id AND e.source_line=t.source_line AND e.identity_id=? AND (? IS NULL OR e.kind=?)) AND t.text LIKE ? ESCAPE '\\' AND (? IS NULL OR t.channel=?)"+(favorites?" AND "+star:"");
+        // Confirmed links form a reversible display overlay. UNION deduplicates
+        // component IDs; EXISTS below deduplicates observations tagged to several
+        // members. Original evidence and persona assignments keep their exact IDs.
+        String group="WITH RECURSIVE linked(id) AS (SELECT ? UNION SELECT CASE WHEN m.from_id=l.id THEN m.to_id ELSE m.from_id END FROM characters.identity_merges m JOIN linked l ON (m.from_id=l.id OR m.to_id=l.id) WHERE m.active=1) ";
+        String where=" FROM main.transcript_lines t WHERE EXISTS(SELECT 1 FROM ("+MessageTagReviews.EFFECTIVE_SQL+") e WHERE e.source_id=t.source_id AND e.source_line=t.source_line AND e.identity_id IN (SELECT id FROM linked) AND (? IS NULL OR e.kind=?)) AND t.text LIKE ? ESCAPE '\\' AND (? IS NULL OR t.channel=?)"+(favorites?" AND "+star:"");
         long total;
-        try(var q=c.prepareStatement("SELECT count(*)"+where)) {bind(q,identity,pattern,channel,kind);try(var r=q.executeQuery()){total=r.getLong(1);}}
+        try(var q=c.prepareStatement(group+"SELECT count(*)"+where)) {bind(q,identity,pattern,channel,kind);try(var r=q.executeQuery()){total=r.getLong(1);}}
         var entries=new ArrayList<TranscriptLine>();var stars=new HashSet<MessageReference>();
-        try(var q=c.prepareStatement("SELECT t.*,"+star+" AS favorite"+where+" ORDER BY t.source_id,t.source_line LIMIT ? OFFSET ?")) {
+        try(var q=c.prepareStatement(group+"SELECT t.*,"+star+" AS favorite"+where+" ORDER BY t.source_id,t.source_line LIMIT ? OFFSET ?")) {
             bind(q,identity,pattern,channel,kind);q.setInt(7,limit);q.setInt(8,offset);
             try(var r=q.executeQuery()) {while(r.next()) {var entry=read(r);entries.add(entry);if(r.getBoolean("favorite"))stars.add(MessageReference.of(entry));}}
         }

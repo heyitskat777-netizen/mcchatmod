@@ -82,7 +82,7 @@ final class SmokeReport {
     private synchronized void captureShutdown() {
         long start = System.nanoTime();
         var workers = Thread.getAllStackTraces().keySet().stream()
-            .filter(thread -> thread.isAlive() && (thread.getName().startsWith("lotc-journal-") || thread.getName().startsWith("lotc-identity-"))).toList();
+            .filter(thread -> thread.isAlive() && (thread.getName().startsWith("lotc-journal-") || thread.getName().startsWith("lotc-identity-") || thread.getName().startsWith("lotc-scene-"))).toList();
         shutdownAcknowledged = workers.isEmpty();
         if (!shutdownAcknowledged) failures.add("Journal I/O worker remained alive after CLIENT_STOPPING: "
             + workers.stream().map(thread -> thread.getName() + " (" + thread.getState() + ")").toList());

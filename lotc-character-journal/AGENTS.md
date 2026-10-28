@@ -117,6 +117,19 @@ Target Minecraft 1.21.11, Fabric, Java 21. Do not silently upgrade Minecraft.
   revisions under the write lock, retain automatic revision markers after restore,
   and reject stale saves. UNKNOWN allows manual MENTION only; never promote channel
   or grant persona knowledge. Undo removes review rows at exact owned coordinates.
+- Shared confirmed identity groups affect related-history display only; exact
+  observation coordinates deduplicate the union, undo changes it immediately, and
+  no group or shared tag correction grants persona knowledge.
+- Scenes are revisioned interpretations with exact message references. Keep
+  confirmed/skipped groups and manual participants across automatic refresh;
+  protected coordinates are hard boundaries. Unknown clocks/locations stay unknown.
+  Split/combine and source undo use the paired transaction without rewriting text.
+  Retain revision tombstones against stale/ABA writes. Mentions are not attendees.
+- Persona scene projections use only explicit owned RP observations and their own
+  speaker assignments, preserving unassigned/raw identity decisions without global
+  link resolution. Never expose shared titles, locations, silent attendees or
+  shared tag interpretations through persona results/counts/search. DIRECT/OVERHEARD
+  needs an explicit perspective, never an implicit grant of memories.
 - New characters/aliases search existing dialogue; preserve source observations,
   manual persona assignments and ambiguity. Automatic tags never grant memories,
   infer accounts, select personas or merge identities. An unrelated legacy

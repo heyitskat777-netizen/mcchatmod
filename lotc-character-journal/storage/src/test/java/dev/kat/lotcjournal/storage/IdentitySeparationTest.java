@@ -126,7 +126,7 @@ class IdentitySeparationTest {
         characterVersion(characters(), 1);
         assertEquals(1, scalar(characters(), "PRAGMA user_version"));
         var upgraded = open(archive(), characters()); var upgradedRepository = repository();
-        assertEquals(9, scalar(archive(), "PRAGMA user_version")); assertEquals(3, scalar(characters(), "PRAGMA user_version"));
+        assertEquals(9, scalar(archive(), "PRAGMA user_version")); assertEquals(4, scalar(characters(), "PRAGMA user_version"));
         assertEquals(before, upgraded.transcript(null, null, 0, 20)); assertEquals(identities, upgradedRepository.identities(""));
         assertEquals(personas, upgradedRepository.personas()); assertEquals(merges, upgradedRepository.merges());
         assertEquals(progress, upgraded.progress(SOURCE)); assertEquals(sources, upgraded.sources());
@@ -153,7 +153,7 @@ class IdentitySeparationTest {
         assertThrows(java.nio.file.FileAlreadyExistsException.class, () -> open(archive(), characters()));
         assertArrayEquals(beforeArchive, Files.readAllBytes(archive())); assertArrayEquals(beforeCharacters, Files.readAllBytes(characters()));
         assertEquals(1, scalar(characters(), "PRAGMA user_version")); assertFalse(tables(characters()).contains("identity_separations"));
-        Files.delete(obstruction); open(archive(), characters()); assertEquals(3, scalar(characters(), "PRAGMA user_version"));
+        Files.delete(obstruction); open(archive(), characters()); assertEquals(4, scalar(characters(), "PRAGMA user_version"));
     }
 
     @Test void failedDenialWriteRollsBackWithoutAffectingOtherDecisions() throws Exception {
@@ -183,7 +183,7 @@ class IdentitySeparationTest {
         var restored = open(restoredArchive, restoredCharacters);
         var identities = new SqliteIdentityRepository(restoredArchive, restoredCharacters);
         assertEquals(original, restored.transcript(null, null, 0, 20));
-        assertEquals(3, scalar(restoredCharacters, "PRAGMA user_version"));
+        assertEquals(4, scalar(restoredCharacters, "PRAGMA user_version"));
         assertNotNull(identities.assignment(ref(2), PERSONA_SECOND)); assertEquals(PERSONA_SECOND, identities.activePersona());
         identities.undoMerge(identities.merges().getFirst().id()); identities.denyIdentityLink(FIRST, SECOND);
         open(restoredArchive, restoredCharacters);

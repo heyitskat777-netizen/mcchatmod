@@ -55,8 +55,9 @@ Both development and packaged runs also assert the physical archive/character
 SQLite split, historical/live character discovery, filtered related dialogue,
 paired backups, persistent reversible link denials, durable message-tag reviews and explicit persona
 isolation. The tag-review stage includes multitag drafts, resize, save/reject/restore,
-a simulated newer review revision, stale-save rejection and explicit reload. Writers require 25 stages; readers
-require 26 including restart evidence. Worker liveness at shutdown remains a strict
+a simulated newer review revision, stale-save rejection and explicit reload. The scene-review stage adds saved metadata/participants, resize, exact-message
+split, confirmed combine, durable skip, restart and paired-backup checks. Writers
+require 26 stages; readers require 27 including restart evidence. Worker liveness at shutdown remains a strict
 assertion, separate from Gradle process exit.
 
 Each suite run has a unique run ID. Graphics, development, and packaged game
@@ -86,7 +87,7 @@ Stage durations are post-action budgets; explicit tick waits and the hard proces
 deadline enforce active bounds.
 
 These checks do not validate hardware audio, GPU-driver compatibility, other mods,
-live capture, persona isolation, or AI features. See [STATUS.md](STATUS.md) for
+real-server capture or modpack behavior, real-persona knowledge accuracy, or AI features. See [STATUS.md](STATUS.md) for
 actual commands/outcomes and [USER_TEST_PHASE1.md](USER_TEST_PHASE1.md) for the
 remaining user test.
 
@@ -98,7 +99,7 @@ retry, two-step undo and watch opt-in. The reader JVM checks durable undone
 status, removed-coordinate accounting, older observations and saved watch intent,
 then disables the watcher through the UI. Cross-source/channel controls and the
 UNKNOWN review queue are also asserted. Screenshots capture preview and both
-confirmation warnings. All `lotc-journal-*` workers must stop on shutdown.
+confirmation warnings. All `lotc-journal-*`, `lotc-identity-*` and `lotc-scene-*` workers must stop on shutdown.
 Unit tests separately exercise stable-file watch polling, bounded/cancelled work,
 content changes, retries and transactional storage invariants. These are not a
 substitute for the executed client stage or private real-log acceptance.

@@ -1,10 +1,11 @@
 {
   "date": "2026-10-27",
-  "version": "0.1.0-alpha.11",
+  "version": "0.1.0-alpha.12",
   "java_target": 21,
   "gradle": "9.7.1",
   "command": "./gradlew check :fabric:build :fabric:prepareClientSmoke --no-daemon --console=plain",
   "core_gradle_result": "passed",
+  "core_gradle_seconds": 12,
   "suites": [
     {
       "module": "domain",
@@ -39,6 +40,14 @@
       "skipped": 0
     },
     {
+      "module": "domain",
+      "suite": "dev.kat.lotcjournal.domain.SceneGrouperTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
       "module": "application",
       "suite": "dev.kat.lotcjournal.application.IdentityAliasesTest",
       "tests": 4,
@@ -58,6 +67,14 @@
       "module": "application",
       "suite": "dev.kat.lotcjournal.application.JournalServiceTest",
       "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "application",
+      "suite": "dev.kat.lotcjournal.application.SceneServiceTest",
+      "tests": 3,
       "failures": 0,
       "errors": 0,
       "skipped": 0
@@ -232,6 +249,14 @@
     },
     {
       "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.LinkedCharacterHistoryTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
       "suite": "dev.kat.lotcjournal.storage.LiveRepositoryTest",
       "tests": 7,
       "failures": 0,
@@ -272,6 +297,14 @@
     },
     {
       "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.SceneRepositoryTest",
+      "tests": 13,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
       "suite": "dev.kat.lotcjournal.storage.SqliteJournalStoreTest",
       "tests": 12,
       "failures": 0,
@@ -287,105 +320,126 @@
       "skipped": 0
     }
   ],
-  "total_tests": 305,
-  "fabric_build": "passed; actual packaged JAR writer/reader passed",
-  "python_runner_tests": 14,
-  "client_game_test": "passed all five isolated JVMs in message-tag-review-2 including stale-edit fault",
-  "client_phases": [
+  "totals": {
+    "tests": 333,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "runner_tests": {
+    "result": "passed",
+    "tests": 14,
+    "seconds": 1.117
+  },
+  "previous_client_run": "phase-four-2",
+  "previous_client_phases": [
     {
       "name": "graphics-preflight",
       "status": "PASSED",
-      "duration": 21.3329548279944,
+      "duration": 25.518745527000647,
       "returncode": 0,
       "timedOut": false,
-      "processId": 41637,
+      "processId": 7221,
       "errors": []
     },
     {
       "name": "development-write",
       "status": "PASSED",
-      "duration": 28.56856551799865,
+      "duration": 35.25113061100092,
       "returncode": 0,
       "timedOut": false,
-      "processId": 41916,
+      "processId": 7500,
       "errors": []
     },
     {
       "name": "development-read",
       "status": "PASSED",
-      "duration": 27.529176522999478,
+      "duration": 33.79076547799923,
       "returncode": 0,
       "timedOut": false,
-      "processId": 42234,
+      "processId": 7865,
       "errors": []
     },
     {
       "name": "packaged-write",
       "status": "PASSED",
-      "duration": 30.36260627199954,
+      "duration": 40.02836144799949,
       "returncode": 0,
       "timedOut": false,
-      "processId": 42537,
+      "processId": 8278,
       "errors": []
     },
     {
       "name": "packaged-read",
       "status": "PASSED",
-      "duration": 28.69811711300281,
+      "duration": 34.567051268000796,
       "returncode": 0,
       "timedOut": false,
-      "processId": 42842,
+      "processId": 8601,
       "errors": []
     }
   ],
+  "client_smoke_run": "phase-four-3",
+  "client_smoke_result": "passed",
   "artifact": {
-    "name": "lotc-character-journal-0.1.0-alpha.11.jar",
-    "bytes": 14710888,
-    "sha256": "8bd7cbeb0f80f5191dfafe42ccfa9b0b87ca88c75a915401c57a8c65314ed42e"
+    "name": "lotc-character-journal-0.1.0-alpha.12.jar",
+    "bytes": 14780536,
+    "sha256": "230becc88d8a6304d2c089df186116ee7467f7ef2e982ba1c98d12e47b871689"
   },
-  "user_test": "alpha.10 smoke passed per user; alpha.11 tag review pending",
+  "user_test": "Prior alpha.10 smoke accepted; alpha.11 tags and alpha.12 linked-history/real scenes/modpack restore acceptance pending",
   "ci": {
-    "functional_commit": "77695fd0ed5db01e84f260958c99f57f0e7641b9",
-    "run_id": 40524151013,
-    "url": "https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40524151013",
-    "verify": "passed",
-    "client_smoke": "passed",
-    "client_phases": [
-      {
-        "name": "graphics-preflight",
-        "seconds": 28.4,
-        "result": "PASSED",
-        "exit_code": 0
-      },
-      {
-        "name": "development-write",
-        "seconds": 34.3,
-        "result": "PASSED",
-        "exit_code": 0
-      },
-      {
-        "name": "development-read",
-        "seconds": 31.5,
-        "result": "PASSED",
-        "exit_code": 0
-      },
-      {
-        "name": "packaged-write",
-        "seconds": 36.4,
-        "result": "PASSED",
-        "exit_code": 0
-      },
-      {
-        "name": "packaged-read",
-        "seconds": 32.1,
-        "result": "PASSED",
-        "exit_code": 0
-      }
-    ],
-    "artifact_ids": {
-      "journal-jars": 12743670433,
-      "client-smoke-evidence": 12742948559,
-      "test-reports": 12742607722
+    "result": "unobserved",
+    "reason": "Environment proxy refuses GitHub API CONNECT with HTTP 403; no CI result claimed"
+  },
+  "client_phases": [
+    {
+      "name": "graphics-preflight",
+      "status": "PASSED",
+      "duration": 25.19712696500028,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 9162,
+      "errors": []
+    },
+    {
+      "name": "development-write",
+      "status": "PASSED",
+      "duration": 34.957166463998874,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 9453,
+      "errors": []
+    },
+    {
+      "name": "development-read",
+      "status": "PASSED",
+      "duration": 34.79364787600025,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 9784,
+      "errors": []
+    },
+    {
+      "name": "packaged-write",
+      "status": "PASSED",
+      "duration": 39.13837719500043,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 10116,
+      "errors": []
+    },
+    {
+      "name": "packaged-read",
+      "status": "PASSED",
+      "duration": 34.1068630890004,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 10492,
+      "errors": []
     }
-  }
+  ],
+  "client_evidence": "fabric/build/client-smoke/evidence/phase-four-3/",
+  "client_writer_stages": 26,
+  "client_reader_stages": 27,
+  "core_execution": "333 tests executed successfully in integrated-3 (21s); UI-only final integrated-4 (12s), core tasks up-to-date"
 }

@@ -83,7 +83,7 @@ final class IdentityMergeScreen extends Screen {
         service.mergeIdentity(values.get(from).id(),values.get(to).id()).whenComplete((id,error)->minecraft.execute(()->{
             if(minecraft.screen!=this)return;
             if(error!=null){pending=false;status="Link not saved; reopen review or undo an existing decision first";tick();}
-            else load(id,"Identity link saved; dialogue and persona memories remain separate");
+            else load(id,"Link saved; shared related history combines; persona memories unchanged");
         }));
     }
     private void deny() {
@@ -112,7 +112,7 @@ final class IdentityMergeScreen extends Screen {
         confirm.active=!pending&&valid&&!together&&!denied&&root(values.get(from).id()).equals(values.get(from).id());
         deny.active=!pending&&valid&&!together&&!denied;
         deny.setTooltip(Tooltip.create(Component.literal(together?"Undo the existing identity link before keeping these identities separate":denied?"Already kept separate. Clear the selected denial to permit linking":"Remember that these identities are different; block direct and indirect linking")));
-        confirm.setTooltip(Tooltip.create(Component.literal(denied?"Blocked by a saved denial. Explicitly clear that denial first":"Confirm an identity link; this does not combine dialogue or persona knowledge")));
+        confirm.setTooltip(Tooltip.create(Component.literal(denied?"Blocked by a saved denial. Explicitly clear that denial first":"Confirm a shared related-history group. Original records remain distinct; persona knowledge is unchanged")));
         history.active=undo.active=!pending&&!decisions.isEmpty();
         if(!values.isEmpty()){fromButton.setMessage(Component.literal("Link from: "+label(from)));toButton.setMessage(Component.literal("Link to: "+label(to)));}
         if(decisions.isEmpty()){history.setMessage(Component.literal("No active links or denials"));history.setTooltip(null);}

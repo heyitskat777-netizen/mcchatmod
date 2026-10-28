@@ -68,9 +68,10 @@ final class PairedDatabaseFixtures {
     }
     /** Reconstruct an exact earlier character member, rather than changing only its version number. */
     static void characterVersion(Path characters, int version) throws Exception {
-        if (version < 1 || version > 2) throw new IllegalArgumentException("Expected an older synthetic character schema");
+        if (version < 1 || version > 3) throw new IllegalArgumentException("Expected an older synthetic character schema");
         try (var c = DriverManager.getConnection("jdbc:sqlite:" + characters); var s = c.createStatement()) {
-            s.execute("DROP TABLE IF EXISTS message_tag_choices"); s.execute("DROP TABLE IF EXISTS message_tag_reviews");
+            for (String table : List.of("scene_participants", "scene_members", "scene_settings", "scenes")) s.execute("DROP TABLE IF EXISTS " + table);
+            if (version < 3) { s.execute("DROP TABLE IF EXISTS message_tag_choices"); s.execute("DROP TABLE IF EXISTS message_tag_reviews"); }
             if (version == 1) s.execute("DROP TABLE IF EXISTS identity_separations");
             s.execute("PRAGMA user_version=" + version);
         }

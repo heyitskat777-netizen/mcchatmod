@@ -11,6 +11,8 @@ import net.minecraft.network.chat.Component;
 /** Durable reports contain safe codes, never exception messages or source payloads. */
 public final class ImportDashboardScreen extends Screen {
     private final Screen parent;
+    private final dev.kat.lotcjournal.application.SceneService scenes;
+    private final dev.kat.lotcjournal.application.IdentityService identities;
     private final BatchImportService batches;
     private List<BatchSummary> summaries = List.of();
     private BatchImportService.BatchReport report;
@@ -22,7 +24,10 @@ public final class ImportDashboardScreen extends Screen {
     private Button batch, previous, next, retry, undo;
 
     public ImportDashboardScreen(Screen parent, BatchImportService batches) {
-        super(Component.literal("Import dashboard")); this.parent = parent; this.batches = batches;
+        this(parent,batches,null,null);
+    }
+    public ImportDashboardScreen(Screen parent,BatchImportService batches,dev.kat.lotcjournal.application.SceneService scenes,dev.kat.lotcjournal.application.IdentityService identities) {
+        super(Component.literal("Import dashboard"));this.scenes=scenes;this.identities=identities; this.parent = parent; this.batches = batches;
     }
     @Override protected void init() {
         int panel = Math.min(420, width - 32), left = (width - panel) / 2;
@@ -38,7 +43,8 @@ public final class ImportDashboardScreen extends Screen {
         undo = addRenderableWidget(Button.builder(Component.literal("Undo batch"), button -> undo())
             .bounds(left + panel / 2 + 4, height - 78, panel / 2 - 4, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Refresh reports"), button -> refresh())
-            .bounds(left, height - 52, panel, 20).build());
+            .bounds(left, height - 52, scenes==null?panel:panel/2-4, 20).build());
+        if(scenes!=null)addRenderableWidget(Button.builder(Component.literal("Review scenes / skip"),b->minecraft.setScreen(new SceneScreen(this,scenes,identities))).bounds(left+panel/2+4,height-52,panel/2-4,20).build());
         addRenderableWidget(Button.builder(Component.literal("Done"), button -> onClose())
             .bounds(left, height - 26, panel, 20).build());
         refresh(); tick();
@@ -75,7 +81,7 @@ public final class ImportDashboardScreen extends Screen {
         if (report == null) return;
         pending = true; notice = "Retrying failed/interrupted files under their saved policy";
         batches.retry(report.summary().id()).whenComplete((value, error) -> minecraft.execute(() -> {
-            pending = false; notice = error == null ? "Retry finished: " + value.summary().status() : "Retry stopped; inspect file status";
+            pending = false; if(error==null&&scenes!=null)scenes.refreshSuggestions();notice = error == null ? "Retry finished: " + value.summary().status() : "Retry stopped; inspect file status";
             refresh();
         })); tick();
     }

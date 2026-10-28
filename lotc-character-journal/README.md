@@ -10,7 +10,7 @@ The user has accepted the Phase 1 foundation smoke test. Press **J** in a world
 to open the journal; its key is rebindable in Controls. Layout settings and backup
 creation remain available. Characters now supports explicit names, aliases and notes; persona memories require manual message assignment.
 
-The `0.1.0-alpha.11` development build expands **Log import** for finished UTF-8 `.log`
+The `0.1.0-alpha.12` development build expands **Log import** for finished UTF-8 `.log`
 and `.log.gz` files, background validation, progress/cancellation, restart-safe
 checkpoints, repeat-import deduplication, and a transcript browser with literal
 text search. **Import all / dashboard** adds a read-only folder preview,
@@ -42,6 +42,8 @@ fingerprints, line coordinates, clocks and channel uncertainty remain separate
 metadata. Names found in trusted ROLEPLAY speaker/action headers create observed characters.
 New names and aliases search earlier dialogue; ambiguous collisions stay unresolved.
 **Related dialogue** on a saved character filters speech, actions and mentions.
+Confirmed identity links combine the transitive group in this shared view once per
+source coordinate; undo separates it again. Denials and persona scopes are preserved.
 Persona memories still require explicit confirmation through Assign.
 
 Dialogue, import/live state, settings and favorites live in
@@ -81,7 +83,7 @@ assignments. Shared archive Transcripts remains separate. Review identity links
 supports explicit confirmation, **Deny link / keep separate**, and persistent undo.
 Denials block direct/indirect linking until **Clear selected denial**; clearing does
 not link automatically. Duplicate names/aliases never merge automatically.
-Characters schemas 1/2 upgrade to schema 3 after a verified paired backup. The mod owns two bound SQLite files: `.log`/`.log.gz` imports and live recording
+Characters schemas 1/2/3 upgrade to schema 4 after a verified paired backup. The mod owns two bound SQLite files: `.log`/`.log.gz` imports and live recording
 populate `archive.sqlite`; character records and confirmed assignments use
 `characters.sqlite`. Upgrading copies native `journal.sqlite` without changing it,
 then migrates the copy. Backups contain both SQLite files and a `.pair.json`
@@ -90,8 +92,23 @@ closed. See [the upgrade checklist](docs/USER_TEST_CHARACTER_DISCOVERY.md). An u
 
 Native `.lotc-chat.jsonl` repeat imports reuse event IDs. Ordinary `.log` overlaps
 with live events remain separate when their identity cannot be proved; genuine
-repeated text is not discarded. Nearby recognition, scenes, AI and favorite-driven
-extraction remain future work.
+repeated text is not discarded.
+
+**Scenes** on the main journal suggests source/session-local RP windows, with a
+configurable 15-minute gap. Import screens offer **Review scenes / skip** after
+commits. Review participants, enter a title/location, and **Confirm / save scene**;
+**Skip for now** is durable. **Scene dialogue / split** provides bounded searchable,
+scrollable messages and exact-message split confirmation. Choose and combine saved
+scenes explicitly. Manual decisions survive imports, settings changes, restart and
+paired backups; source dialogue is never copied or rewritten by scene edits.
+Automatic actors come from speech/action evidence, not mentions. Add/remove silent
+participants manually. Direct/overheard requires an explicit persona perspective.
+Persona scene views use only explicitly assigned evidence and speaker identities,
+without inheriting shared identity tags, merges, titles, locations or attendees.
+Missing clocks/locations stay unknown; crowded conversation windows need review.
+Counts are observations, and active time estimates cap each gap at 60 seconds.
+See [the Phase 3/4 checklist](docs/USER_TEST_SCENES.md) for controls and limitations.
+Nearby recognition, AI and favorite-driven extraction remain future work.
 See [docs/USER_TEST_CHARACTER_BROWSER.md](docs/USER_TEST_CHARACTER_BROWSER.md) for alpha.8
 and [docs/USER_TEST_LIVE_PERSONAS.md](docs/USER_TEST_LIVE_PERSONAS.md) for alpha.7
 and the policy-4 partial-import upgrade requirement.

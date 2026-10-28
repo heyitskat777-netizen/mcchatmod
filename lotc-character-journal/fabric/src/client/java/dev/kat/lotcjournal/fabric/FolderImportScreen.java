@@ -15,6 +15,8 @@ import net.minecraft.network.chat.Component;
 /** Preview confirmation is separate from discovery; all file/SQL work belongs to workers. */
 public final class FolderImportScreen extends Screen {
     private final Screen parent;
+    private final dev.kat.lotcjournal.application.SceneService scenes;
+    private final dev.kat.lotcjournal.application.IdentityService identities;
     private final BatchImportService batches;
     private final FolderWatchService watcher;
     private final Path gameDirectory;
@@ -23,10 +25,13 @@ public final class FolderImportScreen extends Screen {
     private boolean pending, confirmWatch;
     private long revision;
     private int previewScroll;
-    private Button scan, confirm, cancel, watch;
+    private Button scan, confirm, cancel, watch, sceneReview;
 
     public FolderImportScreen(Screen parent, BatchImportService batches, FolderWatchService watcher, Path gameDirectory) {
-        super(Component.literal("Import all logs"));
+        this(parent,batches,watcher,gameDirectory,null,null);
+    }
+    public FolderImportScreen(Screen parent, BatchImportService batches, FolderWatchService watcher, Path gameDirectory, dev.kat.lotcjournal.application.SceneService scenes, dev.kat.lotcjournal.application.IdentityService identities) {
+        super(Component.literal("Import all logs"));this.scenes=scenes;this.identities=identities;
         this.parent = parent; this.batches = batches; this.watcher = watcher; this.gameDirectory = gameDirectory;
     }
 
@@ -44,10 +49,11 @@ public final class FolderImportScreen extends Screen {
         confirm = addRenderableWidget(Button.builder(Component.literal("Confirm Import all"), button -> confirm())
             .bounds(left + panel / 2 + 4, 82, panel / 2 - 4, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Import dashboard"), button ->
-            minecraft.setScreen(new ImportDashboardScreen(this, batches)))
+            minecraft.setScreen(new ImportDashboardScreen(this, batches, scenes, identities)))
             .bounds(left, 108, panel / 2 - 4, 20).build());
         watch = addRenderableWidget(Button.builder(Component.literal("Enable folder watch"), button -> toggleWatch())
             .bounds(left + panel / 2 + 4, 108, panel / 2 - 4, 20).build());
+        if(scenes!=null)sceneReview=addRenderableWidget(Button.builder(Component.literal("Review scenes / skip"),button->minecraft.setScreen(new SceneScreen(this,scenes,identities))).bounds(left,height-77,panel,20).build());
         cancel = addRenderableWidget(Button.builder(Component.literal("Cancel queue"), button -> {
             batches.cancel(); notice = "Cancellation requested; committed checkpoints remain";
         }).bounds(left, height - 52, panel, 20).build());
@@ -79,6 +85,7 @@ public final class FolderImportScreen extends Screen {
         pending = true; notice = "Importing preview; changed files fail individually";
         batches.confirm(preview).whenComplete((value, error) -> minecraft.execute(() -> {
             pending = false; preview = null;
+            if(error==null&&scenes!=null)scenes.refreshSuggestions();
             notice = error == null ? "Batch " + value.summary().status() + "; inspect the dashboard" : "Batch stopped; inspect the dashboard";
             tick();
         })); tick();
@@ -106,6 +113,7 @@ public final class FolderImportScreen extends Screen {
         var state = batches.snapshot().state();
         boolean busy = pending || state == BatchImportService.State.IMPORTING || state == BatchImportService.State.PREVIEWING;
         scan.active = !busy && !pathValue.isBlank(); confirm.active = !busy && preview != null;
+        if(sceneReview!=null)sceneReview.active=!busy;
         cancel.active = busy; watch.active = !busy && (!pathValue.isBlank() || watcher.snapshot().settings().enabled());
         watch.setMessage(Component.literal(watcher.snapshot().settings().enabled() ? "Disable folder watch"
             : confirmWatch ? "Confirm folder watch" : "Enable folder watch"));
@@ -125,14 +133,14 @@ public final class FolderImportScreen extends Screen {
                 + " invalid | " + preview.entries().size() + " files", left, y, 0xFFD1D5DB); y += 12;
             graphics.drawString(font, font.plainSubstrByWidth("Bytes " + encoded + " encoded / " + preview.decodedBytes()
                 + " decoded | Scroll files", panel), left, y, 0xFF9CA3AF); y += 12;
-            for (int index = previewScroll; index < preview.entries().size() && y + 10 < height - 57; index++) {
+            for (int index = previewScroll; index < preview.entries().size() && y + 10 < height - (scenes==null?57:82); index++) {
                 var file = preview.entries().get(index);
                 graphics.drawString(font, font.plainSubstrByWidth((index + 1) + ". " + file.status() + ": "
                     + file.path().getFileName(), panel), left, y, 0xFF9CA3AF); y += 11;
             }
         } else {
             for (var line : font.split(Component.literal(notice.isBlank() ? batches.snapshot().message() : notice), panel)) {
-                if (y + 10 >= height - 57) break;
+                if (y + 10 >= height - (scenes==null?57:82)) break;
                 graphics.drawString(font, line, left, y, 0xFF93C5FD); y += 11;
             }
         }

@@ -228,13 +228,13 @@ acceptance remain separate work.
 
 Per-message tag review now provides durable correction/rejection of automatic
 archive tags, explicit restoration and stale-edit protection. Alpha.10 user smoke
-tests passed; tag-review user acceptance is still pending. The remaining identity
-slice needs a deliberate policy and implementation for displaying confirmed merge
-overlays in related dialogue. These are separate from explicit persona memory
-assignments; discovery alone does not close Phase 3.
+tests passed; tag-review user acceptance is still pending. Alpha.12 implements
+confirmed transitive merge overlays in shared related dialogue, with exact-coordinate
+deduplication and immediate reversible separation. These are separate from explicit
+persona memory assignments; discovery alone does not close Phase 3.
 
-Future favorites, scene participants and extracted records must use these identity
-contracts. The user can explicitly tie a bookmark/record to a specific identity;
+Favorites and scene participants use these identity contracts; future extracted
+records must preserve them too. The user can explicitly tie a bookmark/record to a specific identity;
 unknown or ambiguous attribution requires a confirmation prompt with evidence,
 plus an unassigned/skip choice. Identity link decisions are reversible; message assignments remain persona-scoped.
 A link or denial grants no additional persona knowledge.
@@ -255,6 +255,15 @@ Switch personas, inspect which memories appear, deliberately make a wrong identi
 Identity decisions are reversible without losing source dialogue; the reviewed personas expose only their assigned knowledge. AI cannot confirm identity merges.
 
 ## Phase 4 — Encounters, transcripts, and statistics
+
+Alpha.12 implements conservative deterministic suggestions, scene browser,
+post-import review/skip access, exact participant corrections, manual location,
+searchable/scrollable scene dialogue, split/combine, configurable inactivity gap,
+observation statistics and explained active-time estimates. Shared identity links
+never grant persona knowledge; projected scenes require explicit assignments and
+retain their own confirmed identity decisions. Implementation and automated results
+are tracked in STATUS.md. Quiet/crowded/interrupted real-scene acceptance and
+large-archive measurements remain user/deployment validation, not a completed claim.
 
 **Deliverables**
 
@@ -399,7 +408,8 @@ The initial release is one client-side mod with a local database. A local model 
 
 Cloud synchronization, a server plugin, a standalone desktop app, multi-version support, and automatic nearby-player recognition are not prerequisites for the first release. Revisit them as independent milestones if requested.
 
-Phase 1's user smoke test has been accepted; historical import is the current
-Phase 2a slice. STATUS.md records exact implementation and verification results;
-live capture, real-source acceptance, and later phases remain pending.
+Phase 1 and prior import/live/identity smoke feedback are recorded in STATUS.md.
+Phase 3/4 implementation is delivered in alpha.12; focused user acceptance,
+real-source accuracy and large-archive measurements remain distinct. Optional AI
+and later phases remain unimplemented.
 

@@ -28,6 +28,7 @@ public final class JournalClient implements ClientModInitializer {
     private BatchImportService batches;
     private FolderWatchService watcher;
     private IdentityService identities;
+    private dev.kat.lotcjournal.application.SceneService scenes;
     private LiveCaptureService live;
     private LiveChatAdapter liveAdapter;
 
@@ -39,6 +40,7 @@ public final class JournalClient implements ClientModInitializer {
         batches = new BatchImportService(importer, store);
         watcher = new FolderWatchService(batches, store);
         identities = new IdentityService(new SqliteIdentityRepository(directory.resolve("archive.sqlite"), directory.resolve("characters.sqlite")));
+        scenes = new dev.kat.lotcjournal.application.SceneService(new dev.kat.lotcjournal.storage.SqliteSceneRepository(directory.resolve("archive.sqlite"), directory.resolve("characters.sqlite")));
         live = new LiveCaptureService(FabricLoader.getInstance().getGameDir().resolve("lotc-journal/live"), store, java.util.Set.of());
         var ready = service.start().thenCompose(ignored -> watcher.load()).thenCompose(ignored -> live.recover());
         liveAdapter = new LiveChatAdapter(live, ready);
@@ -54,11 +56,12 @@ public final class JournalClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (open.consumeClick()) {
                 if (client.screen == null && client.player != null)
-                    client.setScreen(new JournalScreen(service, importer, batches, watcher, directory, identities, live, liveAdapter));
+                    client.setScreen(new JournalScreen(service, importer, batches, watcher, directory, identities, live, liveAdapter, scenes));
             }
         });
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
             live.close();
+            scenes.close();
             identities.close();
             watcher.close();
             batches.close();

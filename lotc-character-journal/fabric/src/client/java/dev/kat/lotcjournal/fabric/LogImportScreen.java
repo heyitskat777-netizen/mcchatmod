@@ -24,6 +24,7 @@ public final class LogImportScreen extends Screen {
     private final Path gameDirectory;
     private final LiveCaptureService live;
     private final IdentityService identities;
+    private final dev.kat.lotcjournal.application.SceneService scenes;
     private final BatchImportService batches;
     private final FolderWatchService watcher;
     private List<ImportSource> sources = List.of();
@@ -33,13 +34,16 @@ public final class LogImportScreen extends Screen {
     private boolean pending;
     private Button start;
     private Button cancel;
-    private Button transcript;
+    private Button transcript,sceneReview;
 
     public LogImportScreen(Screen parent, LogImportService importer, BatchImportService batches, FolderWatchService watcher, Path gameDirectory) {
         this(parent, importer, batches, watcher, gameDirectory, null, null);
     }
     public LogImportScreen(Screen parent, LogImportService importer, BatchImportService batches, FolderWatchService watcher, Path gameDirectory, LiveCaptureService live, IdentityService identities) {
-        super(Component.literal("Historical / journal import"));
+        this(parent,importer,batches,watcher,gameDirectory,live,identities,null);
+    }
+    public LogImportScreen(Screen parent, LogImportService importer, BatchImportService batches, FolderWatchService watcher, Path gameDirectory, LiveCaptureService live, IdentityService identities, dev.kat.lotcjournal.application.SceneService scenes) {
+        super(Component.literal("Historical / journal import"));this.scenes=scenes;
         this.live = live; this.identities = identities;
         this.parent = parent;
         this.importer = importer;
@@ -68,11 +72,12 @@ public final class LogImportScreen extends Screen {
             notice = "Cancellation keeps committed batches; retry resumes";
         }).bounds(left + panel / 2 + 4, 112, panel / 2 - 4, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Import all / dashboard"), button ->
-            minecraft.setScreen(new FolderImportScreen(this, batches, watcher, gameDirectory)))
+            minecraft.setScreen(new FolderImportScreen(this, batches, watcher, gameDirectory, scenes, identities)))
             .bounds(left, height - 77, panel, 20).build());
         transcript = addRenderableWidget(Button.builder(Component.literal("View transcripts"), button ->
             minecraft.setScreen(new TranscriptScreen(this, importer, sources, identities, null)))
-            .bounds(left, height - 52, panel, 20).build());
+            .bounds(left, height - 52, scenes==null?panel:panel/2-4, 20).build());
+        if(scenes!=null)sceneReview=addRenderableWidget(Button.builder(Component.literal("Review scenes / skip"),button->minecraft.setScreen(new SceneScreen(this,scenes,identities))).bounds(left+panel/2+4,height-52,panel/2-4,20).build());
         addRenderableWidget(Button.builder(Component.literal("Done"), button -> onClose())
             .bounds(left, height - 27, panel, 20).build());
         refreshSources();
@@ -98,7 +103,8 @@ public final class LogImportScreen extends Screen {
                 live.importJournal(path).whenComplete((ignored,error) -> minecraft.execute(() -> {
                     pending = false;
                     if (minecraft.screen != this) return;
-                    notice = error == null ? "Journal format import complete" : "Journal import failed: use a complete closed single-segment file";
+                    if(error==null&&scenes!=null)scenes.refreshSuggestions();
+                    notice = error == null ? "Journal format import complete; Review scenes or skip for now" : "Journal import failed: use a complete closed single-segment file";
                     refreshSources(); tick();
                 }));
                 return;
@@ -110,7 +116,8 @@ public final class LogImportScreen extends Screen {
             tick();
             importer.importFile(path, names).whenComplete((progress, error) -> minecraft.execute(() -> {
                 pending = false;
-                notice = error == null ? "Finished; view transcripts or import another file"
+                if(error==null&&scenes!=null)scenes.refreshSuggestions();
+                notice = error == null ? "Finished; Review scenes / skip, or view transcripts"
                     : "Import stopped; see status and retry a finished valid log";
                 refreshSources();
                 tick();
@@ -124,6 +131,7 @@ public final class LogImportScreen extends Screen {
         start.active = !busy && !pathValue.isBlank() && state != ImportView.State.CLOSED;
         cancel.active = busy;
         transcript.active = !busy && !sources.isEmpty();
+        if(sceneReview!=null)sceneReview.active=!busy&&!sources.isEmpty();
     }
 
     @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {

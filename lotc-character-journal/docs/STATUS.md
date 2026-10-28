@@ -1,3 +1,144 @@
+# Current work — October 27, 2026: Phase 3 linked history and Phase 4 scenes
+
+User authorizes proceeding through Phase 4. Branch `feature/scenes` continues
+`7125d8c` (alpha.11), target Fabric / Minecraft **1.21.11**, **Java 21**; build
+**alpha.12**. Main remains unchanged. Implementation is delivered; focused real
+scene/modpack acceptance remains separate. See [USER_TEST_SCENES.md](USER_TEST_SCENES.md).
+
+Confirmed identity groups now share transitive related dialogue, deduplicating
+immutable source coordinates rather than text. Undo immediately separates groups;
+effective reviewed tags, favorite/text/channel/kind filters and denials remain.
+Global identity links/tag edits grant no persona knowledge.
+
+Phase 4 adds main-screen **Scenes**, post-import **Review scenes / skip**, source/
+session-local RP suggestions, editable titles/manual locations/participants,
+durable **Skip for now**, configurable inactivity gaps, searched/scrollable scene
+dialogue, and explicit selected-message split / saved-scene combine. Suggestions
+are observation windows, not proof of a single crowded-room conversation. Missing
+clocks/dates/locations stay unknown; source clock reversal and ownership changes
+split conservatively. Mentions are not attendees. Manual DIRECT/OVERHEARD requires
+an explicit persona perspective; silent attendees can be added without granting
+memories. Confirmed/skipped memberships are protected hard boundaries during
+regrouping. Split inherits reviewed interpretations into both halves for review.
+
+Characters schema **4** adds scene metadata, exact memberships, participants and
+gap settings after a verified paired backup of schemas 1/2/3. Archive schema **9**
+and parser policy **4** stay unchanged. Revision checks/tombstones reject stale/ABA
+edits; split/combine and owned-source undo are atomic in the bound pair. Counts
+are observations, not reconstructed exact emotes. Active time estimates cap each
+adjacent gap at 60 seconds; mixed/missing/reversed chronology is unknown.
+
+Persona scenes project only explicitly assigned RP messages and raw confirmed
+SPEAKER attribution, without resolving global links or using shared tag identities.
+Unassigned identities remain unresolved. Their counts derive from their own
+assignment/text; shared titles/locations/silent attendees stay hidden. Shared skip
+decisions never hide their assigned evidence. Summary pages use SQL count/LIMIT,
+not whole-archive dialogue/tag/statistic materialization. Nonempty search streams
+visible text and only queries eligible participant names when needed.
+
+Native build, verification and read-only review agents completed their primary
+assignments. Coordinator owns integration/UI/domain/application/docs. Reviewer
+identified and checked fixes for persona identity/statistics leaks, stale untouched
+participant drafts, duplicate-name perspective labels, and list-query cost. No
+blocking review finding remains. The verification agent hit its usage limit during
+a final follow-up after writing two more fault/input cases; coordinator inspected
+and executed that delta. No simulated agents or weakened assertions/timeouts.
+
+## Integrated verification
+
+```sh
+./gradlew check :fabric:build :fabric:prepareClientSmoke --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+```
+
+**333 core tests, 0 failures/errors/skips** — domain 17, application 22, parsing
+116, ingestion 58, storage 120. There are **28 new cases** covering transitive exact
+history, reviewed tags/favorites/undo, source/context/clock/midnight/live boundaries,
+max grouping and time estimates, bounded off-thread work, growing-source revisions,
+manual/skip barriers, persona-only attribution and search, invalid participant/save
+inputs, partial split/combine/undo failure rollback, restart, paired restore and a
+genuine characters-3→4 upgrade retaining old reviews/denials/personas. **14 runner
+contract tests passed in 1.117s**. Architecture checks and packaged six-runtime-JAR
+verification passed; pins remain unchanged except mod alpha.12.
+
+Initial integration compiled production Fabric, but a new whole-object test assumed
+derived timing stayed unchanged after ownership changes. Independent review
+confirmed mixed ownership makes timing uncertain. The corrected test retains exact
+metadata, manual participants, coordinate order/counts and persona assertions, and
+explicitly requires null duration. Integrated-2 passed 331 tests in 14s. After list
+optimization and two added fault/input cases, integrated-3 executed all **333** and
+passed in **21s**. A final responsive statistics/narration improvement was followed
+by integrated-4 **PASS in 12s**, 34 tasks (8 executed, 26 up-to-date; core unchanged).
+No baseline assertion or accepted privacy/persistence requirement was relaxed.
+
+## Actual isolated Minecraft client verification
+
+```sh
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --prepared --timeout 300 --run-id phase-four-3
+```
+
+EULA acceptance remains the user's prior authorization. Graphics is established
+before the journal; synthetic worlds/profiles only, no live LoTC connection.
+
+`phase-four-1`: graphics **PASS 20.5s**, development writer **FAIL 44.2s** on the
+existing native-import success prefix. The coordinator had renamed that UI text;
+three live events/reimport remained correct. Production now preserves `Journal
+format import complete` and appends scene guidance; the old assertion and all
+budgets are unchanged. Later phases were not run. Failure evidence is retained.
+This was an application/UI-copy regression, not a graphics environment failure.
+
+After that repair and privacy/list/draft fixes, `phase-four-2` **passed all five**
+phases: **25.5 / 35.3 / 33.8 / 40.0 / 34.6s**. Screenshots exposed a narrow statistics
+line, so final UI uses S/A/M-R labels at small widths, full narration and explicit
+participant-limit guidance. Fresh preparation preceded final `phase-four-3`:
+
+| Final local phase | Elapsed | Result |
+| --- | --- | --- |
+| graphics-preflight | 25.2s | PASSED |
+| development-write | 35.0s | PASSED |
+| development-read | 34.8s | PASSED |
+| packaged-write | 39.1s | PASSED |
+| packaged-read | 34.1s | PASSED |
+
+Writers pass **26 assertion stages**, readers **27**, with launch/report identity,
+actual keybind/world/widget interactions, selected-message operations, multitag
+reviews, scene title/location/participant drafts across resize, save, precise split
+and combine, skip/restart/reimport, explicit persona projection, paired backups and
+clean worker shutdown. New `lotc-scene-*` liveness is checked alongside existing
+workers. Original dialogue, favorites and persona assignment digests stay exact.
+Packaged runs load the real remapped mod and SQLite/nested modules from JARs.
+Selected packaged small-editor and persona screenshots were inspected; screenshots
+are supplemental to assertions. Evidence with JSON/JUnit/logs/screenshots and
+separate launch/shutdown witnesses:
+`fabric/build/client-smoke/evidence/phase-four-3/`.
+
+Installable JAR: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.12.jar`,
+**14,780,536 bytes**, SHA-256
+`230becc88d8a6304d2c089df186116ee7467f7ef2e982ba1c98d12e47b871689`.
+Download bundle: `/workspace/artifacts/lotc-character-journal-alpha.12.zip` contains
+only that JAR, installation instructions, checksum and user checklist. JAR and ZIP
+integrity were checked. [Machine-readable evidence](verification/core-results.json).
+
+## Acceptance, limitations and publication
+
+Phase 3/4 implementation and local automated checks pass; alpha.11 tag corrections
+and alpha.12 real-scene usefulness still need the focused user checklist. Test quiet,
+crowded and interrupted dialogue, participant/location correction, skip/restart,
+link undo and restoration of a backup copy in the actual modpack. Record false
+joins/splits separately from import correctness. Missing location evidence requires
+manual entry; no geographic identification is invented. Large detailed-scene and
+regrouping latency/memory remain unmeasured against real archives. Phase 2 private
+reference/performance acceptance is also distinct. Do not mark all milestone user
+acceptance complete from synthetic tests. Phases 5/6 AI and extraction remain later.
+
+GitHub API requests currently fail at the environment proxy (CONNECT HTTP 403),
+even the escalated read-only attempt; git read access succeeds. Publication is
+pending a verified commit/push/PR attempt. The existing Actions workflow includes
+all required checks and the extended client stage; no CI result is claimed until
+observed. [Prepared pull-request description](PR_PHASE4.md).
+
+---
+
 # Current work — October 27, 2026: durable message tag review
 
 Kat reports alpha.10 smoke tests passed. Branch `feature/message-tag-review`

@@ -24,12 +24,13 @@ public final class JournalScreen extends Screen {
     private final BatchImportService batches;
     private final FolderWatchService watcher;
     private final IdentityService identities;
+    private final dev.kat.lotcjournal.application.SceneService scenes;
     private final LiveCaptureService live;
     private final LiveChatAdapter liveAdapter;
     private EditBox search;
     private Button layout;
     private Button backup;
-    private Button importLogs, transcripts, characters, memories, capture;
+    private Button importLogs, transcripts, characters, memories, capture, scenesButton;
     private boolean loadingTranscripts;
     private String operation = "";
     private boolean savingLayout;
@@ -38,7 +39,10 @@ public final class JournalScreen extends Screen {
         .orElseThrow().getMetadata().getVersion().getFriendlyString();
 
     public JournalScreen(JournalService service, LogImportService importer, BatchImportService batches, FolderWatchService watcher, Path directory, IdentityService identities, LiveCaptureService live, LiveChatAdapter liveAdapter) {
-        super(Component.literal("Character Journal"));
+        this(service,importer,batches,watcher,directory,identities,live,liveAdapter,null);
+    }
+    public JournalScreen(JournalService service, LogImportService importer, BatchImportService batches, FolderWatchService watcher, Path directory, IdentityService identities, LiveCaptureService live, LiveChatAdapter liveAdapter, dev.kat.lotcjournal.application.SceneService scenes) {
+        super(Component.literal("Character Journal"));this.scenes=scenes;
         this.service = service;
         this.directory = directory;
         this.importer = importer;
@@ -54,7 +58,7 @@ public final class JournalScreen extends Screen {
         search.setMaxLength(120);
         addRenderableWidget(search);
         importLogs = addRenderableWidget(Button.builder(Component.literal("Log import"), button ->
-            minecraft.setScreen(new LogImportScreen(this, importer, batches, watcher, FabricLoader.getInstance().getGameDir(), live, identities)))
+            minecraft.setScreen(new LogImportScreen(this, importer, batches, watcher, FabricLoader.getInstance().getGameDir(), live, identities, scenes)))
             .bounds(left, 115, panel / 2 - 4, 20).build());
         transcripts = addRenderableWidget(Button.builder(Component.literal("View transcripts"), button -> {
             loadingTranscripts = true; operation = "Loading transcripts..."; tick();
@@ -98,7 +102,8 @@ public final class JournalScreen extends Screen {
                     operation = error == null ? "Backup created" : "Backup failed; you can retry";
                     tick();
                 }));
-        }).bounds(left, 190, panel, 20).build());
+        }).bounds(left, 190, scenes==null?panel:panel/2-4, 20).build());
+        if(scenes!=null)scenesButton=addRenderableWidget(Button.builder(Component.literal("Scenes"),button->minecraft.setScreen(new SceneScreen(this,scenes,identities))).bounds(left+panel/2+4,190,panel/2-4,20).build());
         addRenderableWidget(Button.builder(Component.literal("Done"), button -> onClose())
             .bounds(left, height - 24, panel, 20).build());
         tick();
@@ -112,6 +117,7 @@ public final class JournalScreen extends Screen {
         importLogs.active = layout.active && !loadingTranscripts;
         transcripts.active = layout.active && !loadingTranscripts;
         characters.active = memories.active = layout.active;
+        if(scenesButton!=null)scenesButton.active=layout.active;
         capture.active = ready && live.snapshot().state() != LiveCaptureService.State.CLOSED;
         capture.setMessage(Component.literal(live.snapshot().paused() ? "Resume live capture" : "Pause live capture"));
         layout.setMessage(Component.literal("Layout: " +

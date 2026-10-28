@@ -219,3 +219,42 @@ Saved lists survive alias edits, reimports, live replay, restart and paired back
 Optimistic revisions prevent stale edits; restoring automatic mode retains a revision
 marker so an older draft cannot overwrite it. Save supports at most 64 reviewed
 tags with explicit limits; larger automatic sets are not silently truncated.
+
+## Through Phase 4 — October 27, 2026
+
+Kat authorizes completing the remaining Phase 3 implementation and Phase 4.
+Shared related-dialogue views project the reversible transitive confirmed identity
+component, deduplicating exact source coordinates. Neither merges nor tag reviews
+rewrite original observations or grant any persona knowledge.
+
+Scenes are conservative source/session-local RP windows, with a configurable
+15-minute inactivity default (1–120 minute bound), strict greater-than boundary,
+clock reversal/missing-clock splits, explicit ownership-context boundaries and
+5,000-message chunks. Windows may contain interleaved conversations; grouping is a
+suggestion, never confirmed identity/location/interaction proof. Missing historical
+locations/dates/timezones stay unknown. Manual location entry is an interpretation.
+
+Scene metadata and memberships live in characters.sqlite schema 4, separate from
+immutable dialogue in archive schema 9. Confirmed/skipped exact memberships and
+participant edits persist across refresh/settings changes/import/restart/backup.
+Optimistic revisions and inactive header tombstones protect against stale/ABA
+writes. Split/combine are atomic coordinate operations; source undo trims only
+owned membership and invalidates affected revisions. Review occurs after commits,
+with Skip for now and later correction; no import transaction waits on UI.
+
+Shared automatic participants use effective SPEAKER/ACTION tags and confirmed
+identity groups, never MENTION alone. Manual participants can include a silent
+attendee. DIRECT/OVERHEARD requires an explicit persona perspective; this grants no
+knowledge. Persona scene reads project every message/count from explicit owned RP
+assignments, hide shared titles/locations, and expose only their own explicit
+SPEAKER identity IDs without resolving global links. Unknown assignment identities
+remain unknown. Their interpretation counts derive from their own assignment and
+owned text syntax, so shared tag/merge edits do not expose a secret identity or
+change their knowledge. Shared manual attendees never become persona memories.
+
+Speech/action/mention totals count observations, not exact reconstructed emotes.
+Active time estimates sum adjacent gaps capped at 60 seconds; elapsed/active are
+unknown for missing, mixed-source/context or reversed chronology. Cross-source
+manual combine is allowed explicitly but cannot invent a common clock/location.
+AI remains off/unimplemented; scenes work entirely offline. Real-scene acceptance,
+large-archive budgets and actual modpack backup restoration are separate checks.
