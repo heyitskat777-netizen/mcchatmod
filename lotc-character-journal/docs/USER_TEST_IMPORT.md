@@ -4,7 +4,9 @@ This is the original alpha.2 checklist. For alpha.4 cleanup, scrolling, migratio
 and parser-policy limits, use [USER_TEST_DIALOGUE_SCROLL.md](USER_TEST_DIALOGUE_SCROLL.md).
 
 This build adds historical imports and transcript inspection. Live capture,
-character identities/personas, previous-database import, and AI remain future work.
+This historical checklist predates native character/persona tools; see the latest
+STATUS.md and USER_TEST_CHARACTER_BROWSER.md. No unrelated old-database importer
+is planned. AI remains future work.
 Use Minecraft 1.21.11 / Fabric / Java 21 and the `0.1.0-alpha.2` development JAR.
 
 1. Open the journal with its configured key and click **Log import**.

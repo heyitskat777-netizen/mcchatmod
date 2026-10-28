@@ -10,14 +10,15 @@ The user has accepted the Phase 1 foundation smoke test. Press **J** in a world
 to open the journal; its key is rebindable in Controls. Layout settings and backup
 creation remain available. Characters now supports explicit names, aliases and notes; persona memories require manual message assignment.
 
-The `0.1.0-alpha.7` development build expands **Log import** for finished UTF-8 `.log`
+The `0.1.0-alpha.11` development build expands **Log import** for finished UTF-8 `.log`
 and `.log.gz` files, background validation, progress/cancellation, restart-safe
 checkpoints, repeat-import deduplication, and a transcript browser with literal
 text search. **Import all / dashboard** adds a read-only folder preview,
 confirmed batch import, durable per-file reports/retry and batch-owned undo.
 Transcript browsing supports All sources, channel filters, a direct **Roleplay only**
 view and UNKNOWN review. Recognized persona/plugin notices are ignored; IC-channel
-and sender/emote evidence classifies new RP without guessing speaker identities.
+and sender/emote evidence classifies new RP; trusted anchored speech/actions also
+create observed character records.
 Older cleaned UNKNOWN observations are not promoted from wording alone.
 The main journal now has **View transcripts**, without opening the import screen.
 Click an individual dialogue message to select its highlighted row, then **Favorite selected**, or click its
@@ -38,12 +39,15 @@ through Details. The database stores cleaned dialogue without redundant raw logg
 lines. Logger/thread tags, recognized leading RP tags, log clocks and color escapes
 are removed from the payload; quoted markers inside speech remain. Source
 fingerprints, line coordinates, clocks and channel uncertainty remain separate
-metadata. Names remain unresolved unless supplied as
-reviewed observations before import. Character/persona links require explicit user
-confirmation through Assign; import never creates those links automatically.
+metadata. Names found in trusted ROLEPLAY speaker/action headers create observed characters.
+New names and aliases search earlier dialogue; ambiguous collisions stay unresolved.
+**Related dialogue** on a saved character filters speech, actions and mentions.
+Persona memories still require explicit confirmation through Assign.
 
-Settings live in `config/lotc-journal/journal.sqlite`. Backups are stored in
-`config/lotc-journal/backups/`. A schema migration creates a verified backup of an existing schema-1 through schema-7
+Dialogue, import/live state, settings and favorites live in
+`config/lotc-journal/archive.sqlite`. Characters, aliases, personas and evidence
+live in `config/lotc-journal/characters.sqlite`. Backups are stored in
+`config/lotc-journal/backups/`. A schema migration creates a verified backup of an existing schema-1 through schema-8
 database before upgrading the journal. Undo removes active batch-owned records
 while keeping source checkpoints and payload-free removal accounting; it does not
 restore them on repeat import or erase existing backups. Live capture now starts automatically in worlds and offers pause/resume on the main
@@ -56,19 +60,40 @@ Only acknowledged forced writes receive the crash-recovery guarantee; messages
 still in memory when the process dies can be lost. See the actual verification
 limits and restore behavior in STATUS.md.
 
-**Characters** manages manual archive names/aliases/notes/account observations.
+**Characters** shows a searchable, paged list of saved characters. Click a row to
+review its name, aliases, notes and account observation. **New character** opens a
+separate draft; Save character persists it. **Use as persona** is available for a
+saved, unchanged character; unsaved drafts/edits explain why saving is required.
+Saved characters remain selectable after reopening/search; resizing preserves the
+current editor draft.
+Aliases support escaped semicolons/backslashes and the full native field bounds.
 **Use as persona** creates/selects a persona; **Assign** on an individually selected
 message asks for its owning persona, identity or unassigned choice, and whether it
-is a reference or speaker attribution. **Persona memories** shows only explicit
+is a reference or speaker attribution. **Review tags** on a selected transcript message opens its shared character tags.
+Search for a character, choose its UUID, then Add/Replace/Remove tags and
+**Save reviewed tags**. **Reject all tags** stores an empty reviewed list;
+**Restore automatic** resumes current suggestions. Saved reviews survive alias
+changes, imports and restarts. UNKNOWN supports mentions only. Failed/stale saves
+keep the draft and require explicit reload. These controls leave original dialogue
+and persona memories intact. See [the tag-review checklist](docs/USER_TEST_MESSAGE_TAGS.md).
+**Persona memories** shows only explicit
 assignments. Shared archive Transcripts remains separate. Review identity links
-supports explicit confirmation and persistent undo; duplicate names/aliases never
-merge automatically. The old character-database importer needs its actual schema.
+supports explicit confirmation, **Deny link / keep separate**, and persistent undo.
+Denials block direct/indirect linking until **Clear selected denial**; clearing does
+not link automatically. Duplicate names/aliases never merge automatically.
+Characters schemas 1/2 upgrade to schema 3 after a verified paired backup. The mod owns two bound SQLite files: `.log`/`.log.gz` imports and live recording
+populate `archive.sqlite`; character records and confirmed assignments use
+`characters.sqlite`. Upgrading copies native `journal.sqlite` without changing it,
+then migrates the copy. Backups contain both SQLite files and a `.pair.json`
+manifest: keep and restore all three together. Missing/mismatched members fail
+closed. See [the upgrade checklist](docs/USER_TEST_CHARACTER_DISCOVERY.md). An unrelated old-database importer is no longer planned.
 
 Native `.lotc-chat.jsonl` repeat imports reuse event IDs. Ordinary `.log` overlaps
 with live events remain separate when their identity cannot be proved; genuine
 repeated text is not discarded. Nearby recognition, scenes, AI and favorite-driven
 extraction remain future work.
-See [docs/USER_TEST_LIVE_PERSONAS.md](docs/USER_TEST_LIVE_PERSONAS.md) for alpha.7
+See [docs/USER_TEST_CHARACTER_BROWSER.md](docs/USER_TEST_CHARACTER_BROWSER.md) for alpha.8
+and [docs/USER_TEST_LIVE_PERSONAS.md](docs/USER_TEST_LIVE_PERSONAS.md) for alpha.7
 and the policy-4 partial-import upgrade requirement.
 See [docs/USER_TEST_ROLEPLAY_FILTER.md](docs/USER_TEST_ROLEPLAY_FILTER.md) before
 upgrading, especially if alpha.4 imports are incomplete.

@@ -40,7 +40,7 @@ import java.time.Instant;
 
 /** SQLite adapter. Callers use short-lived connections only on journal/import worker threads. */
 public final class SqliteJournalStore implements SettingsRepository, BackupService, CaptureRepository, BatchRepository, LiveRepository {
-    private static final int SCHEMA_VERSION = 8;
+    private static final int SCHEMA_VERSION = 9;
     private static final String SETTINGS_SQL = "CREATE TABLE journal_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)";
     private static final String SOURCES_SQL = """
         CREATE TABLE capture_sources (
@@ -166,104 +166,127 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
           PRIMARY KEY(source_id,sequence)
         )
         """;
-    private final Path database;
+    private final Path database, characters;
     private boolean startupRecovered;
     private final DialogueNormalizer normalizer;
 
     public SqliteJournalStore(Path database, DialogueNormalizer normalizer) {
-        this.database = database.toAbsolutePath(); this.normalizer = Objects.requireNonNull(normalizer);
+        this(database,SplitJournalFiles.charactersFor(database),normalizer);
     }
+    public SqliteJournalStore(Path database,Path characters,DialogueNormalizer normalizer) {
+        this.database=database.toAbsolutePath().normalize(); this.characters=characters.toAbsolutePath().normalize();
+        this.normalizer=Objects.requireNonNull(normalizer);
+    }
+    private Connection open() throws SQLException { return SplitJournalFiles.open(database,characters); }
 
-    private Connection open() throws SQLException {
-        Connection connection = DriverManager.getConnection("jdbc:sqlite:" + database);
-        try (var statement = connection.createStatement()) {
-            statement.execute("PRAGMA foreign_keys=ON");
-            statement.execute("PRAGMA busy_timeout=2000");
-        } catch (SQLException error) {
-            connection.close();
-            throw error;
+    private void bootstrapLegacyIfNeeded() throws Exception {
+        if(!database.getFileName().toString().equals("archive.sqlite")||Files.exists(database,java.nio.file.LinkOption.NOFOLLOW_LINKS)) return;
+        if(Files.exists(characters,java.nio.file.LinkOption.NOFOLLOW_LINKS)) throw new SQLException("Archive is missing from an established or unrelated pair");
+        Path legacy=database.resolveSibling("journal.sqlite");
+        if(!Files.exists(legacy,java.nio.file.LinkOption.NOFOLLOW_LINKS)) return;
+        if(!Files.isRegularFile(legacy,java.nio.file.LinkOption.NOFOLLOW_LINKS)||Files.isSymbolicLink(legacy)) throw new SQLException("Invalid native migration source");
+        Path staged=database.resolveSibling(database.getFileName()+".bootstrap-"+UUID.randomUUID());
+        boolean published=false;
+        try {
+            // Read-only SQLite snapshot includes committed WAL pages without changing the
+            // old native database, its IDs, or the user's source files.
+            try(var old=DriverManager.getConnection("jdbc:sqlite:"+legacy.toUri()+"?mode=ro")) {
+                int version=version(old,"main");
+                if(version<1||version>8) throw new SQLException("Unsupported native migration source");
+                validateSchema(old,version);verifyIntegrity(old);NativePairBackup.legacy(old,staged);
+            }
+            try(var saved=SplitJournalFiles.archive(staged)) {validateSchema(saved,version(saved,"main"));verifyIntegrity(saved);}
+            Files.move(staged,database,java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            SplitJournalFiles.forceDirectory(database.getParent());published=true;
+        } finally {if(!published) Files.deleteIfExists(staged);}
+    }
+    private static int version(Connection c,String schema) throws SQLException {
+        try(var s=c.createStatement();var r=s.executeQuery("PRAGMA "+schema+".user_version")) {return r.getInt(1);}
+    }
+    private static void requireEmpty(Connection c,String schema) throws SQLException {
+        try(var s=c.createStatement();var r=s.executeQuery("SELECT name FROM "+schema+".sqlite_master WHERE name NOT LIKE 'sqlite_%'")) {
+            if(r.next()) throw new SQLException("Refusing to adopt unrelated storage");
         }
-        return connection;
+        if(version(c,schema)!=0) throw new SQLException("Unexpected empty database version");
     }
 
     @Override public synchronized void initialize() throws Exception {
-        Files.createDirectories(database.getParent());
-        try (Connection connection = open(); var statement = connection.createStatement()) {
-            int version;
-            try (var result = statement.executeQuery("PRAGMA user_version")) {
-                version = result.getInt(1);
-            }
-            if (version < 0 || version > SCHEMA_VERSION) throw new SQLException("Unsupported journal database version");
-            if (version == 0) {
-                try (var tables = statement.executeQuery(
-                    "SELECT name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'")) {
-                    if (tables.next()) throw new SQLException("Refusing to adopt an unrelated database");
-                }
+        Files.createDirectories(database.getParent());SplitJournalFiles.paths(database,characters);
+        try(var ownership=SplitJournalFiles.initializationLock(database)) {initializeOwned();}
+    }
+    private void initializeOwned() throws Exception {
+        Files.createDirectories(database.getParent());SplitJournalFiles.paths(database,characters);bootstrapLegacyIfNeeded();
+        if(!Files.exists(database,java.nio.file.LinkOption.NOFOLLOW_LINKS)&&Files.exists(characters,java.nio.file.LinkOption.NOFOLLOW_LINKS))
+            throw new SQLException("Archive is missing from a native pair");
+        try(Connection connection=SplitJournalFiles.archive(database);var statement=connection.createStatement()) {
+            int oldVersion=version(connection,"main");
+            if(oldVersion<0||oldVersion>SCHEMA_VERSION) throw new SQLException("Unsupported journal database version");
+            if(oldVersion==0) requireEmpty(connection,"main");
+            else if(oldVersion<9) {
+                validateSchema(connection,oldVersion);verifyIntegrity(connection);
+                Path backup=database.getParent().resolve("backups").resolve(database.getFileName()+"-pre-schema9-"+UUID.randomUUID()+".sqlite");
+                NativePairBackup.legacy(connection,backup);
+                try(var saved=SplitJournalFiles.archive(backup)) {validateSchema(saved,oldVersion);verifyIntegrity(saved);}
+            } else if(!Files.isRegularFile(characters,java.nio.file.LinkOption.NOFOLLOW_LINKS)) throw new SQLException("Characters file is missing from a native pair");
+            SplitJournalFiles.attach(connection,characters);
+            if(oldVersion<9) requireEmpty(connection,"characters");
+            else {SplitJournalFiles.validatePair(connection,true);validateSchema(connection,9);validateCharacters(connection);verifyIntegrity(connection);SplitJournalFiles.integrity(connection,"characters");}
+            // Only validated, backed-up legacy data can switch modes. Both databases
+            // must use rollback journals and FULL sync before an attached write.
+            SplitJournalFiles.configure(connection);
+            if(oldVersion<9) {
                 connection.setAutoCommit(false);
                 try {
-                    statement.execute(SETTINGS_SQL);
-                    statement.execute("INSERT INTO journal_settings VALUES ('compact_layout','false')");
-                    createCaptureSchema(connection);
-                    createWorkflowSchema(connection);
-                    statement.execute(FAVORITES_SQL);
-                    statement.execute(LIVE_SESSIONS_SQL);
-                    statement.execute(LIVE_EVENTS_SQL);
-                    IdentitySchema.create(connection);
-                    statement.execute("PRAGMA user_version=8");
-                    validateSchema(connection, SCHEMA_VERSION);
-                    verifyIntegrity(connection);
+                    if(oldVersion==0) {statement.execute(SETTINGS_SQL);statement.execute("INSERT INTO journal_settings VALUES ('compact_layout','false')");}
+                    if(oldVersion<2) createCaptureSchema(connection);
+                    if(oldVersion<3) createWorkflowSchema(connection);
+                    if(oldVersion>=2&&oldVersion<8) migrateDialogue(connection,oldVersion);
+                    if(oldVersion<6) statement.execute(FAVORITES_SQL);
+                    if(oldVersion<7) {statement.execute(LIVE_SESSIONS_SQL);statement.execute(LIVE_EVENTS_SQL);}
+                    if(oldVersion==8) IdentitySchema.migrate(connection); else IdentitySchema.create(connection);
+                    SplitJournalFiles.createPair(connection);
+                    statement.execute("PRAGMA main.user_version=9");statement.execute("PRAGMA characters.user_version=3");
+                    CharacterIndex.reindex(connection);
+                    validateSchema(connection,9);validateCharacters(connection);verifyIntegrity(connection);SplitJournalFiles.integrity(connection,"characters");
                     connection.commit();
-                } catch (SQLException | RuntimeException error) {
-                    connection.rollback();
-                    throw error;
-                } finally { connection.setAutoCommit(true); }
-            } else if (version < SCHEMA_VERSION) {
-                validateSchema(connection, version);
-                verifyIntegrity(connection);
-                // No schema or WAL mutation until a complete, owned old-version snapshot exists.
-                Path backup = createBackup(database.getParent().resolve("backups").resolve(
-                    database.getFileName() + "-pre-schema8-" + UUID.randomUUID() + ".sqlite"));
-                try (var saved = DriverManager.getConnection("jdbc:sqlite:" + backup)) {
-                    validateSchema(saved, version);
-                    verifyIntegrity(saved);
-                }
-                connection.setAutoCommit(false);
-                try {
-                    if (version == 1) createCaptureSchema(connection);
-                    if (version < 3) createWorkflowSchema(connection);
-                    if (version >= 2 && version < 8) migrateDialogue(connection, version);
-                    if (version < 6) statement.execute(FAVORITES_SQL);
-                    if (version < 7) {
-                        statement.execute(LIVE_SESSIONS_SQL);
-                        statement.execute(LIVE_EVENTS_SQL);
-                    }
-                    IdentitySchema.create(connection);
-                    statement.execute("PRAGMA user_version=8");
-                    validateSchema(connection, SCHEMA_VERSION);
-                    verifyIntegrity(connection);
-                    connection.commit();
-                } catch (SQLException | RuntimeException error) {
-                    connection.rollback();
-                    throw error;
-                } finally { connection.setAutoCommit(true); }
+                } catch(Exception failure) {connection.rollback();throw failure;}
+                finally {connection.setAutoCommit(true);}
             }
-            validateSchema(connection, SCHEMA_VERSION);
-            verifyIntegrity(connection);
-            statement.execute("PRAGMA journal_mode=WAL");
-            if (!startupRecovered) {
-                connection.setAutoCommit(false);
+            NativePairBackup.verifyForAdoption(connection,database,characters);
+            if(version(connection,"characters")<3) upgradeCharacters(connection);
+            SplitJournalFiles.validatePair(connection);
+            validateSchema(connection,9);validateCharacters(connection);verifyIntegrity(connection);SplitJournalFiles.integrity(connection,"characters");
+            if(!startupRecovered) {
+                SplitJournalFiles.beginWrite(connection);
                 try {
                     statement.executeUpdate("UPDATE batch_files SET status='INTERRUPTED',error_code='PROCESS_INTERRUPTED' WHERE status IN ('PENDING','RUNNING')");
                     statement.executeUpdate("UPDATE watch_attempts SET status='INTERRUPTED' WHERE status='ATTEMPTED'");
-                    try (var recovery = connection.prepareStatement("UPDATE import_batches SET status='INTERRUPTED',updated_at=? WHERE status IN ('PENDING','RUNNING')")) {
-                        recovery.setString(1, Instant.now().toString());
-                        recovery.executeUpdate();
+                    try(var recovery=connection.prepareStatement("UPDATE import_batches SET status='INTERRUPTED',updated_at=? WHERE status IN ('PENDING','RUNNING')")) {
+                        recovery.setString(1,Instant.now().toString());recovery.executeUpdate();
                     }
-                    connection.commit();
-                    startupRecovered = true;
-                } catch (SQLException failure) { connection.rollback(); throw failure; }
+                    connection.commit();startupRecovered=true;
+                } catch(SQLException failure) {connection.rollback();throw failure;}
+                finally {connection.setAutoCommit(true);}
             }
         }
+    }
+
+    private void upgradeCharacters(Connection connection) throws Exception {
+        int previousVersion=version(connection,"characters");
+        Path backup=database.getParent().resolve("backups").resolve(database.getFileName()+"-pre-characters3-"+UUID.randomUUID()+".sqlite");
+        NativePairBackup.pair(database,characters,backup);
+        try(var saved=SplitJournalFiles.openCompatible(backup,SplitJournalFiles.charactersFor(backup))) {
+            validateSchema(saved,9);validateCharacters(saved);verifyIntegrity(saved);SplitJournalFiles.integrity(saved,"characters");
+        }
+        SplitJournalFiles.beginWrite(connection);
+        try {
+            if(previousVersion<2) IdentitySeparations.create(connection);
+            MessageTagReviews.create(connection);
+            try(var s=connection.createStatement()) {s.execute("PRAGMA characters.user_version=3");}
+            validateSchema(connection,9);validateCharacters(connection);SplitJournalFiles.integrity(connection,"characters");
+            connection.commit();
+        } catch(Exception failure) {connection.rollback();throw failure;}
+        finally {connection.setAutoCommit(true);}
     }
 
     private static void createCaptureSchema(Connection connection) throws SQLException {
@@ -316,6 +339,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                         update.setString(1, line.sourceId());
                         if (update.executeUpdate() != 1) throw new SQLException("Invalid legacy source contribution");
                     }
+                    if (previousVersion >= 9) removeCharacterReferences(connection,line.sourceId(),line.line());
                     try (var delete = connection.prepareStatement("DELETE FROM transcript_lines WHERE source_id=? AND source_line=?")) {
                         delete.setString(1, line.sourceId()); delete.setLong(2, line.line());
                         if (delete.executeUpdate() != 1) throw new SQLException("Legacy dialogue changed during migration");
@@ -357,7 +381,8 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 expected.put("live_sessions", LIVE_SESSIONS_SQL);
                 expected.put("live_events", LIVE_EVENTS_SQL);
             }
-            if (version >= 8) expected.putAll(IdentitySchema.TABLES);
+            if (version == 8) expected.putAll(IdentitySchema.LEGACY_TABLES);
+            if (version >= 9) expected.put("storage_pair", SplitJournalFiles.PAIR_SQL);
             int found = 0;
             try (var objects = statement.executeQuery(
                 "SELECT name, type, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'")) {
@@ -390,7 +415,8 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
         if (version >= 2) validateCaptureData(connection, version >= 3, version >= 4, version >= 8);
         if (version >= 3) validateWorkflowData(connection);
         if (version >= 7) validateLiveData(connection);
-        if (version >= 8) IdentitySchema.validate(connection);
+        if (version == 8) IdentitySchema.validateLegacy(connection);
+        if (version >= 9) {SplitJournalFiles.validatePair(connection,true);IdentitySchema.validate(connection);}
     }
 
     private static String normalizeSql(String sql) {
@@ -507,7 +533,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
     @Override public void beginLiveSession(LiveSession session) throws SQLException {
         Objects.requireNonNull(session);
         try (var connection = open()) {
-            connection.setAutoCommit(false);
+            SplitJournalFiles.beginWrite(connection);
             try {
                 try (var insert = connection.prepareStatement("INSERT INTO capture_sources(id,label,format,total_lines,policy_fingerprint) VALUES (?,?,'plain',0,?) ON CONFLICT(id) DO NOTHING")) {
                     insert.setString(1, session.id());
@@ -543,7 +569,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
             || java.time.ZoneId.of(session.zoneId()).getRules().getOffset(event.receivedAt()).getTotalSeconds() != event.offsetSeconds())
             throw new IllegalArgumentException("Conflicting live event provenance");
         try (var connection = open()) {
-            connection.setAutoCommit(false);
+            SplitJournalFiles.beginWrite(connection);
             try {
                 try (var lock = connection.prepareStatement("UPDATE live_sessions SET closed=closed WHERE source_id=?")) {
                     lock.setString(1, session.id());
@@ -575,6 +601,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                     receipt.setString(1, session.id()); receipt.setLong(2, event.sequence()); receipt.setString(3, event.receivedAt().toString());
                     receipt.setInt(4, event.offsetSeconds()); receipt.setString(5, event.kind().name()); receipt.setString(6, event.fingerprint()); receipt.executeUpdate();
                 }
+                CharacterIndex.indexNew(connection,List.of(new TranscriptLine(event.sessionId(),event.sequence(),null,event.text(),event.channel(),event.observedSpeaker())));
                 connection.commit(); return true;
             } catch (SQLException | RuntimeException failure) { connection.rollback(); throw failure; }
         }
@@ -583,7 +610,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
     @Override public void closeLiveSession(String sessionId) throws SQLException {
         requireSourceId(sessionId);
         try (var connection = open()) {
-            connection.setAutoCommit(false);
+            SplitJournalFiles.beginWrite(connection);
             try {
                 try (var update = connection.prepareStatement("UPDATE live_sessions SET closed=1 WHERE source_id=?")) {
                     update.setString(1, sessionId);
@@ -651,7 +678,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
         Objects.requireNonNull(source, "source");
         try (var connection = open(); var insert = connection.prepareStatement(
             "INSERT INTO capture_sources(id,label,format,total_lines,policy_fingerprint) VALUES (?,?,?,?,?) ON CONFLICT(id) DO NOTHING")) {
-            connection.setAutoCommit(false);
+            SplitJournalFiles.beginWrite(connection);
             try {
                 rejectLiveSource(connection, source.id());
                 insert.setString(1, source.id());
@@ -720,7 +747,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
             previous = line.sourceLine();
         }
         try (var connection = open()) {
-            connection.setAutoCommit(false);
+            SplitJournalFiles.beginWrite(connection);
             try {
                 rejectLiveSource(connection, sourceId);
                 BatchFile ownedFile = null;
@@ -800,6 +827,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                     }
                     updateContribution(connection, ownedFile, sourceId, expectedProcessed, nextProcessed, entries.size(), excludedDelta, ignoredDelta);
                 }
+                CharacterIndex.indexNew(connection,entries);
                 connection.commit();
                 return next;
             } catch (SQLException | RuntimeException failure) {
@@ -875,7 +903,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
     @Override public void setFavorite(MessageReference message, boolean favorite) throws SQLException {
         Objects.requireNonNull(message);
         try (var connection = open()) {
-            connection.setAutoCommit(false);
+            SplitJournalFiles.beginWrite(connection);
             try {
                 // Acquire the write lock before existence check: undo cannot race this decision.
                 try (var lock = connection.createStatement()) {
@@ -967,7 +995,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 throw new IllegalArgumentException("New batch must not claim existing observations or progress");
         }
         try (var connection = open()) {
-            connection.setAutoCommit(false);
+            SplitJournalFiles.beginWrite(connection);
             try {
                 try (var insert = connection.prepareStatement("INSERT INTO import_batches VALUES (?,?,?,?,?,?,?)")) {
                     insert.setString(1, plan.id()); insert.setString(2, plan.root()); insert.setString(3, plan.policyFingerprint());
@@ -1026,7 +1054,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
     @Override public void updateFile(String batchId, int ordinal, String status, String sourceId, String errorCode) throws SQLException {
         requireBatchId(batchId);
         try (var connection = open()) {
-            connection.setAutoCommit(false);
+            SplitJournalFiles.beginWrite(connection);
             try {
                 BatchFile file;
                 try (var query = connection.prepareStatement("SELECT f.*,b.status AS batch_status FROM batch_files f JOIN import_batches b ON b.id=f.batch_id WHERE f.batch_id=? AND f.ordinal=?")) {
@@ -1062,7 +1090,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
         requireBatchId(batchId);
         if (!BatchSummary.STATUSES.contains(status) || "PENDING".equals(status) || "UNDONE".equals(status)) throw new IllegalArgumentException("Invalid batch transition");
         try (var connection = open()) {
-            connection.setAutoCommit(false);
+            SplitJournalFiles.beginWrite(connection);
             try {
                 String old;
                 try (var query = connection.prepareStatement("SELECT status FROM import_batches WHERE id=?")) {
@@ -1097,7 +1125,7 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
     @Override public long undoBatch(String batchId) throws SQLException {
         requireBatchId(batchId);
         try (var connection = open()) {
-            connection.setAutoCommit(false);
+            SplitJournalFiles.beginWrite(connection);
             try {
                 String status;
                 try (var query = connection.prepareStatement("SELECT status FROM import_batches WHERE id=?")) {
@@ -1116,6 +1144,11 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
                 long removed;
                 try (var ledger = connection.prepareStatement("INSERT INTO removed_observations SELECT source_id,source_line,batch_id,file_ordinal FROM observation_owners WHERE batch_id=?")) {
                     ledger.setString(1, batchId); removed = ledger.executeUpdate();
+                }
+                for(String table:List.of("memory_assignments","character_evidence","message_tag_reviews")) {
+                    try(var delete=connection.prepareStatement("DELETE FROM characters."+table+" WHERE (source_id,source_line) IN (SELECT source_id,source_line FROM main.observation_owners WHERE batch_id=?)")) {
+                        delete.setString(1,batchId);delete.executeUpdate();
+                    }
                 }
                 try (var delete = connection.prepareStatement("DELETE FROM transcript_lines WHERE (source_id,source_line) IN (SELECT source_id,source_line FROM observation_owners WHERE batch_id=?)")) {
                     delete.setString(1, batchId);
@@ -1214,29 +1247,31 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
         } catch (IllegalArgumentException | ArithmeticException failure) { throw new SQLException("Invalid stored batch metadata", failure); }
     }
 
-    @Override public Path createBackup(Path destination) throws Exception {
-        Path target = destination.toAbsolutePath().normalize();
-        if (target.equals(database)) throw new IllegalArgumentException("Backup must use a different path");
-        if (Files.exists(target)) throw new IllegalArgumentException("Backup already exists");
-        Files.createDirectories(target.getParent());
-        // Atomically reserve the path. VACUUM accepts the zero-byte file, and a second
-        // writer cannot pass the reservation even if it raced the existence check.
-        try { Files.createFile(target); }
-        catch (FileAlreadyExistsException exists) {
-            throw new IllegalArgumentException("Backup already exists", exists);
-        }
-        boolean complete = false;
-        try {
-            try (Connection connection = open();
-                 var backup = connection.prepareStatement("VACUUM INTO ?")) {
-                backup.setString(1, target.toString());
-                backup.execute();
+    private static void removeCharacterReferences(Connection connection,String source,long line) throws SQLException {
+        for(String table:List.of("memory_assignments","character_evidence","message_tag_reviews")) {
+            try(var delete=connection.prepareStatement("DELETE FROM characters."+table+" WHERE source_id=? AND source_line=?")) {
+                delete.setString(1,source);delete.setLong(2,line);delete.executeUpdate();
             }
-            complete = true;
-        } finally {
-            if (!complete) Files.deleteIfExists(target);
         }
-        return target;
+    }
+    private static void validateCharacters(Connection connection) throws SQLException {
+        int characterVersion=version(connection,"characters");
+        var identityIndexes=IdentitySchema.indexesForVersion(characterVersion);
+        var expected=new java.util.HashMap<>(IdentitySchema.tablesForVersion(characterVersion));expected.putAll(identityIndexes);expected.putAll(CharacterIndex.TABLES);expected.putAll(CharacterIndex.INDEXES);expected.put("storage_pair",SplitJournalFiles.PAIR_SQL);
+        int found=0;
+        try(var s=connection.createStatement();var rows=s.executeQuery("SELECT name,type,sql FROM characters.sqlite_master WHERE name NOT LIKE 'sqlite_%'")) {
+            while(rows.next()) {
+                String sql=expected.get(rows.getString(1));
+                String type=CharacterIndex.INDEXES.containsKey(rows.getString(1))||identityIndexes.containsKey(rows.getString(1))?"index":"table";
+                if(sql==null||!type.equals(rows.getString(2))||!normalizeSql(sql).equals(normalizeSql(rows.getString(3)))) throw new SQLException("Refusing unrelated character storage");
+                found++;
+            }
+        }
+        if(found!=expected.size()) throw new SQLException("Incomplete character storage");
+        IdentitySchema.validate(connection);
+    }
+
+    @Override public Path createBackup(Path destination) throws Exception {
+        return NativePairBackup.pair(database,characters,destination.toAbsolutePath().normalize());
     }
 }
-

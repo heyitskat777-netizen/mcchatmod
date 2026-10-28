@@ -1,18 +1,37 @@
 {
-  "date": "2026-10-24",
+  "date": "2026-10-27",
+  "version": "0.1.0-alpha.11",
   "java_target": 21,
   "gradle": "9.7.1",
+  "command": "./gradlew check :fabric:build :fabric:prepareClientSmoke --no-daemon --console=plain",
   "core_gradle_result": "passed",
-  "architecture_negative_control": "passed",
   "suites": [
     {
-      "suite": "dev.kat.lotcjournal.application.JournalServiceTest",
-      "tests": 4,
+      "module": "domain",
+      "suite": "dev.kat.lotcjournal.domain.CharacterNameMatcherTest",
+      "tests": 5,
       "failures": 0,
       "errors": 0,
       "skipped": 0
     },
     {
+      "module": "domain",
+      "suite": "dev.kat.lotcjournal.domain.MessageReferenceTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "domain",
+      "suite": "dev.kat.lotcjournal.domain.MessageTagReviewTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "domain",
       "suite": "dev.kat.lotcjournal.domain.PrivacyPolicyTest",
       "tests": 1,
       "failures": 0,
@@ -20,6 +39,47 @@
       "skipped": 0
     },
     {
+      "module": "application",
+      "suite": "dev.kat.lotcjournal.application.IdentityAliasesTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "application",
+      "suite": "dev.kat.lotcjournal.application.IdentityServiceTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "application",
+      "suite": "dev.kat.lotcjournal.application.JournalServiceTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "parsing",
+      "suite": "dev.kat.lotcjournal.parsing.DialogueTextNormalizerTest",
+      "tests": 17,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "parsing",
+      "suite": "dev.kat.lotcjournal.parsing.LogLineParserPrivacyTest",
+      "tests": 21,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "parsing",
       "suite": "dev.kat.lotcjournal.parsing.LogLineParserTest",
       "tests": 18,
       "failures": 0,
@@ -27,15 +87,305 @@
       "skipped": 0
     },
     {
-      "suite": "dev.kat.lotcjournal.storage.SqliteJournalStoreTest",
+      "module": "parsing",
+      "suite": "dev.kat.lotcjournal.parsing.LongSystemNoticeTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "parsing",
+      "suite": "dev.kat.lotcjournal.parsing.RoleplayNoticeFilteringTest",
+      "tests": 58,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "parsing",
+      "suite": "dev.kat.lotcjournal.parsing.TitledPersonaNoticeTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "ingestion",
+      "suite": "dev.kat.lotcjournal.ingestion.BatchImportServiceTest",
       "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "ingestion",
+      "suite": "dev.kat.lotcjournal.ingestion.CharacterDiscoveryImportTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "ingestion",
+      "suite": "dev.kat.lotcjournal.ingestion.FolderWatchServiceTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "ingestion",
+      "suite": "dev.kat.lotcjournal.ingestion.LiveCaptureServiceTest",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "ingestion",
+      "suite": "dev.kat.lotcjournal.ingestion.LiveCrashRecoveryTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "ingestion",
+      "suite": "dev.kat.lotcjournal.ingestion.LogImportServiceTest",
+      "tests": 25,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "ingestion",
+      "suite": "dev.kat.lotcjournal.ingestion.MessageTagReviewImportTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "ingestion",
+      "suite": "dev.kat.lotcjournal.ingestion.RoleplayIngestionTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.BatchRepositoryTest",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.CaptureRepositoryTest",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.CharacterDiscoveryTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.DialogueMigrationTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.FavoritesStoreTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.IdentityRepositoryTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.IdentitySeparationTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.LiveRepositoryTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.MessageTagReviewTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.PairedDatabaseCrashTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.PairedDatabaseStoreTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.RoleplayPolicyMigrationTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.SqliteJournalStoreTest",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": "storage",
+      "suite": "dev.kat.lotcjournal.storage.TitledNoticeUpgradeTest",
+      "tests": 1,
       "failures": 0,
       "errors": 0,
       "skipped": 0
     }
   ],
-  "total_tests": 29,
-  "fabric_build": "blocked during Loom platform initialization; Unix-domain socket probe denied by host",
-  "client_game_test": "not run",
-  "user_test": "pending"
+  "total_tests": 305,
+  "fabric_build": "passed; actual packaged JAR writer/reader passed",
+  "python_runner_tests": 14,
+  "client_game_test": "passed all five isolated JVMs in message-tag-review-2 including stale-edit fault",
+  "client_phases": [
+    {
+      "name": "graphics-preflight",
+      "status": "PASSED",
+      "duration": 21.3329548279944,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 41637,
+      "errors": []
+    },
+    {
+      "name": "development-write",
+      "status": "PASSED",
+      "duration": 28.56856551799865,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 41916,
+      "errors": []
+    },
+    {
+      "name": "development-read",
+      "status": "PASSED",
+      "duration": 27.529176522999478,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 42234,
+      "errors": []
+    },
+    {
+      "name": "packaged-write",
+      "status": "PASSED",
+      "duration": 30.36260627199954,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 42537,
+      "errors": []
+    },
+    {
+      "name": "packaged-read",
+      "status": "PASSED",
+      "duration": 28.69811711300281,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 42842,
+      "errors": []
+    }
+  ],
+  "artifact": {
+    "name": "lotc-character-journal-0.1.0-alpha.11.jar",
+    "bytes": 14710888,
+    "sha256": "8bd7cbeb0f80f5191dfafe42ccfa9b0b87ca88c75a915401c57a8c65314ed42e"
+  },
+  "user_test": "alpha.10 smoke passed per user; alpha.11 tag review pending",
+  "ci": {
+    "functional_commit": "77695fd0ed5db01e84f260958c99f57f0e7641b9",
+    "run_id": 40524151013,
+    "url": "https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40524151013",
+    "verify": "passed",
+    "client_smoke": "passed",
+    "client_phases": [
+      {
+        "name": "graphics-preflight",
+        "seconds": 28.4,
+        "result": "PASSED",
+        "exit_code": 0
+      },
+      {
+        "name": "development-write",
+        "seconds": 34.3,
+        "result": "PASSED",
+        "exit_code": 0
+      },
+      {
+        "name": "development-read",
+        "seconds": 31.5,
+        "result": "PASSED",
+        "exit_code": 0
+      },
+      {
+        "name": "packaged-write",
+        "seconds": 36.4,
+        "result": "PASSED",
+        "exit_code": 0
+      },
+      {
+        "name": "packaged-read",
+        "seconds": 32.1,
+        "result": "PASSED",
+        "exit_code": 0
+      }
+    ],
+    "artifact_ids": {
+      "journal-jars": 12743670433,
+      "client-smoke-evidence": 12742948559,
+      "test-reports": 12742607722
+    }
+  }
 }

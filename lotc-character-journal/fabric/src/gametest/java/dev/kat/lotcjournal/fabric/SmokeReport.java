@@ -84,7 +84,8 @@ final class SmokeReport {
         var workers = Thread.getAllStackTraces().keySet().stream()
             .filter(thread -> thread.isAlive() && (thread.getName().startsWith("lotc-journal-") || thread.getName().startsWith("lotc-identity-"))).toList();
         shutdownAcknowledged = workers.isEmpty();
-        if (!shutdownAcknowledged) failures.add("Journal I/O worker remained alive after CLIENT_STOPPING");
+        if (!shutdownAcknowledged) failures.add("Journal I/O worker remained alive after CLIENT_STOPPING: "
+            + workers.stream().map(thread -> thread.getName() + " (" + thread.getState() + ")").toList());
         record("shutdown", shutdownAcknowledged, (System.nanoTime() - start) / 1_000_000, 10_000);
         if (shutdownAcknowledged)
             System.out.println("LOTC_SMOKE_SHUTDOWN_COMPLETE runId=" + runId + " phase=" + phase + " pid=" + processId);

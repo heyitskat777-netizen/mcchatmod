@@ -7,7 +7,7 @@
 - Phase 2 includes **Import all logs**: a user-selected folder, bounded background
   file queue, existing deduplication/privacy/recovery rules, batch progress and
   per-file outcomes. The accepted workflow includes preview, a durable dashboard, retry and safe undo.
-- Previous character-database import, preserving source provenance and decisions.
+- Two actual SQLite files: archive.sqlite for imported/live dialogue and characters.sqlite for characters/personas; no unrelated old-database importer.
 - Separate persona memory views; observed account/persona information when available.
 - Manual character creation, renaming, notes, and corrections.
 - AI-suggested aliases, with confirmation required for identity linking/merging.
@@ -149,9 +149,73 @@ durable daily journals and a manual identity/persona slice are implemented; see
 STATUS.md for actual checks. Persona notes in the shared archive are administrative
 metadata, not automatically shared persona knowledge. Memory searches/favorites
 are restricted to explicit owning-persona assignments. No account/persona link is
-inferred from operational notices. Prior database format remains unknown.
+inferred from operational notices. The then-pending previous-database importer
+was withdrawn by Kat in the character-browser follow-up below.
 
 Comma-titled persona replies now belong to policy 4. Older partial jobs must finish
 under their original policy. Backed-up schema 8 migration cleans uncertain legacy
 noise and retains previously proven roleplay/undo/source identities. Exact wording
 alone cannot safely discard every historically mislabeled server notice.
+
+## Character browser and native database — accepted October 26
+
+Kat reports live recording seems OK, but cannot review/list saved characters and
+Use as persona stays disabled. Alpha.8 adds a visible searchable/paged list and a
+separate saved-character editor, preserves exact UUID/drafts across refresh/resize,
+and enables persona activation only for a persisted, unchanged record. This fixes
+an existing discoverability/selection bug; the earlier create-and-immediately-use
+smoke did not prove reopening a saved character worked.
+
+Kat explicitly withdraws the previous-database importer requirement. It is removed
+from active milestones and no schema/file clarification is pending. The native
+schema 8 already stores all mod data in config/lotc-journal/journal.sqlite; retain
+it and its records. Historical .log/.log.gz import and live recording populate the
+same dialogue archive, with manual character records and explicit identity/persona
+confirmation alongside it. No reset or replacement database is needed. Native
+schema migrations/backups remain necessary and distinct from a legacy importer.
+
+## Two-file storage and observed characters — October 26, 2026
+
+Kat explicitly selected **two SQLite files**, superseding the alpha.8 single-file
+choice above. Imported logs and live recordings share `archive.sqlite`; character
+records, aliases, personas, assignments and derived name evidence use
+`characters.sqlite`. Preserve the old native `journal.sqlite` as a recovery source
+when upgrading. Both members form one bound storage pair; backup/restore the pair.
+
+Kat also requests automatic creation of characters observed speaking/acting in
+imported logs, and archive searches when creating/editing a character or aliases.
+The same indexing applies to live observations. Only trusted ROLEPLAY plus anchored
+name/speech/action grammar discovers a character. Literal whole-token name/alias
+mentions are a separate classification and may include UNKNOWN archive text;
+that does not reclassify its channel or make it eligible for AI. Ambiguous shared
+names/aliases remain unresolved. Original observations and parser policy stay
+unchanged. Account ownership, merges and persona memories still require review.
+The first observed spelling remains linked after renaming an automatic character
+to prevent rediscovery as a duplicate; user aliases can be removed independently.
+
+## Identity denial — October 27, 2026
+
+Kat requests a **Deny link** action in identity review, reports persistence is good
+and no persona-separation issue so far. Implement denial as an unordered, persistent,
+reversible keep-separate decision. It blocks both direct linking and bridges between
+the current resolved groups. Require explicit clearing before later linking; clear
+does not imply acceptance. An existing positive link must be undone first. Denials
+do not rewrite dialogue, aliases, favorites or persona knowledge and must survive
+backups and future analysis. These user checks do not complete automatic-tag
+correction, scene detection, optional AI or large-archive performance acceptance.
+
+## Per-message tag review — October 27, 2026
+
+Kat reports alpha.10 smoke tests passed and asks to continue. The next Phase 3
+slice provides durable corrections/rejections of automatic archive character tags.
+The user edits an exact per-message tag list (identity plus SPEAKER/ACTION/MENTION),
+can save a reviewed-empty list to reject all tags, or explicitly restore current
+automatic suggestions. Source text/channel and persona assignments are unchanged.
+UNKNOWN can receive only MENTION interpretations; this does not make it RP or AI
+knowledge. Duplicate names remain distinguishable by UUID.
+
+Implementation stores the review separately from the rebuildable automatic index.
+Saved lists survive alias edits, reimports, live replay, restart and paired backups.
+Optimistic revisions prevent stale edits; restoring automatic mode retains a revision
+marker so an older draft cannot overwrite it. Save supports at most 64 reviewed
+tags with explicit limits; larger automatic sets are not silently truncated.

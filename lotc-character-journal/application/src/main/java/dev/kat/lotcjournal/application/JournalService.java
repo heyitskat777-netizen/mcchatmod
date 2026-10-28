@@ -16,6 +16,7 @@ public final class JournalService implements AutoCloseable {
     private final SettingsRepository settings;
     private final BackupService backups;
     private final ThreadPoolExecutor worker;
+    private volatile Thread ioThread;
     private final java.util.Set<CompletableFuture<?>> pending = ConcurrentHashMap.newKeySet();
     private volatile JournalSnapshot snapshot = new JournalSnapshot(
         JournalSnapshot.Status.STARTING, JournalSettings.defaults(), "Opening journal");
@@ -29,6 +30,7 @@ public final class JournalService implements AutoCloseable {
             new ArrayBlockingQueue<>(32), task -> {
                 Thread thread = new Thread(task, "lotc-journal-io");
                 thread.setDaemon(true);
+                ioThread = thread;
                 return thread;
             }, new ThreadPoolExecutor.AbortPolicy());
     }
@@ -103,8 +105,15 @@ public final class JournalService implements AutoCloseable {
             snapshot = new JournalSnapshot(JournalSnapshot.Status.CLOSED,
                 snapshot.settings(), "Journal closed");
         }
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
         try {
+            if (Thread.currentThread() == ioThread) { forceShutdown(); return; }
             if (!worker.awaitTermination(3, TimeUnit.SECONDS)) forceShutdown();
+            // Executor termination is signalled inside the worker's final exit path;
+            // it can precede actual Thread death. Complete close's lifetime boundary.
+            Thread thread = ioThread;
+            long remaining = deadline - System.nanoTime();
+            if (thread != null && remaining > 0) TimeUnit.NANOSECONDS.timedJoin(thread, remaining);
         } catch (InterruptedException interrupted) {
             forceShutdown();
             Thread.currentThread().interrupt();

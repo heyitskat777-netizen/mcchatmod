@@ -1,4 +1,528 @@
+# Current work — October 27, 2026: durable message tag review
+
+Kat reports alpha.10 smoke tests passed. Branch `feature/message-tag-review`
+continues `e4b4e14` without changing main. Target remains Fabric / Minecraft 1.21.11 /
+Java 21; build alpha.11. Phase 3 continues with correction/rejection of automatic
+character tags; combined related-dialogue behavior for confirmed identity links
+remains the next identity slice before scenes.
+
+Select an individual transcript message and choose **Review tags**. The shared
+archive editor searches character names/aliases and distinguishes duplicate names
+by UUID. Add/replace/remove individual SPEAKER/ACTION/MENTION tags, then **Save
+reviewed tags** to persist that exact set. **Reject all tags** saves a reviewed-empty
+set. **Restore automatic** resumes the current automatic suggestions. Saved reviews
+survive aliases, reimports/live replay, restart and paired backups. Original
+observations, channels, favorites and persona memories stay unchanged. UNKNOWN
+allows manual MENTION only. No AI eligibility or persona knowledge is granted.
+
+Automatic suggestions remain separately rebuildable. Optimistic revisions prevent
+stale editors overwriting newer decisions; AUTO revision markers remain after
+restore to prevent stale save/restore cycles. Failed/stale writes retain the draft,
+disable writes and require explicit Reload saved tags. Resize/search retain the
+whole draft, including tags outside the 1000-row search-choice cap. Save has an
+explicit 64-tag bound; larger automatic sets are never silently truncated.
+
+Characters schema **3** adds review/choice tables and an identity-query index.
+Archive schema **9** and parser policy **4** stay unchanged. Character schemas 1/2
+receive a verified paired backup before transactional upgrade. Batch undo and noise
+cleanup remove review markers/choices at exact owned coordinates in the same
+attached transaction as source deletion; unrelated reviews and explicit persona
+assignments remain. Import undo never silently restores rejected/removed records.
+
+Native build, verification and read-only review agents were available and completed
+their scopes. Build owned storage/configuration, verification owned non-Fabric
+regressions, reviewer inspected integrity/privacy/threading without edits. Coordinator
+owned domain/service/UI/client assertions/docs and integration. Independent review
+reported no blocking issue. Findings on duplicate-name labels, stale search choices
+and persistent reload guidance were fixed. No assertion was weakened.
+
+## Automated verification
+
+```sh
+./gradlew check :fabric:build :fabric:prepareClientSmoke --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+```
+
+Final integrated run **passed in 13s**, 34 tasks (16 executed/18 up-to-date).
+Latest XML reports **305 core tests, 0 failures/errors/skips** — domain 11,
+application 19, parsing 116, ingestion 58, storage 101. All **14 Python** runner
+contract tests passed in **1.113s**. Fourteen new cases cover immutable models,
+exact multitag correction and coordinate isolation, reject/restore and ABA/stale
+revision protection, concurrency, UNKNOWN restrictions, 64-tag limits with larger
+automatic sets, rollback, alias/live/import persistence, paired upgrade/restore,
+exact undo cleanup including injected pre-delete rollback and off-thread service
+input snapshots. The first preliminary integrated run passed before the final
+import case arrived; final checks include that case and the strengthened rollback.
+
+Actual client suite `message-tag-review-1` passed all five phases (21.2/28.1/27.5/
+32.2/28.2s). Then a minor persistent conflict-guidance improvement and explicit GUI
+stale-editor fault test were added; a fresh smoke preparation passed before the
+final `message-tag-review-2` run. The test-thread-only fixture advances one known
+synthetic review revision to simulate another writer. The actual screen must retain
+its dirty draft, reject the stale save without altering the stored tag set, keep
+Reload guidance after further draft edits, and allow a valid save after reload.
+No application failure or automatic repair cycle occurred in the first run.
+
+Final runtime **message-tag-review-2 passed all five phases** with unchanged
+300-second limits and no timeouts/report errors:
+
+```sh
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --prepared --timeout 300 --run-id message-tag-review-2
+```
+
+| Local phase | Elapsed | Result |
+| --- | --- | --- |
+| graphics-preflight | 21.3s | PASSED |
+| development-write | 28.6s | PASSED |
+| development-read | 27.5s | PASSED |
+| packaged-write | 30.4s | PASSED |
+| packaged-read | 28.7s | PASSED |
+
+Writers passed **25 assertion stages**, readers **26**, including multitag edits,
+removal, reviewed-empty rejection, automatic restore, a persistent UNKNOWN mention,
+reopen/restart, unsaved drafts across resize, explicit stale-write rejection/reload
+and exact preservation of source text/channel, favorites and persona assignments.
+The paired-backup stage verifies the saved reviewed tag. Actual packaged mod and
+SQLite loaded from JARs; no development output masked missing dependencies.
+The packaged small-draft and saved-UNKNOWN screenshots were visually inspected.
+Evidence: `fabric/build/client-smoke/evidence/message-tag-review-2/` includes JSON,
+JUnit XML, selected screenshots, logs and separate launch/shutdown witnesses.
+
+Local artifact: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.11.jar`, **14,710,888 bytes**,
+SHA-256 `8bd7cbeb0f80f5191dfafe42ccfa9b0b87ca88c75a915401c57a8c65314ed42e`.
+Functional commit `77695fd` **passed both verify and client-smoke jobs** in
+[GitHub Actions run 40524151013](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40524151013).
+
+| CI phase | Elapsed | Result |
+| --- | --- | --- |
+| graphics-preflight | 28.4s | PASSED |
+| development-write | 34.3s | PASSED |
+| development-read | 31.5s | PASSED |
+| packaged-write | 36.4s | PASSED |
+| packaged-read | 32.1s | PASSED |
+
+All five exit-0 summaries were confirmed from the completed CI log.
+[PR #12](https://github.com/heyitskat777-netizen/mcchatmod/pull/12) targets the
+previous feature/identity-denials branch. Main is unchanged. The PR is ready for
+review; alpha.11 user acceptance remains pending.
+Artifacts: [alpha.11 JAR ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40524151013/artifacts/12743670433),
+[client evidence](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40524151013/artifacts/12742948559),
+[test reports](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40524151013/artifacts/12742607722).
+Install lotc-character-journal-0.1.0-alpha.11.jar without the -sources suffix.
+The final documentation follow-up records the tested functional commit and changes
+no runtime source or acceptance criteria.
+
+
+
+## Acceptance and remaining work
+
+User accepted alpha.10 smoke; alpha.11 tag review still needs
+[the focused user checklist](USER_TEST_MESSAGE_TAGS.md). Broad real-log matching
+accuracy, large-archive latency and actual modpack backup restoration remain separate
+acceptance items. Backfill can still scan the archive within a worker transaction.
+
+Next Phase 3 slice: define and implement how confirmed identity groups appear in
+related dialogue while preserving reversible decisions, keep-separate constraints
+and explicit persona ownership. Scene grouping/participants/manual corrections,
+optional AI summaries and favorite-based item/name/task extraction remain later
+milestones. Phase 3 is not declared fully complete here.
+
+---
+
+# Current work — October 27, 2026: persistent identity denials
+
+Branch `feature/identity-denials` continues alpha.9 from `11043a4` without changing
+main. Target remains Fabric / Minecraft 1.21.11 / Java 21; build alpha.10.
+Kat reports alpha.9 persistence is good and persona separation has shown no issues
+so far. This is positive user evidence for those paths; backup restoration, broad
+real-log matching accuracy and large-archive performance are not newly certified.
+
+**Review links** now offers **Deny link / keep separate** for the selected pair.
+The unordered decision survives restart, alias edits and paired backups. Both
+positive linking and indirect linking through another character are blocked until
+its denial is explicitly cleared. **Clear selected denial** reverses the decision
+without creating a link. Already-linked identities must have their link undone
+before they can be denied. Active positive and negative decisions share the review
+history; chosen character UUIDs and selected decision survive refresh/resize.
+Dialogue, favorites, aliases and persona memories remain independent of the choice.
+
+Characters schema **2** adds a dedicated denial table and unique active-pair index;
+archive schema **9** and parser policy **4** stay unchanged. Existing characters
+schema 1 is validated and receives a verified paired pre-upgrade backup before
+transactional schema upgrade. A restored old pair can upgrade normally; the source
+backup trio remains unchanged. Native journal.sqlite remains a recovery source.
+
+Native build, verification and review agents were used with non-overlapping scopes.
+Build and verification produced storage changes and nine tests before reaching
+usage limits. Coordinator reviewed/completed that work, added two storage cases,
+one off-thread service case and the actual client assertions, and runs integration.
+Reviewer provided early graph-constraint guidance; a completed final independent
+review was unavailable after the agent turns ended. No simulated review is claimed.
+
+## Verification
+
+Coordinator narrow storage/application tests passed in 8s before the final added
+cases. Integrated command:
+
+```sh
+./gradlew check :fabric:build :fabric:prepareClientSmoke --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+```
+
+**Passed in 17s**, 34 tasks (24 executed/10 up-to-date). Fresh XML: **291 core tests,
+0 failures/errors/skips** — domain 9, application 18, parsing 116, ingestion 57,
+storage 91. All 14 Python runner-contract tests passed in 1.107s. Twelve new cases
+cover unordered idempotent denial/reversal, direct/reverse/transitive rejection,
+concurrent deny/link serialization, exact message/persona preservation, backed-up
+schema-1 migration, restoring an old paired backup, failed writes/backups,
+contradictory stored decisions and off-thread service dispatch. No acceptance
+expectations were weakened. `git diff --check` passed.
+
+A short UI guidance-text change was followed by a fresh
+`./gradlew :fabric:prepareClientSmoke --no-daemon --console=plain` before runtime.
+The isolated `identity-denials-1` five-JVM suite **passed all phases**, using the
+existing accepted EULA, display :99, software rendering and unchanged 300-second
+process caps:
+
+```sh
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --prepared --timeout 300 --run-id identity-denials-1
+```
+
+| Local phase | Elapsed | Result |
+| --- | --- | --- |
+| graphics-preflight | 19.3s | PASSED |
+| development-write | 27.4s | PASSED |
+| development-read | 25.8s | PASSED |
+| packaged-write | 29.1s | PASSED |
+| packaged-read | 26.2s | PASSED |
+
+Writers passed **24 assertion stages**, readers **25**, including required
+identity-denials assertions in both development and packaged modes: deny, reopen,
+small resize, restart persistence, explicit clear, link, undo, re-deny and exact
+preservation of existing persona memories, active persona and favorites. Backup
+assertions include the saved denial. Each phase exited 0 without timeout or
+evidence errors; packaged classes loaded from actual JARs. The packaged 640x480
+review screenshot was inspected. No runtime repair or increased timeout was needed.
+Evidence: `fabric/build/client-smoke/evidence/identity-denials-1/` contains JSON,
+JUnit XML, screenshots, logs and launch/shutdown witnesses. User testing of alpha.10
+remains separate: [denial checklist](USER_TEST_IDENTITY_DENIALS.md).
+
+Local artifact: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.10.jar`, **14,690,652 bytes**,
+SHA-256 `9599f0430d2981e9f920d4c6bb83ec0c0ac0ad2a3555e16bb18054dd073add0b`.
+Functional commit `63bc1b8` **passed both verify and client-smoke jobs** in
+[GitHub Actions run 40508948065](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40508948065).
+
+| CI phase | Elapsed | Result |
+| --- | --- | --- |
+| graphics-preflight | 42.3s | PASSED |
+| development-write | 47.8s | PASSED |
+| development-read | 45.5s | PASSED |
+| packaged-write | 54.3s | PASSED |
+| packaged-read | 44.9s | PASSED |
+
+All five exit-0 phase summaries were confirmed from the completed CI log.
+[PR #11](https://github.com/heyitskat777-netizen/mcchatmod/pull/11) targets
+feature/character-browser, which now contains merged PR #10. Main stays unchanged.
+The PR is ready for review; alpha.10 user acceptance remains pending.
+Artifacts: [alpha.10 JAR ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40508948065/artifacts/12735748826),
+[client evidence](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40508948065/artifacts/12735939145),
+[test reports](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40508948065/artifacts/12735753903).
+Install lotc-character-journal-0.1.0-alpha.10.jar, without the -sources suffix.
+This documentation follow-up records the tested functional code; runtime sources
+and acceptance criteria are unchanged.
+
+
+## What remains
+
+1. Complete Phase 3: durable correction/rejection of automatically inferred message
+   tags; define and implement how confirmed merge overlays affect related dialogue.
+   Continue real-log accuracy, paired restore and large-import user checks.
+2. Phase 4 scene view: suggested conversation groups using available time/location
+   evidence, participant lists, uncertainty review/skip, manual split/combine and
+   participant corrections. Missing location evidence must remain unknown.
+3. Phase 5 optional AI: provider connection, grounded summaries, citations, privacy
+   gates and reliable operation while disabled/offline.
+4. Phase 6 favorite extraction: propose items, names and tasks from individually
+   starred messages; ask for identity confirmation when uncertain, retain edits and
+   rejected identity choices. Relationships/commitments remain evidence-backed.
+5. Phase 7: measured performance, interrupted-write/restore coverage, compatibility
+   and ordinary-session beta acceptance. Phase 3 is not declared complete here.
+
+---
+
+# Current work — October 26, 2026: two-file storage and character discovery
+
+Branch: `feature/character-discovery`, based on reviewed-for-testing alpha.8
+`e2bb155` / `feature/character-browser`. `main` remains unchanged. Kat reports
+alpha.8 smoke tests passed; that user evidence does not certify this upgrade.
+Target remains Minecraft 1.21.11 / Fabric / Java 21, build alpha.9.
+
+Kat explicitly confirmed two actual SQLite files, superseding the alpha.8
+single-file decision below. `archive.sqlite` holds imported/live observations,
+settings, favorites and import/live recovery state. `characters.sqlite` holds
+characters, aliases, personas, assignments, decisions and derived name evidence.
+The original native `journal.sqlite` is snapshotted read-only and retained.
+The archive upgrades to schema 9, characters uses schema 1; parser policy stays 4.
+No unrelated old-database importer was added.
+
+A single attached connection with DELETE journal and FULL synchronization on both
+same-filesystem members provides SQLite's paired commit boundary. Persistent pair
+UUID/generation rejects missing or mismatched members. Initialization takes a
+profile file lock; paired writers reserve the archive first to avoid lock-order
+inversion. Undo removes exact owned assignments/evidence in the same transaction.
+Backups hold one read snapshot across both files, create both SQLite snapshots,
+validate them and publish a hash manifest. Restore all three backup files together;
+see [the user checklist](USER_TEST_CHARACTER_DISCOVERY.md).
+
+Trusted ROLEPLAY plus anchored speech/action headers discovers stable observed
+characters. New characters/aliases search prior dialogue; literal Unicode name
+matching distinguishes SPEAKER, ACTION and MENTION. Duplicate names/aliases stay
+unresolved. Character **Related dialogue** provides those filters plus search and
+favorites. UNKNOWN can match mentions but is never promoted into RP/AI knowledge.
+Automatic records do not infer accounts, create/select personas, merge identities
+or assign persona memories. Manual assignments and original observations remain
+separate. Renaming a discovered character retains its original observed name to
+avoid duplicate rediscovery.
+
+Native build, verification and read-only review subagents were available and used
+with separate ownership; coordinator owns matching/UI/integration/docs and runs
+checks. Review identified and corrected speech-verb parsing, Unicode/apostrophe
+boundaries, writer lock order, transcript snapshot consistency and migration/backup
+publication races. No acceptance tests were weakened.
+
+## Verification in this restored environment
+
+The attached checkout initially contained main/foundation only; fetched alpha.8
+before branching. Previous machine caches and uncommitted work were absent. System
+Java was a JRE without javac, so extracted SHA-256-verified Temurin 21.0.13+9 to
+`/workspace/toolchains/`. Gradle wrapper download required the environment proxy.
+Set `JAVA_HOME=/workspace/toolchains/jdk-21.0.13+9`, `GRADLE_USER_HOME=/workspace/.gradle`,
+and the HTTPS/HTTP proxy JVM options shown in older verification records below.
+An extracted Debian Xvfb runs display :99 with Mesa software rendering.
+
+First domain run exposed two new matcher failures (Unicode suffix boundary and
+hyphen separation); production fixes preserved all test expectations. Second
+`./gradlew -PcoreOnly :domain:test :storage:compileJava --no-daemon --console=plain`
+passed (domain 9 tests). First integrated `-PcoreOnly check` compiled storage and
+ran 72 storage tests with three failures: two backup exception-contract regressions
+fixed in production; the restore test correctly required updating to copy the
+complete pair rather than its archive member alone. The original snapshot assertions
+remain. The subsequent integrated coordinator run passed:
+
+```sh
+./gradlew check :fabric:build --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+```
+
+Gradle **passed in 37s**, 30 tasks (13 executed/17 up-to-date). XML reports
+**278 tests, 0 failures/errors/skips**: domain 9, application 16, parsing 116,
+ingestion 57, storage 80. All 14 Python tests passed in 1.110s. The 21 new core
+cases cover matching boundaries, actual plain/gzip discovery/privacy, native-v8
+upgrade including committed uncheckpointed WAL, paired backup/restore/mismatch,
+transaction rollback and real child-process death before a coordinated undo commit.
+Fabric client and game-test compilation and bundled-runtime checks passed.
+`git diff --check` passed. Independent final source review found no blocker.
+
+The first asset-preparation process was deliberately stopped after slow serial
+cold-cache downloads; its verified cache was preserved. Resumed preparation with
+an environment-only Gradle init script setting 16 asset download threads and a
+600-second cap. This changes no source configuration or runtime acceptance criteria.
+Initial runtime `character-discovery-1`: graphics preflight passed in 22.6s;
+development writer passed all 23 stages in 32.5s. Development reader passed its
+23 functional stages but FAILED its shutdown stage in 26.5s: a journal I/O thread
+was still alive when CLIENT_STOPPING was inspected. Packaged phases were skipped
+by the fail-closed runner. Gradle exit 0 did not count as a suite pass. This is an
+application/lifecycle failure, separate from graphics/environment setup.
+
+Independent review confirmed the JDK executor can signal TERMINATED before the
+actual worker Thread exits; the original report did not identify which worker.
+The final-closing JournalService now joins its tracked thread within the remaining
+existing 3-second shutdown budget (skipping self-join). No sleep, observer grace,
+weakened assertion or larger runtime timeout was added. Failure diagnostics now
+include remaining worker names/state. A new test captures actual workers and
+checks 128 immediate post-close lifetime boundaries. Coordinator repair check/build/
+smoke preparation passed in 10s before that late-arriving test was compiled;
+its affected test run subsequently passed in 7s (17 application tests including
+the 128 real-thread lifecycles). Latest XML totals **279 core tests, zero failures/
+errors/skips** across integrated plus affected runs. One lifecycle repair was needed.
+The second full runtime passed all five phases.
+Original failed evidence remains in `fabric/build/client-smoke/evidence/character-discovery-1/`.
+
+```sh
+./gradlew check :fabric:build :fabric:prepareClientSmoke --no-daemon --console=plain
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --prepared --timeout 300 --run-id character-discovery-2
+./gradlew -PcoreOnly :application:test --no-daemon --console=plain
+```
+
+| Local phase | Elapsed | Result |
+| --- | --- | --- |
+| graphics-preflight | 20.7s | PASSED |
+| development-write | 26.5s | PASSED |
+| development-read | 25.1s | PASSED |
+| packaged-write | 31.0s | PASSED |
+| packaged-read | 26.0s | PASSED |
+
+All five independent JVMs exited 0, without timeouts or evidence errors. Writers
+passed **23 assertion stages**, readers **24**, including both physical storage
+files, exact historical/live character discovery, SPEAKER/ACTION filters through
+Related dialogue, paired backups, restart persistence and clean shutdown. Packaged
+runs verified the actual mod and SQLite loaded from JARs without development
+outputs masking missing dependencies. Synthetic character-dialogue and 640x480
+editor screenshots were visually inspected; labels/controls remain readable and
+onscreen. Screenshots supplement assertions; they do not establish passing tests.
+Evidence: `fabric/build/client-smoke/evidence/character-discovery-2/` contains JSON,
+XML, screenshots, logs, separate launch/shutdown witnesses and the final summary.
+
+Local artifact: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.9.jar` (**14,677,910 bytes**),
+SHA-256 `36125ca0b9ecc9f7a19b1992bad13f33d98a4b804b4e3a7968bdb1e69b8238a1`.
+
+PR [#10](https://github.com/heyitskat777-netizen/mcchatmod/pull/10) targets the
+previous feature branch; main is unchanged. GitHub Actions on the pre-repair
+feature commit passed both jobs ([run 40451878716](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40451878716));
+**Final functional commit `5bb41b4` passed both verify and client-smoke jobs**:
+[GitHub Actions run 40452649263](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40452649263).
+
+| CI phase | Elapsed | Result |
+| --- | --- | --- |
+| graphics-preflight | 35.3s | PASSED |
+| development-write | 38.5s | PASSED |
+| development-read | 36.8s | PASSED |
+| packaged-write | 43.3s | PASSED |
+| packaged-read | 35.5s | PASSED |
+
+All five phase summaries were confirmed from the completed CI log, exit 0.
+Artifacts: [alpha.9 JAR ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40452649263/artifacts/12710474939),
+[client evidence](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40452649263/artifacts/12711086981),
+[test reports](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40452649263/artifacts/12710709913).
+Install `lotc-character-journal-0.1.0-alpha.9.jar` from the ZIP, not its sources JAR.
+The final documentation follow-up records this tested code commit; it changes no
+runtime source or acceptance criteria. PR #10 is ready for review; it is not merged.
+
+
+
+## Remaining acceptance and limits
+
+Full archive backfill currently runs off-thread inside a storage transaction when
+new names/aliases require it. Large-archive throughput and real-play queue latency
+remain unmeasured. Automatic matching is deliberately limited to anchored known
+speech/common-action grammar; unresolved wording remains searchable. No inference
+or scene feature is claimed complete. The real child-process interruption test
+covers pre-commit recovery, not power loss inside SQLite's commit algorithm.
+Confirmed merge overlays still keep their existing separate dialogue views; they do
+not combine derived name evidence. Global editing/rejection of automatic tags is
+a remaining Phase 3 task; explicit persona assignments remain independently editable.
+Actual alpha.9 modpack/upgrade/restore acceptance remains pending the checklist.
+
+---
+
 # Current status — October 26, 2026
+
+## Alpha.8 — visible character browser and native database scope
+
+Branch `feature/character-browser`, based on `209a31d` (alpha.7). Kat reports live
+recording seems OK, but saved characters cannot be reviewed/listed and Use as
+persona stays gray, blocking message-assignment testing. This records limited
+live-recording user acceptance; persona user acceptance remains pending this fix.
+
+Root cause: IdentityScreen hid saved rows behind a selector also named New
+character, reset its index on every load/reopen/resize, and could race two save
+refresh callbacks. The alpha.7 create→immediate persona smoke did not exercise
+reopening existing characters. Alpha.8 replaces it with a visible searchable,
+paged saved-character list and a separate detail editor keyed by immutable UUID.
+Saved rows open labeled name/alias/account/notes fields with persona activation
+available. New/dirty drafts explain the required explicit Save. Drafts survive
+resize; one tokened list refresh preserves previous results on errors and exposes
+Refresh / retry. Selecting/saving never relies on a changing filtered row index.
+
+Review also found valid 200×96 aliases could be truncated by the old 4096-character
+field, and literal semicolons/backslashes were not round-tripped. The bounded
+40,000-character lossless escaped form preserves those native domain values and
+rejects malformed edits without persisting partial data.
+
+Kat **withdraws the unrelated previous-database importer requirement**. No format
+clarification is pending; prior alpha.7 references below are historical and
+superseded. AGENTS/DECISIONS/MILESTONES/README/checklists now require one mod-created
+`config/lotc-journal/journal.sqlite`. This already contains imported historical
+and live observations, characters, aliases, personas, favorites and assignments.
+Schema **8** and parser policy **4** stay unchanged: no reset, replacement database
+or new schema migration is needed, and existing native records are preserved.
+Historical .log/.log.gz imports populate the same archive; identity confirmation
+remains explicit. Native schema upgrade tests/backups stay; the obsolete external
+legacy discovery document is removed.
+
+Native agents were available: build changed only the version to alpha.8 and
+confirmed same-DB/schema/package preservation; verification added four meaningful
+application alias-integrity cases and proposed real reopen/selection regressions;
+review independently inspected the actual browser/editor/alias changes and found
+no blocking issue. Coordinator owns UI/client assertions/docs and integrated runs.
+No agent ran shared Gradle checks or committed files.
+
+Coordinator verification:
+
+```sh
+./gradlew check :fabric:build --no-daemon --console=plain
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null python3 scripts/client_smoke.py --eula-accepted --run-id character-browser-1 --timeout 300
+```
+
+Integrated check/build **passed in 1m18s**, 30 tasks (18 executed/12 up-to-date).
+Fresh XML: **257 tests, 0 failures/errors/skips** — domain 4, application 16,
+parsing 116, ingestion 56, storage 65. All **14 Python runner tests passed** in
+1.142s. Full-size alias sets, delimiter/backslash/Unicode and whitespace preservation,
+invalid encodings and explicit replacement/clearing are covered by the new cases.
+Toolchain/metadata and all six packaged runtime JAR checks passed. No failed
+compile or repair cycle is claimed at this point.
+
+Local **`character-browser-1` passed all five phases** within the existing
+300-second process limit, all exit codes zero, no timeouts/report errors:
+
+| Local phase | Elapsed | Result |
+| --- | --- | --- |
+| Graphics preflight | 92.9s | Passed |
+| Development writer | 160.0s | Passed |
+| Development reader | 118.3s | Passed |
+| Packaged writer | 228.9s | Passed |
+| Packaged reader | 123.6s | Passed |
+
+Writers passed **21 assertion stages**, readers **22**, including successful body
+completion and worker/shutdown witnesses. No runtime repair, reduced assertion or
+extended timeout was needed. Evidence: `fabric/build/client-smoke/evidence/character-browser-1/`
+(JSON, XML, selected screenshots, logs, launch/shutdown witnesses). Normal-list and 640x480 detail screenshots were inspected: saved rows/ID
+suffixes, labeled fields and explicit save/persona guidance are readable and the
+controls remain onscreen.
+
+GitHub Actions **passed verify and the complete five-JVM client suite** on
+functional commit `5a49648`:
+[run 40406809302](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40406809302).
+
+| CI phase | Elapsed | Result |
+| --- | --- | --- |
+| Graphics preflight | 34.5s | Passed |
+| Development writer | 36.0s | Passed |
+| Development reader | 34.6s | Passed |
+| Packaged writer | 40.3s | Passed |
+| Packaged reader | 34.0s | Passed |
+
+[PR #9](https://github.com/heyitskat777-netizen/mcchatmod/pull/9) targets PR #8's
+feature/live-capture branch and is ready for review; main stays unchanged. The
+final documentation-only commit receives normal CI separately; the successful
+functional commit/run above identifies the tested code. Alpha.8
+[installable CI artifact ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40406809302/artifacts/12691079070).
+Install the non-`-sources` JAR. Local artifact:
+`fabric/build/libs/lotc-character-journal-0.1.0-alpha.8.jar`, 14,646,256 bytes;
+SHA-256 `25eaf1f7bffc8a1b01f25eec58f30544f19f5251e75109cecc970d2b02d61142`.
+User/modpack acceptance of the new browser remains pending.
+
+Mandatory `character-browser` creates/saves without immediately using a persona,
+returns to visible rows, filters by shared alias and empty query, opens the second
+saved UUID, resizes an edited draft at 640x480, saves/activates that exact persona,
+reopens/filters the first character and checks repeated activation creates no extra
+identities/personas. Reader JVMs reuse saved records, followed by unchanged actual
+Assign/memory-scope assertions. Existing live capture/privacy/journal-reimport/
+favorites/import/undo/watch/keybind/backup/shutdown gates remain mandatory.
+Logs: `/tmp/lotc-browser-integrated-1.log`, `/tmp/lotc-browser-runner-tests.log`,
+`/tmp/lotc-browser-client-1.log`. New user checklist:
+[USER_TEST_CHARACTER_BROWSER.md](USER_TEST_CHARACTER_BROWSER.md).
 
 ## Alpha.7 — individual selection, live capture and manual identities/personas
 

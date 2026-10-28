@@ -46,6 +46,52 @@ class IdentityServiceTest {
         } finally { release.countDown(); }
     }
 
+    @Test void denialReviewAndReversalUseTheIdentityWorkerAndPreserveArguments() throws Exception {
+        String first = UUID.randomUUID().toString(), second = UUID.randomUUID().toString(), decision = UUID.randomUUID().toString();
+        var calls = new ArrayList<String>(); var caller = Thread.currentThread();
+        var value = new dev.kat.lotcjournal.domain.IdentitySeparation(decision, first, second, true);
+        var repository = repository((method, arguments) -> {
+            assertNotSame(caller, Thread.currentThread()); assertEquals("lotc-identity-io", Thread.currentThread().getName()); calls.add(method);
+            return switch (method) {
+                case "denyIdentityLink" -> { assertArrayEquals(new Object[]{first,second}, arguments); yield decision; }
+                case "separations" -> List.of(value);
+                case "undoSeparation" -> { assertArrayEquals(new Object[]{decision}, arguments); yield null; }
+                default -> throw new AssertionError("Unexpected identity operation");
+            };
+        });
+        try (var service = new IdentityService(repository)) {
+            assertEquals(decision, await(service.denyIdentityLink(first,second)));
+            assertEquals(List.of(value), await(service.separations())); await(service.undoSeparation(decision));
+        }
+        assertEquals(List.of("denyIdentityLink","separations","undoSeparation"),calls);
+    }
+
+    @Test void tagReviewSnapshotsTheCallersMutableListBeforeQueueingAndRunsOffThread() throws Exception {
+        var entered = new CountDownLatch(1); var release = new CountDownLatch(1); var caller = Thread.currentThread();
+        var ref = new dev.kat.lotcjournal.domain.MessageReference("c".repeat(64),1);
+        var tag = new dev.kat.lotcjournal.domain.CharacterTag(UUID.randomUUID().toString(),dev.kat.lotcjournal.domain.CharacterEvidenceKind.MENTION);
+        var mutable = new ArrayList<>(List.of(tag)); var seen = new ArrayList<String>();
+        var line = new dev.kat.lotcjournal.domain.TranscriptLine(ref.sourceId(),1,null,"Synthetic dialogue.",dev.kat.lotcjournal.domain.Channel.UNKNOWN,null);
+        var reviewed = new dev.kat.lotcjournal.domain.MessageTagReview(line,List.of(),List.of(tag),true,1);
+        var repository = repository((method,arguments) -> {
+            assertNotSame(caller,Thread.currentThread()); assertEquals("lotc-identity-io",Thread.currentThread().getName()); seen.add(method);
+            return switch(method) {
+                case "identities" -> { entered.countDown(); assertTrue(release.await(5,TimeUnit.SECONDS)); yield List.of(); }
+                case "saveReviewedTags" -> { assertEquals(ref,arguments[0]); assertEquals(0L,arguments[1]); assertEquals(List.of(tag),arguments[2]); yield reviewed; }
+                case "reviewTags" -> { assertEquals(ref,arguments[0]); yield reviewed; }
+                case "restoreAutomaticTags" -> { assertEquals(ref,arguments[0]); assertEquals(1L,arguments[1]); yield new dev.kat.lotcjournal.domain.MessageTagReview(line,List.of(),List.of(),false,2); }
+                default -> throw new AssertionError("Unexpected review operation");
+            };
+        });
+        try(var service = new IdentityService(repository)) {
+            var waiting = service.identities("hold"); assertTrue(entered.await(5,TimeUnit.SECONDS));
+            var saved = service.saveReviewedTags(ref,0,mutable); mutable.clear(); release.countDown(); await(waiting);
+            assertEquals(reviewed,await(saved)); assertEquals(reviewed,await(service.reviewTags(ref)));
+            assertFalse(await(service.restoreAutomaticTags(ref,1)).overridden());
+        } finally { release.countDown(); }
+        assertEquals(List.of("identities","saveReviewedTags","reviewTags","restoreAutomaticTags"),seen);
+    }
+
     @Test void failedOperationCompletesItsFutureWithoutPoisoningLaterIdentityWork() throws Exception {
         var identity = new CharacterIdentity(UUID.randomUUID().toString(), "Synthetic Identity", "", Set.of(), "");
         var calls = new AtomicInteger();

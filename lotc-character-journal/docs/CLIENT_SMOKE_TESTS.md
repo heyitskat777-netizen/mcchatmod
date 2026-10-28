@@ -51,6 +51,14 @@ validation rather than treating a standalone task exit as a suite pass.
    Production runs exclude development application/domain/storage outputs and
    external SQLite JDBC so those cannot hide missing bundled classes.
 
+Both development and packaged runs also assert the physical archive/character
+SQLite split, historical/live character discovery, filtered related dialogue,
+paired backups, persistent reversible link denials, durable message-tag reviews and explicit persona
+isolation. The tag-review stage includes multitag drafts, resize, save/reject/restore,
+a simulated newer review revision, stale-save rejection and explicit reload. Writers require 25 stages; readers
+require 26 including restart evidence. Worker liveness at shutdown remains a strict
+assertion, separate from Gradle process exit.
+
 Each suite run has a unique run ID. Graphics, development, and packaged game
 directories live separately under `fabric/build/client-smoke/profiles/<runId>/`.
 The writer and reader within a mode intentionally share a profile; different
@@ -146,3 +154,14 @@ restricted memory screen. Reader JVMs verify persisted decisions before mutation
 The shutdown witness checks live and identity workers as well as prior journal I/O.
 Actual subprocess kill/halt recovery, queue/disk/rotation faults and persona SQL
 isolation are core tests; screenshots or successful compilation do not replace them.
+
+## Alpha.8 character browsing regression
+
+`character-browser` is mandatory in writers/readers for development and installed
+JARs. It creates without immediately choosing a persona, returns to visible saved
+rows, searches alias/no-result/clear states, opens the non-first saved UUID, keeps
+an edited draft through 640x480 resize, saves and activates that exact persona,
+then reopens/filters/selects another character and checks no duplicate identities
+or personas were created. Reader JVMs reuse persisted records. Existing Assign and
+persona memory assertions follow. Lossless full-size/escaped alias form handling
+is separately covered by application tests. Native schema and parser policy stay 8/4.

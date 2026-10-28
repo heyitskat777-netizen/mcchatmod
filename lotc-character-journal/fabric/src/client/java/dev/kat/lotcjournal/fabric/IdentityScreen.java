@@ -1,93 +1,129 @@
 package dev.kat.lotcjournal.fabric;
 
 import dev.kat.lotcjournal.application.IdentityService;
-import dev.kat.lotcjournal.domain.*;
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
+import dev.kat.lotcjournal.domain.CharacterIdentity;
+import dev.kat.lotcjournal.ingestion.LogImportService;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.*;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-/** Archive editing is separate from a persona's restricted memory transcript. */
+/** Visible paged saved-character list. Editing and new drafts have separate screens. */
 final class IdentityScreen extends Screen {
     private final Screen parent;
     private final IdentityService service;
-    private List<CharacterIdentity> identities=List.of();
-    private int index=-1;
-    private EditBox search,name,aliases,account,notes;
-    private Button selector,save,persona,merge;
-    private String status="Loading identities",query="";
+    final LogImportService importer;
+    private List<CharacterIdentity> identities = List.of();
+    private final List<Button> rows = new ArrayList<>();
+    private EditBox search;
+    private Button previous, next, pageLabel, retry;
+    private String query, selectedId, status = "Loading characters", loadedQuery = "";
+    private int page, pageSize;
     private long request;
     private boolean pending;
-    IdentityScreen(Screen parent,IdentityService service,String query) {
-        super(Component.literal("Characters — shared archive"));this.parent=parent;this.service=service;this.query=query;
+
+    IdentityScreen(Screen parent, IdentityService service, String query) {
+        this(parent, service, query, null);
+    }
+    IdentityScreen(Screen parent, IdentityService service, String query, LogImportService importer) {
+        super(Component.literal("Characters — shared archive"));
+        this.parent = parent; this.service = service; this.query = query; this.importer = importer;
     }
     @Override protected void init() {
-        int panel=Math.min(520,width-32),left=(width-panel)/2,half=panel/2-4;
-        search=field(left,24,half,"Search names / aliases",256,query);
-        search.setResponder(value->{query=value;load();});
-        selector=addRenderableWidget(Button.builder(Component.literal("New character"),b->{index=index+1>=identities.size()?-1:index+1;populate();}).bounds(left+panel/2+4,24,half,20).build());
-        name=field(left,49,panel,"Character name",96,"");
-        aliases=field(left,74,panel,"Aliases (separate with ;)",4096,"");
-        account=field(left,99,panel,"Account observation — unverified",128,"");
-        notes=field(left,124,panel,"Manual archive notes",16384,"");
-        addRenderableWidget(Button.builder(Component.literal("New character"),b->{index=-1;populate();}).bounds(left,149,half,20).build());
-        save=addRenderableWidget(Button.builder(Component.literal("Save character"),b->save()).bounds(left+panel/2+4,149,half,20).build());
-        persona=addRenderableWidget(Button.builder(Component.literal("Use as persona"),b->makePersona()).bounds(left,174,half,20).build());
-        merge=addRenderableWidget(Button.builder(Component.literal("Review identity links"),b->minecraft.setScreen(new IdentityMergeScreen(this,service))).bounds(left+panel/2+4,174,half,20).build());
-        addRenderableWidget(Button.builder(Component.literal("Done"),b->onClose()).bounds(left,height-24,panel,20).build());
-        load();
+        int panel = Math.min(520, width - 32), left = (width - panel) / 2;
+        search = addRenderableWidget(new EditBox(font, left, 24, panel - 85, 20, Component.literal("Search characters")));
+        search.setMaxLength(256); search.setHint(Component.literal("Search names, aliases or account observations"));
+        search.setValue(query);
+        search.setResponder(value -> { query = value; page = 0; load(false); });
+        addRenderableWidget(Button.builder(Component.literal("Clear search"), button -> search.setValue(""))
+            .bounds(left + panel - 80, 24, 80, 20).build());
+        pageSize = Math.max(1, (height - 135) / 25);
+        rows.clear();
+        for (int row = 0; row < pageSize; row++) {
+            final int index = row;
+            rows.add(addRenderableWidget(Button.builder(Component.empty(), button -> open(index))
+                .bounds(left, 64 + 25 * row, panel, 20).build()));
+        }
+        int third = panel / 3;
+        previous = addRenderableWidget(Button.builder(Component.literal("Previous"), button -> { page--; updateRows(); })
+            .bounds(left, height - 76, third - 3, 20).build());
+        pageLabel = addRenderableWidget(Button.builder(Component.empty(), button -> {})
+            .bounds(left + third, height - 76, third - 3, 20).build());
+        next = addRenderableWidget(Button.builder(Component.literal("Next"), button -> { page++; updateRows(); })
+            .bounds(left + third * 2, height - 76, panel - third * 2, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("New character"), button ->
+            minecraft.setScreen(new CharacterDetailScreen(this, service, null)))
+            .bounds(left, height - 51, third - 3, 20).build());
+        retry = addRenderableWidget(Button.builder(Component.literal("Refresh / retry"), button -> load(true))
+            .bounds(left + third, height - 51, third - 3, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Review links"), button ->
+            minecraft.setScreen(new IdentityMergeScreen(this, service)))
+            .bounds(left + third * 2, height - 51, panel - third * 2, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Done"), button -> onClose())
+            .bounds(left, height - 26, panel, 20).build());
+        updateRows(); load(true);
     }
-    private EditBox field(int x,int y,int width,String hint,int max,String value) {
-        var f=new EditBox(font,x,y,width,20,Component.literal(hint));f.setHint(Component.literal(hint));f.setMaxLength(max);f.setValue(value);return addRenderableWidget(f);
+    void remember(String id) { selectedId = id; }
+    private void open(int row) {
+        int index = page * pageSize + row;
+        if (pending || index >= identities.size()) return;
+        var value = identities.get(index); selectedId = value.id();
+        minecraft.setScreen(new CharacterDetailScreen(this, service, value));
     }
-    private void populate() {
-        var value=index<0?null:identities.get(index);
-        name.setValue(value==null?"":value.name());aliases.setValue(value==null?"":String.join("; ",value.aliases()));
-        account.setValue(value==null?"":value.accountObservation());notes.setValue(value==null?"":value.notes());
-        selector.setMessage(Component.literal(value==null?"New character":font.plainSubstrByWidth(value.name()+" #"+value.id().substring(0,6),selector.getWidth()-12)));
-        status=value==null?"Create a character; aliases never merge automatically":"Archive notes are shared; memories require explicit persona assignment";
-        tick();
-    }
-    private void load() {
-        long token=++request;pending=true;tick();
-        service.identities(query).whenComplete((values,error)->minecraft.execute(()->{
-            if(token!=request || minecraft.screen!=this)return;pending=false;
-            if(error!=null)status="Identity storage unavailable; retry";
-            else {identities=values;index=-1;populate();}tick();
+    private void load(boolean revealSelection) {
+        long token = ++request;
+        pending = true; status = "Loading characters"; updateRows();
+        final String requestedQuery = query;
+        service.identities(requestedQuery).whenComplete((values, error) -> minecraft.execute(() -> {
+            if (token != request || minecraft.screen != this) return;
+            pending = false;
+            if (error != null) status = "Refresh failed; previous results retained. Refresh / retry";
+            else {
+                identities = values; loadedQuery = requestedQuery;
+                if (revealSelection && selectedId != null) for (int index = 0; index < values.size(); index++) {
+                    if (values.get(index).id().equals(selectedId)) { page = index / pageSize; break; }
+                }
+                status = values.isEmpty() ? (requestedQuery.isBlank() ? "No saved characters. Choose New character" : "No matching characters. Clear search or choose New character")
+                    : "Click a character to review, edit or Use as persona";
+            }
+            updateRows();
         }));
     }
-    private void save() {
-        final CharacterIdentity value;
-        try {value=new CharacterIdentity(index<0?UUID.randomUUID().toString():identities.get(index).id(),name.getValue().strip(),notes.getValue(),
-            Arrays.stream(aliases.getValue().split(";")).map(String::strip).filter(a->!a.isEmpty()).collect(java.util.stream.Collectors.toSet()),account.getValue().strip());}
-        catch(IllegalArgumentException e){status="Enter a name and valid bounded fields";return;}
-        pending=true;tick();
-        service.saveIdentity(value).whenComplete((v,error)->minecraft.execute(()->{
-            if(minecraft.screen!=this)return;pending=false;
-            if(error!=null){status="Character could not be saved";tick();return;}
-            query="";search.setValue("");
-            service.identities("").whenComplete((values,e)->minecraft.execute(()->{
-                if(minecraft.screen!=this)return;
-                if(e!=null){status="Saved; reopen to refresh";return;}
-                identities=values;index=0;while(index<identities.size()&&!identities.get(index).id().equals(value.id()))index++;
-                if(index>=identities.size())index=-1;populate();status="Character saved";
-            }));
-        }));
+    private void updateRows() {
+        if (previous == null) return;
+        page = Math.max(0, Math.min(page, Math.max(0, (identities.size() - 1) / pageSize)));
+        for (int row = 0; row < rows.size(); row++) {
+            var button = rows.get(row); int index = page * pageSize + row;
+            button.visible = index < identities.size(); button.active = button.visible && !pending;
+            if (!button.visible) continue;
+            var value = identities.get(index);
+            String label = value.name() + " #" + value.id().substring(0, 8);
+            button.setMessage(Component.literal((value.id().equals(selectedId) ? "> " : "") + font.plainSubstrByWidth(label, button.getWidth() - 18)));
+            button.setTooltip(Tooltip.create(Component.literal(value.name() + "\nID: " + value.id()
+                + "\nAliases: " + value.aliases().stream().sorted().limit(3).collect(java.util.stream.Collectors.joining("; ")))));
+        }
+        previous.active = !pending && page > 0;
+        next.active = !pending && (page + 1) * pageSize < identities.size();
+        pageLabel.active = false;
+        pageLabel.setMessage(Component.literal("Page " + (page + 1) + " / " + Math.max(1, (identities.size() + pageSize - 1) / pageSize)));
+        retry.active = !pending;
     }
-    private void makePersona() {
-        if(index<0)return;var identity=identities.get(index);pending=true;tick();
-        service.personas().thenCompose(values->{
-            var existing=values.stream().filter(p->p.identityId().equals(identity.id())).findFirst();
-            if(existing.isPresent())return service.selectPersona(existing.get().id());
-            var value=new Persona(UUID.randomUUID().toString(),identity.id(),identity.name());
-            return service.createPersona(value).thenCompose(v->service.selectPersona(value.id()));
-        }).whenComplete((v,error)->minecraft.execute(()->{if(minecraft.screen!=this)return;pending=false;status=error==null?"Persona selected; assign messages explicitly to build its memories":"Persona could not be selected";tick();}));
+    @Override public void render(GuiGraphics graphics, int x, int y, float delta) {
+        super.render(graphics, x, y, delta);
+        graphics.drawCenteredString(font, title, width / 2, 8, 0xFFE5E7EB);
+        int panel = Math.min(520, width - 32), left = (width - panel) / 2;
+        String count = pending ? status : identities.size() + " saved character(s)" + (identities.size() == 1000 ? " (search narrows first 1000 matches)" : "");
+        graphics.drawString(font, font.plainSubstrByWidth(count + " | " + status, panel), left, 49, 0xFF93C5FD);
     }
-    @Override public void tick(){if(save==null)return;save.active=!pending;selector.active=!pending;persona.active=!pending&&index>=0;merge.active=!pending;}
-    @Override public void render(GuiGraphics g,int x,int y,float delta){super.render(g,x,y,delta);g.drawCenteredString(font,title,width/2,8,0xFFE5E7EB);g.drawString(font,font.plainSubstrByWidth(status,Math.min(520,width-32)),(width-Math.min(520,width-32))/2,199,0xFF93C5FD);}
-    @Override public Component getNarrationMessage(){return Component.literal(title.getString()+". "+status);}
-    @Override public void onClose(){request++;minecraft.setScreen(parent);}
-    @Override public boolean isPauseScreen(){return false;}
+    @Override public Component getNarrationMessage() {
+        return Component.literal(title.getString() + ". " + status + ". " + identities.size() + " saved characters. Results for " + loadedQuery
+            + ". Page " + (page + 1) + ". " + identities.stream().skip((long) page * pageSize).limit(pageSize)
+                .map(value -> value.name() + " #" + value.id().substring(0, 8)).collect(java.util.stream.Collectors.joining(". ")));
+    }
+    @Override public void onClose() { request++; minecraft.setScreen(parent); }
+    @Override public boolean isPauseScreen() { return false; }
 }

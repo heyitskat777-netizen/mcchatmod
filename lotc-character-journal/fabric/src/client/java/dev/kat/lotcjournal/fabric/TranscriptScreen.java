@@ -1,6 +1,7 @@
 package dev.kat.lotcjournal.fabric;
 
 import dev.kat.lotcjournal.domain.Channel;
+import dev.kat.lotcjournal.domain.CharacterEvidenceKind;
 import dev.kat.lotcjournal.application.IdentityService;
 import dev.kat.lotcjournal.domain.MessageReference;
 import java.util.Set;
@@ -30,6 +31,9 @@ public final class TranscriptScreen extends Screen {
     private final Screen parent;
     private final IdentityService identities;
     private final String personaId;
+    private final String characterId;
+    private static final CharacterEvidenceKind[] EVIDENCE = {null, CharacterEvidenceKind.SPEAKER, CharacterEvidenceKind.ACTION, CharacterEvidenceKind.MENTION};
+    private int evidenceIndex;
     private final LogImportService importer;
     private final List<ImportSource> sources;
     private int sourceIndex = -1, channelIndex, offset;
@@ -39,22 +43,27 @@ public final class TranscriptScreen extends Screen {
     private Set<MessageReference> favorites = Set.of();
     private MessageReference selected;
     private List<TranscriptLine> entries = List.of();
-    private Button source, channel, previous, next, detail, favoritesFilter, favorite, assign;
+    private Button source, channel, previous, next, detail, favoritesFilter, favorite, assign, reviewTags;
     private DialoguePane pane;
 
     public TranscriptScreen(Screen parent, LogImportService importer, List<ImportSource> sources) {
         this(parent, importer, sources, null, null);
     }
     public TranscriptScreen(Screen parent, LogImportService importer, List<ImportSource> sources, IdentityService identities, String personaId) {
-        super(Component.literal(personaId == null ? "Transcripts — shared archive" : "Persona memories — assigned only"));
+        this(parent, importer, sources, identities, personaId, null);
+    }
+    public TranscriptScreen(Screen parent, LogImportService importer, List<ImportSource> sources, IdentityService identities, String personaId, String characterId) {
+        super(Component.literal(characterId != null ? "Character dialogue — shared archive" : personaId == null ? "Transcripts — shared archive" : "Persona memories — assigned only"));
         this.parent = parent; this.importer = importer; this.sources = List.copyOf(sources);
-        this.identities = identities; this.personaId = personaId;
+        this.identities = identities; this.personaId = personaId; this.characterId = characterId;
     }
     @Override protected void init() {
         int panel = Math.min(600, width - 32), left = (width - panel) / 2;
         Anchor anchor = pane == null ? null : pane.anchor();
         source = addRenderableWidget(Button.builder(Component.literal("All sources"), button -> {
-            sourceIndex = sourceIndex + 1 >= sources.size() ? -1 : sourceIndex + 1; offset = 0; load(false);
+            if (characterId != null) evidenceIndex = (evidenceIndex + 1) % EVIDENCE.length;
+            else sourceIndex = sourceIndex + 1 >= sources.size() ? -1 : sourceIndex + 1;
+            offset = 0; load(false);
         }).bounds(left, 24, panel / 2 - 4, 20).build());
         channel = addRenderableWidget(Button.builder(Component.literal("Channel: ALL"), button -> {
             channelIndex = (channelIndex + 1) % CHANNELS.length; offset = 0; load(false);
@@ -71,11 +80,15 @@ public final class TranscriptScreen extends Screen {
         addRenderableWidget(Button.builder(Component.literal("UNKNOWN review"), button -> {
             channelIndex = 2; sourceIndex = -1; offset = 0; load(false);
         }).bounds(left + panel - 100, 49, 100, 20).build());
+        int favoriteWidth=identities==null?panel/2:panel/3;
         favoritesFilter = addRenderableWidget(Button.builder(Component.literal("Favorites: All"), button -> {
             favoritesOnly = !favoritesOnly; offset = 0; load(false);
-        }).bounds(left, 74, panel / 2 - 4, 20).build());
+        }).bounds(left, 74, favoriteWidth - 4, 20).build());
         favorite = addRenderableWidget(Button.builder(Component.literal("Favorite selected"), button -> saveFavorite())
-            .bounds(left + panel / 2 + 4, 74, panel / 2 - 4, 20).build());
+            .bounds(left + favoriteWidth + 4, 74, favoriteWidth - 4, 20).build());
+        if(identities!=null)reviewTags=addRenderableWidget(Button.builder(Component.literal("Review tags"),button ->
+            minecraft.setScreen(new MessageTagReviewScreen(this,identities,selected)))
+            .bounds(left+2*favoriteWidth+4,74,panel-2*favoriteWidth-4,20).build());
         int part = panel / 4, y = height - 24;
         previous = addRenderableWidget(Button.builder(Component.literal("Previous"), button -> page(-1, true))
             .bounds(left, y, part - 3, 20).build());
@@ -111,7 +124,9 @@ public final class TranscriptScreen extends Screen {
                 if (details) pane.setEntries(entries, pane.anchor(), false);
             }
         }));
-        var pageRequest = personaId == null
+        var pageRequest = characterId != null
+            ? identities.characterTranscript(characterId, query, CHANNELS[channelIndex], EVIDENCE[evidenceIndex], favoritesOnly, offset, PAGE_SIZE)
+            : personaId == null
             ? importer.transcript(sourceId, query, CHANNELS[channelIndex], favoritesOnly, offset, PAGE_SIZE)
             : identities.transcript(personaId, query, CHANNELS[channelIndex], favoritesOnly, offset, PAGE_SIZE);
         pageRequest.whenComplete((page, error) -> minecraft.execute(() -> {
@@ -149,17 +164,18 @@ public final class TranscriptScreen extends Screen {
     @Override public void tick() {
         previous.active = !pending && offset > 0;
         next.active = !pending && offset + (long) entries.size() < total && offset <= Integer.MAX_VALUE - PAGE_SIZE;
-        source.active = !pending && !sources.isEmpty() && personaId == null; channel.active = !pending;
+        source.active = !pending && (characterId != null || (!sources.isEmpty() && personaId == null)); channel.active = !pending;
         detail.active = !pending;
         favoritesFilter.active = !pending;
         favoritesFilter.setMessage(Component.literal(favoritesOnly ? "Favorites: Only" : "Favorites: All"));
         favorite.active = !pending && selected != null && pane.selectedVisible();
         if (assign != null) assign.active = favorite.active;
+        if (reviewTags != null) reviewTags.active = favorite.active;
         favorite.setTooltip(selected == null ? null : Tooltip.create(Component.literal("Selected source "
             + selected.sourceId().substring(0, 12) + ", line " + selected.sourceLine() + ". Click a dialogue message to select it; F or its star toggles favorite.")));
         favorite.setMessage(Component.literal(selected != null && favorites.contains(selected) ? "Unfavorite selected" : "Favorite selected"));
         channel.setMessage(Component.literal("Channel: " + (CHANNELS[channelIndex] == null ? "ALL" : CHANNELS[channelIndex])));
-        source.setMessage(Component.literal(personaId != null ? "Persona-scoped memories" : sourceIndex < 0 ? "All sources (click to filter)" : font.plainSubstrByWidth(
+        source.setMessage(Component.literal(characterId != null ? "Evidence: " + (EVIDENCE[evidenceIndex] == null ? "All" : EVIDENCE[evidenceIndex]) : personaId != null ? "Persona-scoped memories" : sourceIndex < 0 ? "All sources (click to filter)" : font.plainSubstrByWidth(
             sources.get(sourceIndex).label(), source.getWidth() - 12)));
     }
     @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
@@ -178,6 +194,7 @@ public final class TranscriptScreen extends Screen {
             + (details ? ". Removed for selected source(s), all text/channels: " + removed : ""));
     }
     @Override public void onClose() { request++; minecraft.setScreen(parent); }
+    void refreshTags() { entries=List.of(); }
     @Override public boolean isPauseScreen() { return false; }
 
     private record Anchor(int entry, double fraction) {}

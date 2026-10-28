@@ -37,7 +37,7 @@ public final class JournalClientGameTest implements FabricClientGameTest {
         try {
             Path profile = FabricLoader.getInstance().getGameDir().toAbsolutePath().normalize();
             String expected = System.getProperty("lotc.journal.smoke.profile");
-            Path database = FabricLoader.getInstance().getConfigDir().resolve("lotc-journal/journal.sqlite")
+            Path database = FabricLoader.getInstance().getConfigDir().resolve("lotc-journal/archive.sqlite")
                 .toAbsolutePath().normalize();
             report.stage("startup", 30_000, () -> {
                 check(FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT, "Must run a real client");
@@ -163,7 +163,14 @@ public final class JournalClientGameTest implements FabricClientGameTest {
                 context.clickScreenButton("Create backup");
                 context.waitFor(client -> hasButton(client.screen, "Create backup"), WAIT_TICKS);
                 List<Path> created = backupFiles(backups).stream().filter(path -> !before.contains(path)).toList();
-                check(created.size() == 1, "Backup button must create exactly one fresh snapshot");
+                check(created.size() == 1, "Backup button must create exactly one fresh primary snapshot");
+                Path companion=created.getFirst().resolveSibling(created.getFirst().getFileName()+".characters.sqlite");
+                check(Files.isRegularFile(companion),"Backup must include its character database companion");
+                check(Files.isRegularFile(created.getFirst().resolveSibling(created.getFirst().getFileName()+".pair.json")),"Backup must include its pair manifest");
+                check(sqlCount(created.getFirst(),"SELECT count(*) FROM character_identities")==4,"Paired backup must preserve observed and manual characters");
+                check(sqlCount(created.getFirst(),"SELECT count(*) FROM memory_assignments")==2,"Paired backup must preserve explicit persona assignments");
+                check(sqlCount(created.getFirst(),"SELECT count(*) FROM identity_separations WHERE active=1")==1,"Paired backup must preserve the saved denial");
+                check(sqlCount(created.getFirst(),"SELECT count(*) FROM message_tag_reviews WHERE reviewed=1")==1&&sqlCount(created.getFirst(),"SELECT count(*) FROM message_tag_choices")==1,"Paired backup must preserve the exact reviewed message tag");
                 check(readLayout(created.getFirst()), "Backup must contain the selected compact layout");
                 toggle(context, false);
                 check(!readLayout(database), "Source setting must change after backup");
@@ -434,26 +441,17 @@ public final class JournalClientGameTest implements FabricClientGameTest {
             check(Arrays.equals(originalJournal,Files.readAllBytes(selectedJournal)),"Journal format import must leave selected original untouched");
             context.clickScreenButton("Done");waitForJournal(context);
         });
+        exerciseCharacterDiscovery(context,report,database);
+        exerciseCharacterBrowser(context,report,database);
         report.stage("identity-personas",60_000,()->{
             context.runOnClient(client -> search(client.screen).setValue(""));
             if(report.phase().equals("read")) {
-                check(sqlCount(database,"SELECT count(*) FROM character_identities")==2,"Manual identities must survive restart");
+                check(sqlCount(database,"SELECT count(*) FROM character_identities")==4,"Manual identities must survive restart");
                 check(sqlCount(database,"SELECT count(*) FROM personas")==2,"Distinct persona choices must survive restart");
                 check(sqlCount(database,"SELECT count(*) FROM memory_assignments")==2,"Explicit memory assignments must survive restart");
-            } else {
-                context.clickScreenButton("Characters");
-                context.waitFor(client -> isScreen(client.screen,"dev.kat.lotcjournal.fabric.IdentityScreen"),WAIT_TICKS);
-                for(String label:List.of("Synthetic Persona A","Synthetic Persona B")) {
-                    context.clickScreenButton("New character");
-                    context.runOnClient(client -> {var fields=editBoxes(client.screen);fields.get(1).setValue(label);fields.get(2).setValue("Shared Alias");fields.get(4).setValue("Synthetic manual archive note");});
-                    context.clickScreenButton("Save character");
-                    context.waitFor(client -> screenButtonActive(client.screen,"Use as persona"),WAIT_TICKS);
-                    context.clickScreenButton("Use as persona");
-                    context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Persona selected"),WAIT_TICKS);
-                }
-                check(sqlCount(database,"SELECT count(*) FROM character_identities")==2,"Shared aliases must not silently merge distinct identities");
-                context.clickScreenButton("Done");waitForJournal(context);
             }
+            check(sqlCount(database,"SELECT count(*) FROM character_identities")==4,"Saved character selection must not create extra identities");
+            check(sqlCount(database,"SELECT count(*) FROM personas")==2,"Reusing saved characters must reuse existing personas");
             context.clickScreenButton("View transcripts");
             context.waitFor(client -> isScreen(client.screen,TRANSCRIPT_SCREEN),WAIT_TICKS);
             context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("Synthetic Visitor waves."));
@@ -485,9 +483,274 @@ public final class JournalClientGameTest implements FabricClientGameTest {
             report.screenshot(context.takeScreenshot("lotc-persona-memories-"+report.phase()));
             context.clickScreenButton("Done");context.clickScreenButton("Done");waitForJournal(context);
         });
+        exerciseIdentityDenials(context,report,database);
+        exerciseMessageTagReview(context,report,database);
     }
+    private void exerciseMessageTagReview(ClientGameTestContext context,SmokeReport report,Path database) throws Exception {
+        report.stage("message-tag-review",60_000,()->{
+            String memories=sqlText(database,"SELECT group_concat(persona_id||':'||source_id||':'||source_line||':'||coalesce(identity_id,'none')||':'||role,'|') FROM (SELECT * FROM memory_assignments ORDER BY persona_id,source_id,source_line)");
+            long count=sqlCount(database,"SELECT count(*) FROM transcript_lines"),stars=sqlCount(database,"SELECT count(*) FROM message_favorites");
+            String source=sqlText(database,"SELECT source_id FROM transcript_lines WHERE text='Synthetic Visitor waves.' ORDER BY source_id,source_line LIMIT 1");
+            String ref="source_id='"+source+"' AND source_line=1";
+            openTagEditor(context,"Synthetic Visitor waves.",2);
+            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Automatic saved tags 1"),WAIT_TICKS);
+            chooseTagIdentity(context,"Synthetic Persona A");chooseTagKind(context,"SPEAKER");context.clickScreenButton("Replace");
+            chooseTagIdentity(context,"Synthetic Persona B");chooseTagKind(context,"MENTION");context.clickScreenButton("Add tag");
+            context.runOnClient(client -> check(client.screen.getNarrationMessage().getString().contains("Draft tags 2"),"Individual corrections must preserve the full unsaved multitag draft"));
+            context.getInput().resizeWindow(640,480);
+            context.waitFor(client -> client.screen.width==320&&client.screen.height==240,WAIT_TICKS);
+            context.runOnClient(client -> {
+                check(client.screen.getNarrationMessage().getString().contains("Draft tags 2"),"Resize must preserve both unsaved tag edits");
+                check(client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).allMatch(button -> button.getY()>=0&&button.getBottom()<=client.screen.height),"Tag-review controls must stay onscreen");
+            });
+            report.screenshot(context.takeScreenshot("lotc-message-tags-draft-small-"+report.phase()));
+            context.getInput().resizeWindow(854,480);context.waitFor(client -> client.screen.width==427,WAIT_TICKS);
+            context.clickScreenButton("Save reviewed tags");
+            context.waitFor(client -> screenButtonActive(client.screen,"Save reviewed tags")&&client.screen.getNarrationMessage().getString().contains("Reviewed saved tags 2"),WAIT_TICKS);
+            check(sqlCount(database,"SELECT count(*) FROM message_tag_choices WHERE "+ref)==2,"Both reviewed tags must persist at the exact selected coordinate");
+            // Simulate a second editor's newer revision; the real screen must preserve
+            // its dirty draft and reject the stale write, rather than overwrite it.
+            try(var other=DriverManager.getConnection("jdbc:sqlite:"+database.resolveSibling("characters.sqlite"));var q=other.createStatement()) {
+                check(q.executeUpdate("UPDATE message_tag_reviews SET revision=revision+1 WHERE "+ref)==1,"Concurrent-review fixture must touch exactly one known message");
+            }
+            context.clickScreenButton("Remove");context.clickScreenButton("Save reviewed tags");
+            context.waitFor(client -> screenButtonActive(client.screen,"Reload saved tags")&&client.screen.getNarrationMessage().getString().contains("Reload saved tags required"),WAIT_TICKS);
+            context.runOnClient(client -> check(!screenButtonActive(client.screen,"Save reviewed tags")&&client.screen.getNarrationMessage().getString().contains("Draft tags 1"),"A stale save must retain the exact unsaved draft and require explicit reload"));
+            check(sqlCount(database,"SELECT count(*) FROM message_tag_choices WHERE "+ref)==2,"Stale UI writes must not replace the newer stored set");
+            context.clickScreenButton("Remove");
+            context.runOnClient(client -> check(client.screen.getNarrationMessage().getString().contains("Reload saved tags required")&&client.screen.getNarrationMessage().getString().contains("Draft tags 0"),"Further draft edits must not hide the conflict/reload requirement"));
+            context.clickScreenButton("Reload saved tags");
+            context.waitFor(client -> screenButtonActive(client.screen,"Save reviewed tags")&&client.screen.getNarrationMessage().getString().contains("Reviewed saved tags 2"),WAIT_TICKS);
+            context.clickScreenButton("Remove");context.clickScreenButton("Save reviewed tags");
+            context.waitFor(client -> screenButtonActive(client.screen,"Save reviewed tags")&&client.screen.getNarrationMessage().getString().contains("Reviewed saved tags 1"),WAIT_TICKS);
+            check(sqlCount(database,"SELECT count(*) FROM message_tag_choices WHERE "+ref)==1,"Removing one tag must preserve the other reviewed tag");
+            context.clickScreenButton("Reject all tags");
+            context.waitFor(client -> screenButtonActive(client.screen,"Restore automatic")&&client.screen.getNarrationMessage().getString().contains("Reviewed saved tags 0"),WAIT_TICKS);
+            check(sqlCount(database,"SELECT count(*) FROM message_tag_reviews WHERE "+ref+" AND reviewed=1")==1&&sqlCount(database,"SELECT count(*) FROM message_tag_choices WHERE "+ref)==0,"Reviewed-empty must be a saved rejection, not missing automatic state");
+            context.clickScreenButton("Restore automatic");
+            context.waitFor(client -> screenButtonActive(client.screen,"Save reviewed tags")&&client.screen.getNarrationMessage().getString().contains("Automatic saved tags 1"),WAIT_TICKS);
+            check(sqlCount(database,"SELECT count(*) FROM message_tag_reviews WHERE "+ref+" AND reviewed=0")==1,"Restore must preserve a revision marker while enabling automatic evidence");
+            context.clickScreenButton("Done");context.waitFor(client -> isScreen(client.screen,TRANSCRIPT_SCREEN),WAIT_TICKS);context.clickScreenButton("Done");waitForJournal(context);
+            openTagEditor(context,"Synthetic Visitor says dialogue 53.",1);
+            if(report.phase().equals("read")) context.runOnClient(client -> check(client.screen.getNarrationMessage().getString().contains("Reviewed saved tags 1")&&client.screen.getNarrationMessage().getString().contains("Synthetic Persona B"),"A new JVM must load the writer's exact reviewed identity"));
+            context.runOnClient(client -> check(!screenButtonActive(client.screen,"MENTION"),"UNKNOWN must not expose a speaker/action override control"));
+            chooseTagIdentity(context,"Synthetic Persona B");context.clickScreenButton("Replace");context.clickScreenButton("Save reviewed tags");
+            context.waitFor(client -> screenButtonActive(client.screen,"Save reviewed tags")&&client.screen.getNarrationMessage().getString().contains("Reviewed saved tags 1"),WAIT_TICKS);
+            check(sqlCount(database,"SELECT count(*) FROM message_tag_choices x JOIN character_identities i ON i.id=x.identity_id WHERE x.source_id='"+source+"' AND x.source_line=53 AND x.kind='MENTION' AND i.name='Synthetic Persona B'")==1,"UNKNOWN review must persist a mention without changing its channel");
+            check(sqlCount(database,"SELECT count(*) FROM transcript_lines WHERE source_id='"+source+"' AND source_line=53 AND channel='UNKNOWN'")==1,"Review must retain source channel uncertainty");
+            context.clickScreenButton("Done");context.waitFor(client -> isScreen(client.screen,TRANSCRIPT_SCREEN)&&screenButtonActive(client.screen,"Details"),WAIT_TICKS);
+            transcriptClick(context,45,8);context.clickScreenButton("Review tags");
+            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Reviewed saved tags 1")&&screenButtonActive(client.screen,"Save reviewed tags"),WAIT_TICKS);
+            report.screenshot(context.takeScreenshot("lotc-message-tags-reviewed-"+report.phase()));
+            check(count==sqlCount(database,"SELECT count(*) FROM transcript_lines")&&stars==sqlCount(database,"SELECT count(*) FROM message_favorites"),"Tag edits must preserve source dialogue and individual favorites");
+            check(memories.equals(sqlText(database,"SELECT group_concat(persona_id||':'||source_id||':'||source_line||':'||coalesce(identity_id,'none')||':'||role,'|') FROM (SELECT * FROM memory_assignments ORDER BY persona_id,source_id,source_line)")),"Shared tag edits must never grant or rewrite persona memories");
+            context.clickScreenButton("Done");context.waitFor(client -> isScreen(client.screen,TRANSCRIPT_SCREEN),WAIT_TICKS);context.clickScreenButton("Done");waitForJournal(context);
+        });
+    }
+    private static void openTagEditor(ClientGameTestContext context,String query,int matches) {
+        context.clickScreenButton("View transcripts");context.waitFor(client -> isScreen(client.screen,TRANSCRIPT_SCREEN),WAIT_TICKS);
+        context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue(query));
+        context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Messages 1 to "+matches+" of "+matches),WAIT_TICKS);
+        transcriptClick(context,45,8);context.clickScreenButton("Review tags");
+        context.waitFor(client -> isScreen(client.screen,"dev.kat.lotcjournal.fabric.MessageTagReviewScreen")&&screenButtonActive(client.screen,"Reject all tags"),WAIT_TICKS);
+    }
+    private static void chooseTagIdentity(ClientGameTestContext context,String name) {
+        context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue(name));
+        context.waitFor(client -> screenButtonActive(client.screen,"Choose character (click)"),WAIT_TICKS);
+        context.clickScreenButton("Choose character (click)");
+        context.waitFor(client -> client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).anyMatch(button -> button.active&&button.getMessage().getString().startsWith(name+" #")),WAIT_TICKS);
+    }
+    private static void chooseTagKind(ClientGameTestContext context,String desired) {
+        for(int attempt=0;attempt<3;attempt++) {
+            String current=context.computeOnClient(client -> client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).map(button -> button.getMessage().getString()).filter(text -> List.of("SPEAKER","ACTION","MENTION").contains(text)).findFirst().orElseThrow());
+            if(current.equals(desired))return;context.clickScreenButton(current);
+        }
+        throw new AssertionError("Expected evidence kind must be selectable");
+    }
+    private void exerciseIdentityDenials(ClientGameTestContext context,SmokeReport report,Path database) throws Exception {
+        report.stage("identity-denials",60_000,()->{
+            long messages=sqlCount(database,"SELECT count(*) FROM transcript_lines"),stars=sqlCount(database,"SELECT count(*) FROM message_favorites");
+            String active=sqlText(database,"SELECT active_persona FROM identity_state WHERE id=1");
+            String memories=sqlText(database,"SELECT group_concat(persona_id||':'||source_id||':'||source_line||':'||coalesce(identity_id,'unassigned')||':'||role,'|') FROM (SELECT * FROM memory_assignments ORDER BY persona_id,source_id,source_line)");
+            context.runOnClient(client -> search(client.screen).setValue(""));
+            context.clickScreenButton("Characters");waitForCharacterList(context,4);
+            context.clickScreenButton("Review links");waitForLinkReview(context);
+            selectLinkCharacter(context,"Link from: ","Synthetic Persona A");
+            selectLinkCharacter(context,"Link to: ","Synthetic Persona B");
+            if(report.phase().equals("read")) {
+                check(sqlCount(database,"SELECT count(*) FROM identity_separations WHERE active=1")==1,"Denial must survive a fresh Minecraft process");
+                context.runOnClient(client -> {
+                    check(!screenButtonActive(client.screen,"Confirm these are the same identity"),"Restart must not silently permit a denied link");
+                    check(screenButtonActive(client.screen,"Clear selected denial"),"Persisted denial must remain explicitly reversible");
+                });
+            } else {
+                context.clickScreenButton("Deny link / keep separate");
+                context.waitFor(client -> screenButtonActive(client.screen,"Clear selected denial")&&client.screen.getNarrationMessage().getString().contains("Selected identities are kept separate"),WAIT_TICKS);
+            }
+            context.runOnClient(client -> check(!screenButtonActive(client.screen,"Confirm these are the same identity"),"A saved denial must disable conflicting confirmation"));
+            context.getInput().resizeWindow(640,480);
+            context.waitFor(client -> client.screen.width==320&&client.screen.height==240&&screenButtonActive(client.screen,"Clear selected denial"),WAIT_TICKS);
+            context.runOnClient(client -> {
+                check(!screenButtonActive(client.screen,"Confirm these are the same identity"),"Resize must preserve the selected denied pair");
+                check(client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).allMatch(button -> button.getY()>=0&&button.getBottom()<=client.screen.height),"Link and denial controls must remain onscreen");
+            });
+            report.screenshot(context.takeScreenshot("lotc-identity-denial-small-"+report.phase()));
+            context.getInput().resizeWindow(854,480);
+            context.waitFor(client -> client.screen.width==427&&screenButtonActive(client.screen,"Clear selected denial"),WAIT_TICKS);
+            context.clickScreenButton("Done");waitForCharacterList(context,4);context.clickScreenButton("Review links");waitForLinkReview(context);
+            selectLinkCharacter(context,"Link from: ","Synthetic Persona A");selectLinkCharacter(context,"Link to: ","Synthetic Persona B");
+            context.runOnClient(client -> check(!screenButtonActive(client.screen,"Confirm these are the same identity"),"Closing and reopening review must preserve the denial"));
+            context.clickScreenButton("Clear selected denial");
+            context.waitFor(client -> screenButtonActive(client.screen,"Confirm these are the same identity"),WAIT_TICKS);
+            check(sqlCount(database,"SELECT count(*) FROM identity_merges WHERE active=1")==0,"Clearing a denial must not create an identity link");
+            context.clickScreenButton("Confirm these are the same identity");
+            context.waitFor(client -> screenButtonActive(client.screen,"Undo selected link"),WAIT_TICKS);
+            check(sqlCount(database,"SELECT count(*) FROM identity_merges WHERE active=1")==1,"Explicit confirmation after clearing must persist a link");
+            context.runOnClient(client -> check(!screenButtonActive(client.screen,"Deny link / keep separate"),"Already linked identities must be unlinked before denial"));
+            context.clickScreenButton("Undo selected link");
+            context.waitFor(client -> screenButtonActive(client.screen,"Deny link / keep separate"),WAIT_TICKS);
+            context.clickScreenButton("Deny link / keep separate");
+            context.waitFor(client -> screenButtonActive(client.screen,"Clear selected denial"),WAIT_TICKS);
+            check(sqlCount(database,"SELECT count(*) FROM identity_separations WHERE active=1")==1,"Writer and reader must leave one persisted denial");
+            check(sqlCount(database,"SELECT count(*) FROM identity_merges WHERE active=1")==0,"Undo must remove only the confirmed overlay");
+            check(messages==sqlCount(database,"SELECT count(*) FROM transcript_lines")&&stars==sqlCount(database,"SELECT count(*) FROM message_favorites"),"Identity decisions must preserve original dialogue and favorites");
+            check(active.equals(sqlText(database,"SELECT active_persona FROM identity_state WHERE id=1")),"Identity decisions must not switch the owning persona");
+            check(memories.equals(sqlText(database,"SELECT group_concat(persona_id||':'||source_id||':'||source_line||':'||coalesce(identity_id,'unassigned')||':'||role,'|') FROM (SELECT * FROM memory_assignments ORDER BY persona_id,source_id,source_line)")),"Identity decisions must not grant or rewrite persona memories");
+            context.clickScreenButton("Done");waitForCharacterList(context,4);context.clickScreenButton("Done");waitForJournal(context);
+        });
+    }
+    private static void waitForLinkReview(ClientGameTestContext context) {
+        context.waitFor(client -> isScreen(client.screen,"dev.kat.lotcjournal.fabric.IdentityMergeScreen")&&client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).anyMatch(button -> button.active&&button.getMessage().getString().startsWith("Link from: ")),WAIT_TICKS);
+    }
+    private static void selectLinkCharacter(ClientGameTestContext context,String prefix,String name) {
+        for(int attempt=0;attempt<4;attempt++) {
+            String label=context.computeOnClient(client -> client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).map(button -> button.getMessage().getString()).filter(text -> text.startsWith(prefix)).findFirst().orElseThrow());
+            if(label.startsWith(prefix+name+" #"))return;
+            context.clickScreenButton(label);
+        }
+        throw new AssertionError("Expected synthetic identity choice must be available");
+    }
+    private void exerciseCharacterDiscovery(ClientGameTestContext context,SmokeReport report,Path database) throws Exception {
+        report.stage("storage-split",20_000,()->{
+            Path characters=database.resolveSibling("characters.sqlite");
+            check(Files.isRegularFile(database)&&Files.isRegularFile(characters),"Both physical database files must exist");
+            try(var c=DriverManager.getConnection("jdbc:sqlite:"+database.toUri()+"?mode=ro");var q=c.createStatement();var r=q.executeQuery("SELECT count(*) FROM sqlite_master WHERE name IN ('character_identities','personas','memory_assignments')")) {
+                check(r.next()&&r.getLong(1)==0,"Archive must not contain character or persona tables");
+            }
+            try(var c=DriverManager.getConnection("jdbc:sqlite:"+characters.toUri()+"?mode=ro");var q=c.createStatement();var r=q.executeQuery("SELECT count(*) FROM sqlite_master WHERE name IN ('transcript_lines','live_events','capture_sources')")) {
+                check(r.next()&&r.getLong(1)==0,"Characters database must not contain dialogue tables");
+            }
+        });
+        report.stage("character-discovery",40_000,()->{
+            check(sqlCount(database,"SELECT count(*) FROM character_identities WHERE name IN ('Synthetic Visitor','Synthetic Live Actor')")==2,"Historical and live speakers must each create exactly one observed character");
+            check(sqlCount(database,"SELECT count(*) FROM character_identities WHERE name LIKE '% says'")==0,"Speech verbs must never become part of discovered names");
+            check(sqlCount(database,"SELECT count(*) FROM character_evidence e JOIN character_identities i ON i.id=e.identity_id WHERE i.name='Synthetic Visitor' AND e.kind='ACTION'")==2,"Repeated historical actions at different coordinates must both tag their actor");
+            check(sqlCount(database,"SELECT count(*) FROM character_evidence e JOIN character_identities i ON i.id=e.identity_id WHERE i.name='Synthetic Visitor' AND e.kind='SPEAKER'")==50,"Trusted historical speech must tag its speaker");
+            check(sqlCount(database,"SELECT count(*) FROM character_evidence e JOIN transcript_lines t ON t.source_id=e.source_id AND t.source_line=e.source_line WHERE t.channel='UNKNOWN' AND e.kind IN ('SPEAKER','ACTION')")==0,"Unknown channel text must never acquire a confident speaker/action attribution");
+            check(sqlCount(database,"SELECT count(*) FROM character_identities WHERE account_observation<>''")==0,"Observed speakers must not infer account ownership");
+            if(!report.phase().equals("read")) check(sqlCount(database,"SELECT count(*) FROM personas")==0&&sqlCount(database,"SELECT count(*) FROM memory_assignments")==0,"Discovery must not create personas or grant memories");
+            context.clickScreenButton("Characters");
+            context.waitFor(client -> screenButtonActive(client.screen,"Refresh / retry"),WAIT_TICKS);
+            context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("Synthetic Visitor"));waitForCharacterList(context,1);
+            openCharacter(context,"Synthetic Visitor",sqlText(database,"SELECT id FROM character_identities WHERE name='Synthetic Visitor'"));
+            context.clickScreenButton("Related dialogue");
+            context.waitFor(client -> isScreen(client.screen,TRANSCRIPT_SCREEN)&&screenButtonActive(client.screen,"Evidence: All"),WAIT_TICKS);
+            context.clickScreenButton("Evidence: All");
+            context.waitFor(client -> screenButtonActive(client.screen,"Evidence: SPEAKER")&&client.screen.getNarrationMessage().getString().contains("of 50"),WAIT_TICKS);
+            context.clickScreenButton("Evidence: SPEAKER");
+            context.waitFor(client -> screenButtonActive(client.screen,"Evidence: ACTION")&&client.screen.getNarrationMessage().getString().contains("Messages 1 to 2 of 2"),WAIT_TICKS);
+            report.screenshot(context.takeScreenshot("lotc-character-dialogue-"+report.phase()));
+            context.clickScreenButton("Done");context.clickScreenButton("Done");context.clickScreenButton("Done");waitForJournal(context);
+        });
+    }
+
+    private static java.sql.Connection archiveConnection(Path database) throws Exception {
+        var c=DriverManager.getConnection("jdbc:sqlite:"+database.toUri()+"?mode=ro");
+        Path companion=database.getFileName().toString().equals("archive.sqlite") ? database.resolveSibling("characters.sqlite") : database.resolveSibling(database.getFileName()+".characters.sqlite");
+        try(var q=c.prepareStatement("ATTACH DATABASE ? AS characters")) {q.setString(1,companion.toUri()+"?mode=ro");q.execute();}
+        catch(Exception e) {c.close();throw e;}return c;
+    }
+
+    private void exerciseCharacterBrowser(ClientGameTestContext context,SmokeReport report,Path database) throws Exception {
+        report.stage("character-browser",60_000,()->{
+            context.runOnClient(client -> search(client.screen).setValue(""));
+            context.clickScreenButton("Characters");
+            waitForCharacterList(context,report.phase().equals("read")?4:2);
+            if(!report.phase().equals("read")) {
+                for(String label:List.of("Synthetic Persona A","Synthetic Persona B")) {
+                    context.clickScreenButton("New character");
+                    context.waitFor(client -> isScreen(client.screen,"dev.kat.lotcjournal.fabric.CharacterDetailScreen"),WAIT_TICKS);
+                    context.runOnClient(client -> {
+                        check(!screenButtonActive(client.screen,"Use as persona"),"Unsaved draft must explain why persona activation is unavailable");
+                        var fields=editBoxes(client.screen);check(fields.size()==4,"Character detail needs clearly identified editable fields");
+                        fields.get(0).setValue(label);fields.get(1).setValue("Shared Alias;Literal\\;Alias;Path\\\\Alias");fields.get(3).setValue("Synthetic manual archive note");
+                    });
+                    context.clickScreenButton("Save character");
+                    context.waitFor(client -> screenButtonActive(client.screen,"Use as persona"),WAIT_TICKS);
+                    context.clickScreenButton("Done");waitForCharacterList(context,label.endsWith("A")?3:4);
+                }
+                check(sqlCount(database,"SELECT count(*) FROM personas")==0,"Saving alone must not silently choose a persona");
+            }
+            report.screenshot(context.takeScreenshot("lotc-character-list-"+report.phase()));
+            context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("Shared Alias"));waitForCharacterList(context,2);
+            context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("NO_SYNTHETIC_CHARACTER_MATCH"));waitForCharacterList(context,0);
+            context.clickScreenButton("Clear search");waitForCharacterList(context,4);
+            String secondId=sqlText(database,"SELECT id FROM character_identities WHERE name='Synthetic Persona B'");
+            openCharacter(context,"Synthetic Persona B",secondId);
+            context.runOnClient(client -> {
+                check(screenButtonActive(client.screen,"Use as persona"),"Existing non-first character must be usable after list selection");
+                check(editBoxes(client.screen).get(1).getValue().contains("Literal\\;Alias"),"Literal semicolon alias must survive opening saved details");
+                var notes=editBoxes(client.screen).get(3);notes.setValue(notes.getValue()+" "+report.phase());
+            });
+            context.waitFor(client -> !screenButtonActive(client.screen,"Use as persona"),WAIT_TICKS);
+            List<String> draft=context.computeOnClient(client -> editBoxes(client.screen).stream().map(EditBox::getValue).toList());
+            context.getInput().resizeWindow(640,480);
+            context.waitFor(client -> client.screen.width==320&&client.screen.height==240,WAIT_TICKS);
+            context.runOnClient(client -> {
+                check(client.screen.getNarrationMessage().getString().contains(secondId),"Resize must keep exact selected UUID");
+                check(editBoxes(client.screen).stream().map(EditBox::getValue).toList().equals(draft),"Resize must preserve the full draft, aliases and notes");
+                check(!screenButtonActive(client.screen,"Use as persona"),"Dirty saved draft needs explicit save, not an accidental different character");
+                check(client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).allMatch(button -> button.getY()>=0&&button.getBottom()<=client.screen.height),"Detail controls must stay onscreen");
+            });
+            report.screenshot(context.takeScreenshot("lotc-character-detail-small-"+report.phase()));
+            context.getInput().resizeWindow(854,480);
+            context.waitFor(client -> client.screen.width==427&&client.screen.height==240,WAIT_TICKS);
+            context.clickScreenButton("Save character");context.waitFor(client -> screenButtonActive(client.screen,"Use as persona"),WAIT_TICKS);
+            context.clickScreenButton("Use as persona");
+            context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Persona selected"),WAIT_TICKS);
+            check(secondId.equals(sqlText(database,"SELECT p.identity_id FROM personas p JOIN identity_state s ON s.active_persona=p.id WHERE s.id=1")),"Use as persona must activate the selected second character, not the first list row");
+            check(draft.get(3).equals(sqlText(database,"SELECT notes FROM character_identities WHERE id='"+secondId+"'")),"Saved draft must update only its exact UUID");
+            context.clickScreenButton("Done");waitForCharacterList(context,4);
+            context.runOnClient(client -> editBoxes(client.screen).getFirst().setValue("Synthetic Persona A"));waitForCharacterList(context,1);
+            String firstId=sqlText(database,"SELECT id FROM character_identities WHERE name='Synthetic Persona A'");
+            openCharacter(context,"Synthetic Persona A",firstId);
+            context.clickScreenButton("Use as persona");context.waitFor(client -> client.screen.getNarrationMessage().getString().contains("Persona selected"),WAIT_TICKS);
+            check(firstId.equals(sqlText(database,"SELECT p.identity_id FROM personas p JOIN identity_state s ON s.active_persona=p.id WHERE s.id=1")),"Filtered saved selection must activate its own persona");
+            context.clickScreenButton("Done");waitForCharacterList(context,1);
+            context.clickScreenButton("Done");waitForJournal(context);
+            context.clickScreenButton("Characters");waitForCharacterList(context,4);
+            openCharacter(context,"Synthetic Persona B",secondId);
+            context.runOnClient(client -> check(screenButtonActive(client.screen,"Use as persona"),"Reopening saved detail after leaving the browser must not reset it to an unsaved New character"));
+            check(sqlCount(database,"SELECT count(*) FROM character_identities")==4,"Browsing, editing and reusing personas must not duplicate identities");
+            check(sqlCount(database,"SELECT count(*) FROM personas")==2,"Repeated Use as persona must reuse existing persona records");
+            context.clickScreenButton("Done");waitForCharacterList(context,4);context.clickScreenButton("Done");waitForJournal(context);
+        });
+    }
+    private static void waitForCharacterList(ClientGameTestContext context,int count) {
+        context.waitFor(client -> isScreen(client.screen,"dev.kat.lotcjournal.fabric.IdentityScreen")
+            && client.screen.getNarrationMessage().getString().contains(". "+count+" saved characters.")
+            && screenButtonActive(client.screen,"Refresh / retry"),WAIT_TICKS);
+    }
+    private static void openCharacter(ClientGameTestContext context,String name,String id) {
+        String label=context.computeOnClient(client -> client.screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast)
+            .map(button -> button.getMessage().getString()).filter(text -> text.contains(name+" #"+id.substring(0,8))).findFirst().orElseThrow(()->new AssertionError("Saved character row must be visible")));
+        context.clickScreenButton(label);
+        context.waitFor(client -> isScreen(client.screen,"dev.kat.lotcjournal.fabric.CharacterDetailScreen")
+            && client.screen.getNarrationMessage().getString().contains(id),WAIT_TICKS);
+    }
+
     private static String sqlText(Path database,String sql) throws Exception {
-        try(var c=DriverManager.getConnection("jdbc:sqlite:"+database.toUri()+"?mode=ro");var q=c.createStatement();var r=q.executeQuery(sql)){check(r.next(),"Expected metadata row");return r.getString(1);}
+        try(var c=archiveConnection(database);var q=c.createStatement();var r=q.executeQuery(sql)){check(r.next(),"Expected metadata row");return r.getString(1);}
     }
 
     private void exerciseBatchImport(ClientGameTestContext context, SmokeReport report, Path database) throws Exception {
@@ -588,7 +851,7 @@ public final class JournalClientGameTest implements FabricClientGameTest {
     }
 
     private static long sqlCount(Path database, String sql) throws Exception {
-        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database.toUri() + "?mode=ro");
+        try (var connection = archiveConnection(database);
              var statement = connection.createStatement(); var rows = statement.executeQuery(sql)) {
             check(rows.next(), "Count query must return a row"); return rows.getLong(1);
         }
@@ -699,7 +962,7 @@ public final class JournalClientGameTest implements FabricClientGameTest {
 
     private static List<Path> backupFiles(Path directory) throws Exception {
         if (!Files.exists(directory)) return List.of();
-        try (var paths = Files.list(directory)) { return paths.filter(Files::isRegularFile).toList(); }
+        try (var paths = Files.list(directory)) { return paths.filter(Files::isRegularFile).filter(path -> path.toString().endsWith(".sqlite") && !path.toString().endsWith(".characters.sqlite")).toList(); }
     }
 
     private static boolean readLayout(Path database) throws Exception {
