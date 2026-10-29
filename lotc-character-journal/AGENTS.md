@@ -38,6 +38,10 @@ Target Minecraft 1.21.11, Fabric, Java 21. Do not silently upgrade Minecraft.
   See docs/CLIENT_SMOKE_TESTS.md. Record failed and skipped phases explicitly.
 - Review failures independently where possible. After three unsuccessful repair
   cycles, document the blocker and reassess; do not weaken acceptance criteria.
+- For opt-in synthetic archive scale checks, run `./gradlew -PcoreOnly :storage:scaleTest`
+  and retain JSON/JUnit evidence. Declare workload and ceilings before measuring;
+  distinguish known-name throughput from fresh discovery and single-writer timings
+  from concurrent live capture. Ordinary `check` excludes the scale tag.
 - Do not change checked reference expectations just to match implementation.
 - Record exact commands, outcomes, skipped checks, and user testing still needed
   in docs/STATUS.md. Preserve milestone state across sessions.

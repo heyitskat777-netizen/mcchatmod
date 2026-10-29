@@ -303,3 +303,34 @@ actual filtered Characters list. Queries survive resize, including beyond the
 EditBox default 32-character limit. Editing a query clears completed operation
 feedback; a fresh operation result remains visible until the next query edit.
 Search/list work stays on bounded workers and loading hides stale scene results.
+
+## Phase 4 synthetic scale verification — October 28, 2026
+
+The next unfinished engineering check is measured archive/scene/identity-queue scale,
+not Phase 5 AI integration. Add an opt-in synthetic storage workload and separate
+source-path-triggered CI job. Keep runtime version/schema and dependency pins
+unchanged when only verification tooling changes. Preserve the existing native
+coordinator/build/verification/review workflow.
+
+The reference workload and generous timeout ceilings are engineering regression
+criteria declared before measurement. They are not user-approved interactive
+performance budgets. Record known-character imports separately from fresh automatic
+discovery/backfill, and storage-port reads/writes separately from parser, Minecraft,
+Windows modpack and concurrent live-capture behavior. Do not generalize a passing
+storage workload into real-scene accuracy or private persona acceptance. Only
+synthetic report artifacts may be uploaded; databases and transcript payloads stay
+outside the artifact selection. See ARCHIVE_SCALE_TESTS.md and actual STATUS.md
+results. Real-log scene acceptance and alpha.13's focused user checks remain open.
+
+The first reference run failed the scene-search ceiling (466.454s versus60s).
+Alpha.14 scopes effective actor evidence to each scene before UNION, retaining
+manual overrides, reviewed-empty suppression, restored AUTO and persona raw
+assignments. Existing message indexes suffice; schema and parser policy remain
+unchanged. Retain the failed evidence and original workload/budgets.
+
+The follow-up run measured notes-only saves taking 108.811s, the same full archive
+reindex as an alias edit. Alpha.14 compares old exact names/alias sets under the
+existing write reservation and skips index rebuilding only for unchanged inputs.
+Notes/account values still persist; case-only renames, alias add/remove and new
+identities retain backfill and atomic rollback. Trigger-guard tests preserve exact
+evidence, reviewed tags, favorites, cursors and persona assignments.

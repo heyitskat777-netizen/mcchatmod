@@ -1,0 +1,26 @@
+JDBC SQLite 3.51.3
+before.sql
+CO-ROUTINE e
+COMPOUND QUERY
+LEFT-MOST SUBQUERY
+SCAN x
+SEARCH r USING INDEX sqlite_autoindex_message_tag_reviews_1 (source_id=? AND source_line=?)
+UNION ALL
+SCAN a USING COVERING INDEX sqlite_autoindex_character_evidence_1
+CORRELATED SCALAR SUBQUERY 2
+SEARCH r USING INDEX sqlite_autoindex_message_tag_reviews_1 (source_id=? AND source_line=?)
+SEARCH m USING COVERING INDEX sqlite_autoindex_scene_members_1 (scene_id=?)
+BLOOM FILTER ON e (source_line=? AND source_id=?)
+SEARCH e USING AUTOMATIC PARTIAL COVERING INDEX (source_line=? AND source_id=?)
+USE TEMP B-TREE FOR DISTINCT
+after.sql
+COMPOUND QUERY
+LEFT-MOST SUBQUERY
+SEARCH m USING COVERING INDEX sqlite_autoindex_scene_members_1 (scene_id=?)
+SEARCH a USING INDEX character_evidence_by_message (source_id=? AND source_line=?)
+CORRELATED SCALAR SUBQUERY 1
+SEARCH r USING INDEX sqlite_autoindex_message_tag_reviews_1 (source_id=? AND source_line=?)
+UNION USING TEMP B-TREE
+SEARCH m USING COVERING INDEX sqlite_autoindex_scene_members_1 (scene_id=?)
+SEARCH r USING INDEX sqlite_autoindex_message_tag_reviews_1 (source_id=? AND source_line=?)
+SEARCH x USING COVERING INDEX sqlite_autoindex_message_tag_choices_1 (source_id=? AND source_line=?)

@@ -1,4 +1,130 @@
-# Current work — October 28, 2026: scene minimums, confidence, review queue and search
+# Current work — October 28, 2026: archive scale verification
+
+Continue the earliest unfinished Phase 4 validation on
+`feature/archive-scale-verification`, based on alpha.13 documentation commit
+`b8c23da`. Native build, verification and read-only review agents are available.
+Build owns Gradle/CI, verification owns isolated scale tests/fixtures, review checks
+integrity/privacy and measurement claims, coordinator owns integration/docs.
+
+The fixed opt-in synthetic workload and ceilings were established before running:
+100,000 observations, 2,000 identities, 1,000 scenes and 100 shared-alias candidate
+pairs. See [ARCHIVE_SCALE_TESTS.md](ARCHIVE_SCALE_TESTS.md). Ordinary check remains
+fast; a separate CI workflow will upload bounded report artifacts. The initial tooling-only scope exposed a runtime performance defect; alpha.14 now
+contains a targeted shared-scene search query repair, with no schema/policy change.
+AI/provider work remains
+deferred. Alpha.13 real-log/modpack acceptance is still pending.
+
+Preliminary standalone production-API pilot used 2,000 saved identities and 1,000
+synthetic observations in ten 100-row batches: identity setup 7,100 ms; ingestion
+714 ms (Java 21, 1 GiB heap). This is exploratory evidence, not the fixed workload
+pass. An initial pilot incorrectly attempted a 1,000-row append and was rejected
+by the existing 500-coordinate safety limit before writing; the harness was fixed
+to respect that existing bound, with no application changes.
+
+The first fixed run `scale-1` failed after 9m43s: setup 4.020s, ingestion 95.346s,
+initial/repeat scene refresh 4.109s/5.555s, repeat-source 0.811s and transcript paging
+0.194s passed; grouped scene list/search/paging took **466.454s**, failing the
+predeclared 60s ceiling. Later stages were not reached. This is a reproduced
+application performance defect, not a graphics, environment or weakened-test issue.
+Failed JSON/JUnit/log evidence is preserved under
+`/workspace/runtime/verification/archive-scale/scale-1/`.
+
+SQLite JDBC 3.51.3 EXPLAIN confirms the old shared participant query scans complete
+review-choice/automatic-evidence tables for each nonmatching scene, then builds an
+automatic index over the union. The repair restricts both effective-tag branches to
+scene coordinates before UNION, with CROSS JOIN fixing coordinate-first lookup.
+The new plan searches scene membership and existing message indexes. Reviewed-empty
+suppression, restored automatic tags, confirmed roots, manual participants and
+persona raw attribution remain distinct and unchanged. Schema/archive/parser pins
+remain 5/9/4. Existing 129 storage tests pass (10s). A new regression uses canonical
+participant names absent from source text so text matching cannot mask tag errors.
+
+`scale-2` passed all 16 stages in 5m56s after the scoped-query fix. The same grouped
+scene list/search/paging stage dropped to **0.766s**; queue 0.014s, related dialogue
+0.331s, persona reads 0.155s, backup 0.713s and paired/original reopen 8.904s passed.
+Ingestion took 108.642s; full alias backfill 107.926s. This exploratory run used the
+compiled pre-strengthening scale test; the final suite additionally verifies exact
+persisted alias/notes metadata, so this is not substituted for the final run.
+
+Notes-only save measured **108.811s** because the old implementation rebuilt the
+whole archive. The second narrow repair compares old exact name/alias set under
+the existing paired write reservation and skips reindex only when those inputs
+are unchanged. Notes/account fields still persist; new identities, exact case/name
+changes, alias additions/removals still rebuild. A trigger-guard regression checks
+no evidence insert/update/delete on metadata/no-op, atomic rollback on real index
+failures, and exact source/favorites/persona/revision preservation. No schema or
+policy changes were needed.
+
+Coordinator integrated `./gradlew --offline check :fabric:build
+:fabric:prepareClientSmoke --no-daemon --console=plain`: PASS 17s, 34 tasks
+(17 executed/17 up-to-date). **354 core tests**, zero failures/errors/skips
+(domain27/application22/parsing116/ingestion58/storage131).
+`python3 -m unittest discover -s scripts -p 'test_*.py' -v`: **15 PASS**, 1.120s.
+Fabric compilation, packaged dependencies and architecture checks pass.
+
+Actual isolated Minecraft suite: `python3 scripts/client_smoke.py --offline
+--eula-accepted --prepared --mode all --timeout 300 --run-id alpha14-final`
+(using Java21, DISPLAY=:99, software GL, isolated synthetic profiles and the user's
+existing EULA acceptance): **all five phases PASS**.
+
+| Phase | Seconds | Result |
+| --- | --- | --- |
+| Graphics preflight | 24.2 | PASSED |
+| Development write | 37.5 | PASSED |
+| Development read/restart | 35.2 | PASSED |
+| Packaged-JAR write | 43.4 | PASSED |
+| Packaged-JAR read/restart | 34.8 | PASSED |
+
+Writers passed 28 explicit assertion stages; readers 29, with complete reports,
+launch-origin validation and acknowledged clean shutdown. Packaged runs load the
+remapped alpha.14 mod and all nested runtime modules from JARs. Logs, JUnit,
+screenshots and launch/shutdown witnesses are preserved under
+`fabric/build/client-smoke/evidence/alpha14-final/`. Reviewed packaged scene and
+small character-editor screenshots supplement assertions.
+[Client summary](verification/alpha14-client-summary.json). This is actual automated
+client verification, not user/modpack acceptance.
+
+Local installable JAR: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.14.jar`,
+14,801,662 bytes; SHA-256
+`3fffb77b81177f32a6e850f573e020e616d6d58416f5c4badb508214968edde9`.
+Local distribution ZIP integrity and embedded JAR hash pass.
+
+Final strengthened `scale-3-final` command
+`./gradlew -PcoreOnly :storage:scaleTest --offline --no-daemon --console=plain`: **PASS
+in 4m08s**, all 16 measured stages and exact metadata readback passed. Fixed 100,000
+rows/100 sources/2,000 pre-saved identities/1,000 scenes/100 candidate pairs remain
+unchanged, along with every ceiling. Ingestion 108.342s; initial/repeat refresh
+4.140s/5.679s; grouped scene list/search/paging **0.729s**; queue 0.016s; related
+dialogue 0.322s; persona reads 0.152s; full alias backfill 107.051s; notes-only save
+**0.516s** (versus pre-guard 108.811s); paired backup 0.708s and original/backup
+reopen 9.171s. Timings include correctness assertions/validation overhead.
+
+Final counts: exactly 100,000 original RP observations, 101,000 derived evidence
+rows after alias backfill, 200 explicit persona assignments, 20 favorites, 1,000
+scenes and 100 queue pairs. Full original payload/coordinate digest is unchanged;
+source counters remain 1,000 imported +2 excluded per source, complete at 1,002.
+Paired backup/reopen preserves these invariants. Actual write contention, fresh
+actor discovery, parser/decompressor throughput, UNKNOWN scale and real modpack
+latency are explicitly outside this measurement.
+
+One initial application performance failure was repaired; subsequent exploratory
+and final scale runs passed. No test, ceiling or acceptance criterion was weakened.
+Native build/verification/review results were integrated by the coordinator; final
+review found no blocker. [Full scale evidence](verification/archive-scale-results.json),
+[failed baseline](verification/archive-scale-baseline.json),
+[JDBC 3.51 query plans](verification/scene-search-query-plans.txt).
+
+Next user checks: [USER_TEST_ALPHA14.md](USER_TEST_ALPHA14.md), particularly real
+large-archive text/participant/missing-name scene search, notes/account persistence,
+shared/manual tag search and persona isolation. Alpha.13 scene/queue acceptance is
+still separate if not completed. Phase 4 user accuracy/false joins/splits, first-time
+discovery throughput and concurrent live recording remain open; AI stays deferred.
+Commit, push, PR and CI publication results will be recorded below. Historical
+verified results remain below.
+
+---
+
+# Previous verified work — October 28, 2026: scene minimums, confidence, review queue and search
 
 User requests: minimum 10 RP messages and 2 participants to create shared scenes;
 automatically confirm clear groups, keep low-confidence groups Suggested and list

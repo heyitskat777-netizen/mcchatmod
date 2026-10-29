@@ -312,6 +312,19 @@ Use a quiet conversation, a crowded group event, and an interrupted scene. Revie
 
 Grouping is useful and correctable, estimates are understandable, and any unavoidable ambiguity is visible. Record false joins and false splits to tune the rules.
 
+Alpha.14 fixes a measured shared-scene search regression by restricting actor
+evidence to each scene before combining reviewed/automatic tags. Metadata-only
+character saves skip unnecessary indexing; actual name/alias edits retain backfill.
+No new database format or analysis capability is introduced.
+
+A separate Phase 4 synthetic scale verification suite exercises 100,000 archived
+observations, 2,000 pre-saved characters and 1,000 qualifying scenes through
+production storage APIs. It measures known-character ingestion, backfill, scene and
+queue queries, persona isolation and paired backup/reopen. Budgets are regression
+ceilings; fresh-name import cost, live-writer contention and real-modpack latency
+remain separate. See [ARCHIVE_SCALE_TESTS.md](ARCHIVE_SCALE_TESTS.md) and actual
+results in STATUS.md. This does not mark real-scene acceptance complete.
+
 ## Phase 5 — Optional AI and encounter summaries
 
 **Deliverables**

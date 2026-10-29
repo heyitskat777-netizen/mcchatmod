@@ -82,13 +82,22 @@ public final class SqliteIdentityRepository implements IdentityRepository {
     @Override public void saveIdentity(CharacterIdentity value) throws Exception {
         Objects.requireNonNull(value);
         write(c -> {
+            CharacterIdentity previous=null;
+            try(var q=c.prepareStatement("SELECT * FROM characters.character_identities WHERE id=?")) {
+                q.setString(1,value.id());try(var r=q.executeQuery()){if(r.next())previous=readIdentity(c,r,"characters");}
+            }
+            // Notes and account observations cannot change name evidence. Compare
+            // under the same write lock so a metadata save does not rebuild the
+            // whole archive or race a concurrent name/alias change.
+            boolean namesChanged=previous==null||!previous.name().equals(value.name())||!previous.aliases().equals(value.aliases());
             try(var q=c.prepareStatement("INSERT INTO characters.character_identities(id,name,notes,account_observation) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,notes=excluded.notes,account_observation=excluded.account_observation")) {
                 q.setString(1,value.id());q.setString(2,value.name());q.setString(3,value.notes());q.setString(4,value.accountObservation());q.executeUpdate();
             }
             try(var q=c.prepareStatement("DELETE FROM characters.character_aliases WHERE identity_id=?")) {q.setString(1,value.id());q.executeUpdate();}
             try(var q=c.prepareStatement("INSERT INTO characters.character_aliases VALUES(?,?)")) {
                 for(String alias:value.aliases()) {q.setString(1,value.id());q.setString(2,alias);q.addBatch();} q.executeBatch();
-            } CharacterIndex.reindex(c); return null;
+            }
+            if(namesChanged)CharacterIndex.reindex(c); return null;
         });
     }
     @Override public List<Persona> personas() throws Exception {

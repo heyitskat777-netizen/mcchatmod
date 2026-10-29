@@ -1,0 +1,99 @@
+{
+  "runtime_version": "0.1.0-alpha.13",
+  "command": "./gradlew -PcoreOnly :storage:scaleTest --offline --no-daemon --console=plain",
+  "result": "failed_application_performance_ceiling",
+  "measurement": {
+    "complete": true,
+    "passed": false,
+    "startedAt": "2026-10-28T23:36:19.635652772Z",
+    "workload": {
+      "expectedScenes": 1000,
+      "characters": 2000,
+      "rows": 100000,
+      "seed": 20261028,
+      "expectedQueuePairs": 100,
+      "sources": 100
+    },
+    "schemaVersion": 1,
+    "environment": {
+      "vmName": "OpenJDK 64-Bit Server VM",
+      "processors": 4,
+      "javaVendor": "Eclipse Adoptium",
+      "javaVersion": "21.0.13",
+      "maxHeapBytes": 1073741824,
+      "osName": "Linux",
+      "osArch": "amd64",
+      "sqliteVersion": "3.51.3"
+    },
+    "counts": {
+      "expectedPayloadSha256": "e95a30771f8cb15d7e19573e90f619e70dd15ca8a03f7f0b79d3ef215719292a"
+    },
+    "stages": [
+      {
+        "name": "setup-presaved-characters",
+        "status": "PASSED",
+        "budgetMillis": 120000,
+        "durationMillis": 4020
+      },
+      {
+        "name": "ingest-production-append-and-index",
+        "status": "PASSED",
+        "budgetMillis": 300000,
+        "durationMillis": 95346
+      },
+      {
+        "name": "explicit-persona-and-favorite-setup",
+        "status": "PASSED",
+        "budgetMillis": 60000,
+        "durationMillis": 210
+      },
+      {
+        "name": "scene-refresh-initial",
+        "status": "PASSED",
+        "budgetMillis": 180000,
+        "durationMillis": 4109
+      },
+      {
+        "name": "scene-refresh-repeat",
+        "status": "PASSED",
+        "budgetMillis": 180000,
+        "durationMillis": 5555
+      },
+      {
+        "name": "completed-source-repeat",
+        "status": "PASSED",
+        "budgetMillis": 60000,
+        "durationMillis": 811
+      },
+      {
+        "name": "transcript-first-deep-and-literal-pages",
+        "status": "PASSED",
+        "budgetMillis": 60000,
+        "durationMillis": 194
+      },
+      {
+        "name": "scene-list-search-and-paging",
+        "status": "FAILED",
+        "budgetMillis": 60000,
+        "durationMillis": 466454,
+        "errorType": "AssertionFailedError"
+      }
+    ],
+    "failures": [
+      "AssertionFailedError"
+    ],
+    "limitations": [
+      "All character identities are pre-saved; fresh-name discovery throughput is not measured",
+      "Historical storage append/index throughput; parser and decompressor throughput are not measured",
+      "Single-writer workload; live append contention during refresh or reindex is not measured",
+      "Synthetic storage verification; Minecraft UI and real modpack latency are not measured"
+    ],
+    "deadlines": {
+      "suiteSeconds": 900,
+      "stageBudgets": "Elapsed ceilings checked after each operation; JUnit interruption and enclosing Gradle timeout bound a hung run"
+    },
+    "finishedAt": "2026-10-28T23:45:56.683261769Z"
+  },
+  "runtime_source_ref": "b8c23da",
+  "note": "The uncommitted new scale harness measured baseline production classes; this commit does not itself contain the harness."
+}

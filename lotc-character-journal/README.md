@@ -11,7 +11,7 @@ to open the journal; its key is rebindable in Controls. Home search shows name/a
 match feedback; press Enter to open the filtered Characters list. Queries survive resize. Layout settings and backup
 creation remain available. Characters now supports explicit names, aliases and notes; persona memories require manual message assignment.
 
-The `0.1.0-alpha.13` development build expands **Log import** for finished UTF-8 `.log`
+The `0.1.0-alpha.14` development build expands **Log import** for finished UTF-8 `.log`
 and `.log.gz` files, background validation, progress/cancellation, restart-safe
 checkpoints, repeat-import deduplication, and a transcript browser with literal
 text search. **Import all / dashboard** adds a read-only folder preview,
@@ -125,6 +125,14 @@ upgrading, especially if alpha.4 imports are incomplete.
 See [docs/USER_TEST_IMPORT.md](docs/USER_TEST_IMPORT.md) for historical limits and recognized
 privacy exclusions, and the real-log test still required to advance Phase 2.
 
+Alpha.14 fixes shared-scene participant search repeatedly scanning archive-wide
+evidence on large archives. It uses existing per-message indexes and preserves
+reviewed tags, manual participants and persona scopes. Notes/account-only character
+saves also avoid unnecessary archive-wide reindexing; actual name/alias edits still
+backfill earlier dialogue. No database migration is
+required beyond alpha.13. See actual verification in STATUS.md and
+[the alpha.14 checklist](docs/USER_TEST_ALPHA14.md).
+
 ## Start this project in Codex on your computer
 
 1. Extract the source ZIP into a normal local folder, for example
@@ -178,7 +186,19 @@ timeouts, and evidence. A build or unit-test pass is not evidence of successful
 in-game testing; actual results remain in docs/STATUS.md.
 
 If an environment cannot initialize Loom, verify just the independent core with
-\`./gradlew -PcoreOnly check\`. This does not compile or validate the Minecraft adapter.
+`./gradlew -PcoreOnly check`. This does not compile or validate the Minecraft adapter.
+
+For the separate synthetic archive scale suite:
+
+```sh
+./gradlew -PcoreOnly :storage:scaleTest --no-daemon --console=plain
+```
+
+This opt-in workload checks 100,000 observations, 2,000 saved characters and 1,000
+scenes with explicit correctness assertions and timing ceilings. Its dedicated CI
+workflow saves JSON/JUnit/HTML reports. Ordinary `check` excludes it. See
+[docs/ARCHIVE_SCALE_TESTS.md](docs/ARCHIVE_SCALE_TESTS.md) for the exact workload
+and limits; storage timings do not establish in-game or real-log acceptance.
 
 ## Structure
 

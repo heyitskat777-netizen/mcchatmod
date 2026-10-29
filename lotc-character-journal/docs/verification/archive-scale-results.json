@@ -1,0 +1,217 @@
+{
+  "date": "2026-10-28",
+  "runtime_version": "0.1.0-alpha.14",
+  "branch": "feature/archive-scale-verification",
+  "base_commit": "b8c23da",
+  "runtime_changes": [
+    "Coordinate-scoped shared scene actor search",
+    "Skip character reindex when exact name and aliases are unchanged"
+  ],
+  "integrated": {
+    "command": "./gradlew --offline check :fabric:build :fabric:prepareClientSmoke --no-daemon --console=plain",
+    "passed": true,
+    "seconds": 17,
+    "suites": [
+      {
+        "module": "domain",
+        "tests": 27,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "module": "application",
+        "tests": 22,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "module": "parsing",
+        "tests": 116,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "module": "ingestion",
+        "tests": 58,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "module": "storage",
+        "tests": 131,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "runner_tests": {
+    "command": "python3 -m unittest discover -s scripts -p 'test_*.py' -v",
+    "passed": true,
+    "tests": 15,
+    "seconds": 1.12
+  },
+  "client_summary": "alpha14-client-summary.json",
+  "baseline_failure": "archive-scale-baseline.json",
+  "query_plan_evidence": "scene-search-query-plans.txt",
+  "scale_command": "./gradlew -PcoreOnly :storage:scaleTest --offline --no-daemon --console=plain",
+  "scale_gradle_seconds": 248,
+  "measurement": {
+    "passed": true,
+    "complete": true,
+    "schemaVersion": 1,
+    "workload": {
+      "rows": 100000,
+      "characters": 2000,
+      "expectedScenes": 1000,
+      "sources": 100,
+      "expectedQueuePairs": 100,
+      "seed": 20261028
+    },
+    "startedAt": "2026-10-29T04:52:47.104260189Z",
+    "environment": {
+      "javaVersion": "21.0.13",
+      "javaVendor": "Eclipse Adoptium",
+      "processors": 4,
+      "vmName": "OpenJDK 64-Bit Server VM",
+      "osArch": "amd64",
+      "osName": "Linux",
+      "maxHeapBytes": 1073741824,
+      "sqliteVersion": "3.51.3"
+    },
+    "counts": {
+      "expectedPayloadSha256": "e95a30771f8cb15d7e19573e90f619e70dd15ca8a03f7f0b79d3ef215719292a",
+      "backupArchiveBytes": 25923584,
+      "backupCharactersBytes": 78462976,
+      "queuePairs": 100,
+      "characters": 2000,
+      "personaAssignments": 200,
+      "qualifyingScenes": 1000,
+      "evidenceAfterBackfill": 101000,
+      "historicalRows": 100000,
+      "sourceCount": 100,
+      "favorites": 20
+    },
+    "stages": [
+      {
+        "name": "setup-presaved-characters",
+        "status": "PASSED",
+        "budgetMillis": 120000,
+        "durationMillis": 4058
+      },
+      {
+        "name": "ingest-production-append-and-index",
+        "status": "PASSED",
+        "budgetMillis": 300000,
+        "durationMillis": 108342
+      },
+      {
+        "name": "explicit-persona-and-favorite-setup",
+        "status": "PASSED",
+        "budgetMillis": 60000,
+        "durationMillis": 238
+      },
+      {
+        "name": "scene-refresh-initial",
+        "status": "PASSED",
+        "budgetMillis": 180000,
+        "durationMillis": 4140
+      },
+      {
+        "name": "scene-refresh-repeat",
+        "status": "PASSED",
+        "budgetMillis": 180000,
+        "durationMillis": 5679
+      },
+      {
+        "name": "completed-source-repeat",
+        "status": "PASSED",
+        "budgetMillis": 60000,
+        "durationMillis": 782
+      },
+      {
+        "name": "transcript-first-deep-and-literal-pages",
+        "status": "PASSED",
+        "budgetMillis": 60000,
+        "durationMillis": 193
+      },
+      {
+        "name": "scene-list-search-and-paging",
+        "status": "PASSED",
+        "budgetMillis": 60000,
+        "durationMillis": 729
+      },
+      {
+        "name": "scene-detail-and-exact-provenance",
+        "status": "PASSED",
+        "budgetMillis": 60000,
+        "durationMillis": 10
+      },
+      {
+        "name": "identity-review-queue",
+        "status": "PASSED",
+        "budgetMillis": 60000,
+        "durationMillis": 16
+      },
+      {
+        "name": "related-dialogue-before-backfill",
+        "status": "PASSED",
+        "budgetMillis": 60000,
+        "durationMillis": 322
+      },
+      {
+        "name": "persona-scoped-reads",
+        "status": "PASSED",
+        "budgetMillis": 60000,
+        "durationMillis": 152
+      },
+      {
+        "name": "alias-save-full-retrospective-reindex",
+        "status": "PASSED",
+        "budgetMillis": 300000,
+        "durationMillis": 107051
+      },
+      {
+        "name": "notes-only-save-after-backfill",
+        "status": "PASSED",
+        "budgetMillis": 300000,
+        "durationMillis": 516
+      },
+      {
+        "name": "paired-backup",
+        "status": "PASSED",
+        "budgetMillis": 60000,
+        "durationMillis": 708
+      },
+      {
+        "name": "original-and-backup-reopen",
+        "status": "PASSED",
+        "budgetMillis": 180000,
+        "durationMillis": 9171
+      }
+    ],
+    "failures": [],
+    "limitations": [
+      "All character identities are pre-saved; fresh-name discovery throughput is not measured",
+      "Historical storage append/index throughput; parser and decompressor throughput are not measured",
+      "Single-writer workload; live append contention during refresh or reindex is not measured",
+      "Synthetic storage verification; Minecraft UI and real modpack latency are not measured"
+    ],
+    "deadlines": {
+      "suiteSeconds": 900,
+      "stageBudgets": "Elapsed ceilings checked after each operation; JUnit interruption and enclosing Gradle timeout bound a hung run"
+    },
+    "finishedAt": "2026-10-29T04:56:49.570038833Z"
+  },
+  "artifact": {
+    "file": "lotc-character-journal-0.1.0-alpha.14.jar",
+    "bytes": 14801662,
+    "sha256": "3fffb77b81177f32a6e850f573e020e616d6d58416f5c4badb508214968edde9"
+  },
+  "user_modpack_acceptance": "pending",
+  "publication": "pending"
+}

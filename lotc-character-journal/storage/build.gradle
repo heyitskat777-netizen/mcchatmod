@@ -1,6 +1,54 @@
+import java.time.Duration
+
 dependencies {
     api project(':domain')
     implementation "org.xerial:sqlite-jdbc:${rootProject.sqlite_version}"
     testImplementation project(':parsing')
+}
+
+// Archive-scale measurements are deliberately opt-in and never part of check.
+tasks.named('test', Test) {
+    useJUnitPlatform { excludeTags 'scale' }
+}
+
+tasks.register('scaleTest', Test) {
+    group = 'verification'
+    description = 'Runs bounded synthetic archive-scale correctness and timing checks.'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { includeTags 'scale' }
+    maxParallelForks = 1
+    maxHeapSize = '1g'
+    // The JUnit suite has a 15-minute deadline; leave time to flush failures.
+    timeout = Duration.ofMinutes(18)
+    // Timing evidence must come from this machine and this invocation.
+    outputs.upToDateWhen { false }
+    outputs.cacheIf('Scale timings cannot be reused from another run') { false }
+
+    def reportDirectory = layout.buildDirectory.dir('reports/scale')
+    def scaleRows = providers.gradleProperty('scaleRows')
+        .orElse(providers.environmentVariable('LOTC_SCALE_ROWS')).orElse('100000')
+    def scaleSeed = providers.gradleProperty('scaleSeed')
+        .orElse(providers.environmentVariable('LOTC_SCALE_SEED')).orElse('20261028')
+    systemProperty 'lotc.scale.rows', scaleRows.get()
+    systemProperty 'lotc.scale.seed', scaleSeed.get()
+    systemProperty 'lotc.scale.reportDir', reportDirectory.get().asFile.absolutePath
+    systemProperty 'junit.jupiter.execution.parallel.enabled', 'false'
+    reports.html.outputLocation = layout.buildDirectory.dir('reports/tests/scaleTest')
+    reports.junitXml.outputLocation = layout.buildDirectory.dir('test-results/scaleTest')
+
+    doFirst {
+        // An earlier successful report must not survive a failed/empty new run.
+        delete reportDirectory
+        reportDirectory.get().asFile.mkdirs()
+    }
+    afterSuite { suite, result ->
+        if (suite.parent == null && result.testCount == 0)
+            throw new GradleException('No scale-tagged tests executed')
+    }
+    doLast {
+        if (!reportDirectory.get().file('archive-scale.json').asFile.isFile())
+            throw new GradleException('Scale tests produced no archive-scale.json measurement report')
+    }
 }
 

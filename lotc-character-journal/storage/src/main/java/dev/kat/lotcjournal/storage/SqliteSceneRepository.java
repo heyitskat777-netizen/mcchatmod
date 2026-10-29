@@ -118,11 +118,19 @@ public final class SqliteSceneRepository implements SceneRepository {
     }
     private static boolean participantMatches(Connection c,SceneProjection.Header h,String persona,String filter)throws SQLException{
         if(persona==null&&h.participantsReviewed())return SceneProjection.manualParticipants(c,h.id()).stream().anyMatch(p->p.name().toLowerCase(Locale.ROOT).contains(filter));
+        // Scope both effective-tag branches before combining them. Joining the
+        // archive-wide UNION to each scene materialized all character evidence
+        // repeatedly during search. CROSS JOIN keeps member coordinates outermost
+        // so SQLite uses the existing per-message indexes without a schema change.
         String sql=persona==null
-            ?"SELECT DISTINCT e.identity_id FROM ("+MessageTagReviews.EFFECTIVE_SQL+") e JOIN characters.scene_members m ON m.source_id=e.source_id AND m.source_line=e.source_line WHERE m.scene_id=? AND e.kind IN ('SPEAKER','ACTION')"
+            ?"SELECT a.identity_id FROM characters.scene_members m CROSS JOIN characters.character_evidence a WHERE m.scene_id=? AND a.source_id=m.source_id AND a.source_line=m.source_line AND a.kind IN ('SPEAKER','ACTION') AND NOT EXISTS(SELECT 1 FROM characters.message_tag_reviews r WHERE r.source_id=a.source_id AND r.source_line=a.source_line AND r.reviewed=1)"
+                +" UNION SELECT x.identity_id FROM characters.scene_members m CROSS JOIN characters.message_tag_choices x JOIN characters.message_tag_reviews r ON r.source_id=x.source_id AND r.source_line=x.source_line WHERE m.scene_id=? AND x.source_id=m.source_id AND x.source_line=m.source_line AND x.kind IN ('SPEAKER','ACTION') AND r.reviewed=1"
             :"SELECT DISTINCT a.identity_id FROM characters.scene_members m JOIN characters.memory_assignments a ON a.source_id=m.source_id AND a.source_line=m.source_line WHERE m.scene_id=? AND a.persona_id=? AND a.role='SPEAKER' AND a.identity_id IS NOT NULL";
         var actors=new HashSet<String>();
-        try(var q=c.prepareStatement(sql)){bindMemberScope(q,h.id(),persona);try(var r=q.executeQuery()){while(r.next())actors.add(persona==null?SqliteIdentityRepository.resolve(c,r.getString(1)):r.getString(1));}}
+        try(var q=c.prepareStatement(sql)){
+            q.setString(1,h.id());q.setString(2,persona==null?h.id():persona);
+            try(var r=q.executeQuery()){while(r.next())actors.add(persona==null?SqliteIdentityRepository.resolve(c,r.getString(1)):r.getString(1));}
+        }
         for(String id:actors)if(SceneProjection.name(c,id).toLowerCase(Locale.ROOT).contains(filter))return true;
         return false;
     }

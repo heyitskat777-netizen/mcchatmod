@@ -26,6 +26,7 @@ class SceneRepositoryTest {
     private static MessageReference ref(long coordinate) { return new MessageReference(SOURCE, coordinate); }
     private static List<Long> coordinates(TranscriptPage page) { return page.entries().stream().map(TranscriptLine::sourceLine).toList(); }
     private static Set<String> participants(SceneDetail scene) { return scene.participants().stream().map(SceneParticipant::identityId).collect(java.util.stream.Collectors.toSet()); }
+    private static Set<String> sceneIds(ScenePage page) { return page.entries().stream().map(SceneSummary::id).collect(java.util.stream.Collectors.toSet()); }
     private static TranscriptLine line(long coordinate, String clock, String text, Channel channel) { return new TranscriptLine(SOURCE, coordinate, clock, text, channel, null); }
     private static List<Long> range(long first, long last) { return java.util.stream.LongStream.rangeClosed(first, last).boxed().toList(); }
     private static List<Long> firstCoordinates() { return range(1, 20); }
@@ -250,6 +251,56 @@ class SceneRepositoryTest {
         assertEquals(referenceBefore.statistics(), repository.scene(first.summary().id(), PERSONA_EMPTY).statistics());
         assertEquals(new MemoryAssignment(ref(1), PERSONA_FIRST, FIRST, AttributionRole.SPEAKER), identities.assignment(ref(1), PERSONA_FIRST));
         assertEquals(SILENT, identities.resolveIdentity(FIRST));
+    }
+
+    @Test void participantNameSearchUsesEffectiveReviewsConfirmedRootsAndManualListsWithoutLeakingIntoPersonas() throws Exception {
+        var store = fixture(); store.setFavorite(ref(1), true); var sourceBefore = store.transcript(null, null, 0, 200);
+        var identities = identities(); var repository = scenes();
+        var originalNames = List.of("Synthetic First", "Synthetic Second", "Synthetic Mention", "Synthetic Silent");
+        var labels = List.of("Primary Review Label", "Second Review Label", "Canonical Review Label", "Replacement Review Label");
+        var ids = List.of(FIRST, SECOND, MENTION, SILENT);
+        for (int index = 0; index < ids.size(); index++) identities.saveIdentity(new CharacterIdentity(ids.get(index), labels.get(index), "", Set.of(originalNames.get(index)), ""));
+        String manualAttendee = "40000000-0000-0000-0000-000000000099", manualLabel = "Manual Attendee Label";
+        identities.saveIdentity(new CharacterIdentity(manualAttendee, manualLabel, "", Set.of(), ""));
+        for (String label : labels) assertTrue(sourceBefore.entries().stream().noneMatch(line -> line.text().contains(label)), "Canonical search labels must be absent from dialogue so text matching cannot hide actor-search defects");
+        identities.saveReviewedTags(ref(3), 0, List.of(new CharacterTag(SILENT, CharacterEvidenceKind.SPEAKER)));
+        repository.refreshSuggestions(); var first = containing(ref(1)); var second = containing(ref(21));
+        var both = Set.of(first.summary().id(), second.summary().id());
+        assertEquals(both, sceneIds(repository.scenes(null, true, labels.get(0), 0, 100)));
+        assertEquals(Set.of(first.summary().id()), sceneIds(repository.scenes(null, true, labels.get(3), 0, 100)));
+        assertEquals(0, repository.scenes(null, true, labels.get(2), 0, 100).total(), "Mention-only evidence is not an attendee name");
+        // Remove every primary actor observation in the first window. SECOND and
+        // SILENT remain, keeping it qualified independently of the search under test.
+        for (long coordinate : List.of(1L, 4L, 6L, 8L, 10L, 12L, 14L, 16L, 18L, 20L)) identities.saveReviewedTags(ref(coordinate), 0, List.of());
+        repository.refreshSuggestions(); assertEquals(2, repository.scenes(null, true, "", 0, 100).total());
+        assertEquals(Set.of(second.summary().id()), sceneIds(repository.scenes(null, true, labels.get(0), 0, 100)), "Reviewed-empty tags must suppress their automatic actor rows");
+        var replaced = identities.saveReviewedTags(ref(1), 1, List.of(new CharacterTag(MENTION, CharacterEvidenceKind.ACTION)));
+        assertEquals(Set.of(first.summary().id()), sceneIds(repository.scenes(null, true, labels.get(2), 0, 100)), "An explicit replacement contributes the chosen actor, not the old automatic actor");
+        identities.restoreAutomaticTags(ref(1), replaced.revision());
+        assertEquals(both, sceneIds(repository.scenes(null, true, labels.get(0), 0, 100)), "Restored AUTO revision markers must contribute automatic evidence again");
+        assertEquals(0, repository.scenes(null, true, labels.get(2), 0, 100).total());
+        identities.mergeIdentity(FIRST, MENTION); repository.refreshSuggestions();
+        assertEquals(both, sceneIds(repository.scenes(null, true, labels.get(2), 0, 100)), "Shared automatic search uses the confirmed group's canonical name");
+        assertEquals(0, repository.scenes(null, true, labels.get(0), 0, 100).total());
+        var current = repository.scene(first.summary().id(), null);
+        repository.saveScene(first.summary().id(), current.summary().revision(), "Manual scene", "", List.of(new SceneParticipant(manualAttendee, manualLabel, EncounterRole.UNCERTAIN, null)));
+        assertEquals(Set.of(first.summary().id()), sceneIds(repository.scenes(null, true, manualLabel, 0, 100)));
+        assertEquals(Set.of(second.summary().id()), sceneIds(repository.scenes(null, true, labels.get(2), 0, 100)), "An exact manual attendee list replaces automatic actors in shared search");
+        assertEquals(0, repository.scenes(null, true, labels.get(3), 0, 100).total());
+        identities.createPersona(new Persona(PERSONA_FIRST, FIRST, "First persona")); identities.createPersona(new Persona(PERSONA_SECOND, SECOND, "Second persona"));
+        identities.assign(new MemoryAssignment(ref(1), PERSONA_FIRST, FIRST, AttributionRole.SPEAKER));
+        identities.assign(new MemoryAssignment(ref(2), PERSONA_SECOND, SECOND, AttributionRole.SPEAKER));
+        var review = identities.reviewTags(ref(1)); identities.saveReviewedTags(ref(1), review.revision(), List.of(new CharacterTag(SILENT, CharacterEvidenceKind.ACTION)));
+        repository.refreshSuggestions();
+        assertEquals(Set.of(first.summary().id()), sceneIds(repository.scenes(PERSONA_FIRST, false, labels.get(0), 0, 100)));
+        assertEquals(Set.of(first.summary().id()), sceneIds(repository.scenes(PERSONA_SECOND, false, labels.get(1), 0, 100)));
+        for (String hidden : List.of(labels.get(2), labels.get(3), manualLabel)) {
+            assertEquals(0, repository.scenes(PERSONA_FIRST, true, hidden, 0, 100).total());
+            assertEquals(0, repository.scenes(PERSONA_SECOND, true, hidden, 0, 100).total());
+        }
+        assertEquals(sourceBefore, store.transcript(null, null, 0, 200));
+        assertEquals(2, PairedDatabaseFixtures.scalar(characters(), "SELECT count(*) FROM memory_assignments"));
+        assertEquals(new MemoryAssignment(ref(1), PERSONA_FIRST, FIRST, AttributionRole.SPEAKER), identities.assignment(ref(1), PERSONA_FIRST));
     }
 
     @Test void failedUndoRollsBackSceneTrimmingThenSuccessfulUndoKeepsOnlyUnremovedMembersAndStalesOldEdits() throws Exception {

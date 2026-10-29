@@ -1,0 +1,52 @@
+name: Synthetic archive scale
+
+on:
+  push:
+    paths: &scale_paths
+      - 'lotc-character-journal/storage/**'
+      - 'lotc-character-journal/domain/**'
+      - 'lotc-character-journal/parsing/**'
+      - 'lotc-character-journal/ingestion/**'
+      - 'lotc-character-journal/application/**'
+      - 'lotc-character-journal/*.gradle'
+      - 'lotc-character-journal/gradle.properties'
+      - 'lotc-character-journal/gradle/**'
+      - 'lotc-character-journal/gradlew*'
+      - '.github/workflows/storage-scale.yml'
+  pull_request:
+    paths: *scale_paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  storage-scale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: lotc-character-journal
+    env:
+      LOTC_SCALE_ROWS: '100000'
+      LOTC_SCALE_SEED: '20261028'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Measure the fixed synthetic archive and verify invariants
+        timeout-minutes: 20
+        run: ./gradlew -PcoreOnly :storage:scaleTest --no-daemon --console=plain
+      - name: Save synthetic scale measurements and test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: storage-scale-reports
+          path: |
+            lotc-character-journal/storage/build/reports/scale/archive-scale.json
+            lotc-character-journal/storage/build/test-results/scaleTest/*.xml
+            lotc-character-journal/storage/build/reports/tests/scaleTest/
+          if-no-files-found: warn
