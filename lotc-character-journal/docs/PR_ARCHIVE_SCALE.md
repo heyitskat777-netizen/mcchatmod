@@ -42,3 +42,7 @@ It cannot establish real-conversation grouping accuracy. Continue alpha.13's
 focused home-search, identity-queue, scene-minimum/confidence, correction and
 restart/paired-restore checklist if still pending. Alpha.14 adds a focused
 participant/text/missing-name scene-search checklist for the real archive.
+
+CI for runtime commit 462cffa passed both Build and check
+(run 40820641449, verify+client-smoke) and Synthetic archive scale (run 40820641520).
+See STATUS.md for downloadable evidence and installable alpha.14 artifact.

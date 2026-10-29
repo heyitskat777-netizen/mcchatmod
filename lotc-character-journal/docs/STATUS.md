@@ -119,8 +119,32 @@ large-archive text/participant/missing-name scene search, notes/account persiste
 shared/manual tag search and persona isolation. Alpha.13 scene/queue acceptance is
 still separate if not completed. Phase 4 user accuracy/false joins/splits, first-time
 discovery throughput and concurrent live recording remain open; AI stays deferred.
-Commit, push, PR and CI publication results will be recorded below. Historical
-verified results remain below.
+Verified runtime commit **462cffa27f3dab00c8b16317ecd138de0d40be12** is committed
+and pushed to `feature/archive-scale-verification`. Main is unchanged. A later
+documentation-only follow-up records publication without changing tested code.
+
+PR creation attempted with `gh pr create --base feature/scene-review-refinements
+--head feature/archive-scale-verification --title "Fix large-archive scene search
+and metadata save latency" --body-file docs/PR_ARCHIVE_SCALE.md`. GitHub GraphQL
+returned HTTP 403 Forbidden through this environment's API access. No PR is claimed
+open; [prepared description](PR_ARCHIVE_SCALE.md),
+[review/create comparison](https://github.com/heyitskat777-netizen/mcchatmod/compare/feature%2Fscene-review-refinements...feature%2Farchive-scale-verification?expand=1).
+
+GitHub Actions: [build/client run 40820641449](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40820641449)
+and [scale run 40820641520](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40820641520)
+both match verified runtime commit 462cffa. **Both workflows SUCCESS**: verify 1m35s,
+client-smoke 5m46s, storage-scale 5m20s (whole-job times). Normal completed run/job
+HTML confirms successful jobs, the full isolated graphics/development/installed-JAR
+client step, report uploads and clean job completion. The API remains blocked;
+no unobserved per-stage CI timing or accuracy claim is invented. Download
+[alpha.14 journal-jars ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40820641449/artifacts/12874307105);
+install `lotc-character-journal-0.1.0-alpha.14.jar`, not `-sources.jar`.
+[Core test reports](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40820641449/artifacts/12873688977).
+[CI client screenshots/logs/reports](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40820641449/artifacts/12874995447),
+[CI scale JSON/JUnit/HTML](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40820641520/artifacts/12874179025).
+A documentation-only follow-up records completed publication and does not change
+the tested runtime. User/modpack acceptance remains pending; Phase 4 is not declared
+complete from synthetic tests. Historical verified results remain below.
 
 ---
 

@@ -213,5 +213,34 @@
     "sha256": "3fffb77b81177f32a6e850f573e020e616d6d58416f5c4badb508214968edde9"
   },
   "user_modpack_acceptance": "pending",
-  "publication": "pending"
+  "publication": {
+    "branch_pushed": true,
+    "pull_request": {
+      "result": "blocked",
+      "reason": "GitHub GraphQL API returned HTTP 403 Forbidden",
+      "prepared_body": "docs/PR_ARCHIVE_SCALE.md",
+      "base": "feature/scene-review-refinements",
+      "head": "feature/archive-scale-verification"
+    },
+    "build_ci": {
+      "run_id": 40820641449,
+      "verify": "passed",
+      "client_smoke": "passed",
+      "jar_artifact_id": 12874307105,
+      "reports_artifact_id": 12873688977,
+      "result": "passed",
+      "client_evidence_artifact_id": 12874995447,
+      "verify_job_seconds": 95,
+      "client_job_seconds": 346,
+      "observed_via": "Completed public run/job HTML; every client step succeeded"
+    },
+    "scale_ci": {
+      "run_id": 40820641520,
+      "result": "passed",
+      "artifact_id": 12874179025,
+      "job_seconds": 320,
+      "observed_via": "Completed public run HTML with successful storage-scale job"
+    }
+  },
+  "verified_runtime_commit": "462cffa27f3dab00c8b16317ecd138de0d40be12"
 }
