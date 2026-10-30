@@ -1,0 +1,185 @@
+{
+  "date": "2026-10-30",
+  "version": "0.1.0-alpha.15",
+  "branch": "feature/live-write-contention",
+  "base_commit": "f5e84af",
+  "target": {
+    "minecraft": "1.21.11",
+    "java": 21,
+    "loader": "Fabric"
+  },
+  "baseline": {
+    "runtime_version": "0.1.0-alpha.14",
+    "result": {
+      "receive": "failed",
+      "cause": "SQLiteException",
+      "elapsed_ms": 5031,
+      "state": "ERROR",
+      "saved": 0,
+      "forced_event_present": "true",
+      "rows_before_recovery": 0,
+      "rows_after_recovery": 1
+    }
+  },
+  "policy": {
+    "live_sql_busy_timeout_ms": 250,
+    "other_sql_busy_timeout_ms": 5000,
+    "retry_window_seconds": 180,
+    "backoff_ms": 50,
+    "default_queue_capacity": 256,
+    "existing_close_budget_seconds": 10,
+    "schema_archive": 9,
+    "schema_characters": 5,
+    "parser_policy": 4
+  },
+  "integrated": {
+    "command": "./gradlew --offline check :fabric:build :fabric:prepareClientSmoke --no-daemon --console=plain",
+    "passed": true,
+    "seconds": 28,
+    "suites": [
+      {
+        "module": "domain",
+        "tests": 27,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "module": "application",
+        "tests": 22,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "module": "parsing",
+        "tests": 116,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "module": "ingestion",
+        "tests": 66,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "module": "storage",
+        "tests": 134,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "targeted": {
+    "command": "./gradlew -PcoreOnly :ingestion:test :storage:test --offline --no-daemon --console=plain",
+    "passed": true,
+    "seconds": 25,
+    "note": "First10 cases passed targeted run; final11 cases passed final integrated run"
+  },
+  "runner": {
+    "command": "python3 -m unittest discover -s scripts -p 'test_*.py' -v",
+    "passed": true,
+    "tests": 15,
+    "seconds": 1.116
+  },
+  "repair_history": [
+    {
+      "command": "initial targeted ingestion/storage tests",
+      "result": "one existing closed-journal import failure",
+      "cause": "Executor shutdown interrupt leaked into finalization",
+      "repair": "Clear/restore interrupt only during terminated cleanup; keep closing retry guard",
+      "verification": "Unchanged LiveCaptureServiceTest passed in6s; full targeted+integrated passed"
+    },
+    {
+      "finding": "Concurrent terminal control rejection could be overwritten by late successful start",
+      "repair": "Serialize healthy transitions with terminal failure; reject start if transition denied",
+      "verification": "Start-inflight latch regression and final365-core integrated run passed; all five final actual-client phases passed"
+    }
+  ],
+  "client": "alpha15-client-summary.json",
+  "publication": "pending",
+  "user_modpack_acceptance": "pending",
+  "limits": [
+    "No universal bound for successful fresh-actor reindex or uninterruptible file I/O",
+    "Finite queue overflow remains possible; only forced events receive crash replay guarantee",
+    "Real-modpack acceptance and fresh-character import throughput remain separate"
+  ],
+  "contention_tests": [
+    {
+      "suite": "dev.kat.lotcjournal.ingestion.LiveWriteContentionTest",
+      "name": "realPairedReservationBeyondFiveSecondsKeepsOneForcedEventPendingThenCommitsRepeatedEmotesExactlyOnce()",
+      "seconds": 5.237,
+      "passed": true
+    },
+    {
+      "suite": "dev.kat.lotcjournal.ingestion.LiveWriteContentionTest",
+      "name": "rejectingSessionControlsOnAFullQueueFailsClosedInsteadOfReusingTheOldWorldSession()",
+      "seconds": 0.032,
+      "passed": true
+    },
+    {
+      "suite": "dev.kat.lotcjournal.ingestion.LiveWriteContentionTest",
+      "name": "closingDuringBusyRetrySettlesQueuedFuturesPromptlyAndReleasesTheProfileForExactRecovery()",
+      "seconds": 0.083,
+      "passed": true
+    },
+    {
+      "suite": "dev.kat.lotcjournal.ingestion.LiveWriteContentionTest",
+      "name": "forcedExecutorShutdownSettlesDiscardedQueueCountersExactlyOnceAndKeepsOnlyTheForcedEvent()",
+      "seconds": 10.033,
+      "passed": true
+    },
+    {
+      "suite": "dev.kat.lotcjournal.ingestion.LiveWriteContentionTest",
+      "name": "rejectedControlDuringAnInflightStartCannotBeOverwrittenByTheLaterSuccessfulDatabaseBegin()",
+      "seconds": 0.012,
+      "passed": true
+    },
+    {
+      "suite": "dev.kat.lotcjournal.ingestion.LiveWriteContentionTest",
+      "name": "exhaustedBusyDeadlineFailsWithoutAcknowledgementAndLeavesExactlyOneRecoverableForcedEvent()",
+      "seconds": 0.225,
+      "passed": true
+    },
+    {
+      "suite": "dev.kat.lotcjournal.ingestion.LiveWriteContentionTest",
+      "name": "untypedIoConstraintAndProvenanceFailuresAreNeverRetriedEvenWhenTheirTextSaysLocked()",
+      "seconds": 0.06,
+      "passed": true
+    },
+    {
+      "suite": "dev.kat.lotcjournal.ingestion.LiveWriteContentionTest",
+      "name": "startPauseSessionCloseAndRecoveryRetryOnlyTheirIdempotentRepositoryOperation()",
+      "seconds": 0.482,
+      "passed": true
+    },
+    {
+      "suite": "dev.kat.lotcjournal.storage.LiveStorageContentionTest",
+      "name": "liveOperationsUseShortTypedBusyAttemptsWithoutChangingCheckpointOrPauseState()",
+      "seconds": 1.035,
+      "passed": true
+    },
+    {
+      "suite": "dev.kat.lotcjournal.storage.LiveStorageContentionTest",
+      "name": "provenanceConstraintAndMismatchedPairFailuresNeverBecomeTransientBusySignals()",
+      "seconds": 0.017,
+      "passed": true
+    },
+    {
+      "suite": "dev.kat.lotcjournal.storage.LiveStorageContentionTest",
+      "name": "characterMemberContentionRollsBackAlreadyEnteredArchiveAppendBeforeAnExactRetry()",
+      "seconds": 0.016,
+      "passed": true
+    }
+  ],
+  "artifact": {
+    "file": "lotc-character-journal-0.1.0-alpha.15.jar",
+    "bytes": 14806062,
+    "sha256": "9a550d314f9c02a04072b727a264f918333433ca6647840c85a26aaac3e58a89",
+    "new_busy_contract_in_nested_domain_jar": true
+  }
+}

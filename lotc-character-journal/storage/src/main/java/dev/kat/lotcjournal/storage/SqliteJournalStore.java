@@ -10,6 +10,7 @@ import dev.kat.lotcjournal.domain.Channel;
 import dev.kat.lotcjournal.domain.MessageReference;
 import dev.kat.lotcjournal.domain.LiveRepository;
 import dev.kat.lotcjournal.domain.LiveSession;
+import dev.kat.lotcjournal.domain.StorageBusyException;
 import dev.kat.lotcjournal.domain.LiveEvent;
 import dev.kat.lotcjournal.domain.DialogueNormalizer;
 import dev.kat.lotcjournal.domain.DialogueCleanup;
@@ -531,26 +532,39 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
         }
     }
 
-    @Override public void beginLiveSession(LiveSession session) throws SQLException {
-        Objects.requireNonNull(session);
-        try (var connection = open()) {
-            SplitJournalFiles.beginWrite(connection);
-            try {
-                try (var insert = connection.prepareStatement("INSERT INTO capture_sources(id,label,format,total_lines,policy_fingerprint) VALUES (?,?,'plain',0,?) ON CONFLICT(id) DO NOTHING")) {
-                    insert.setString(1, session.id());
-                    insert.setString(2, "Live " + session.startedAt().atZone(java.time.ZoneId.of(session.zoneId())).toLocalDate() + " " + session.id().substring(0, 12));
-                    insert.setString(3, session.policyFingerprint());
-                    int created = insert.executeUpdate();
-                    if (created == 1) {
-                        try (var live = connection.prepareStatement("INSERT INTO live_sessions(source_id,started_at,zone_id) VALUES (?,?,?)")) {
-                            live.setString(1, session.id()); live.setString(2, session.startedAt().toString()); live.setString(3, session.zoneId()); live.executeUpdate();
+    @FunctionalInterface private interface LiveOperation<T> { T run() throws SQLException; }
+    private static <T> T liveAttempt(LiveOperation<T> operation) throws SQLException, StorageBusyException {
+        try { return operation.run(); }
+        catch (SQLException failure) {
+            int primary=failure.getErrorCode() & 0xff;
+            if(primary==5||primary==6)throw new StorageBusyException(failure);
+            throw failure;
+        }
+    }
+
+    @Override public void beginLiveSession(LiveSession session) throws SQLException, StorageBusyException {
+        liveAttempt(() -> {
+            Objects.requireNonNull(session);
+            try (var connection = SplitJournalFiles.openLive(database,characters)) {
+                SplitJournalFiles.beginWrite(connection);
+                try {
+                    try (var insert = connection.prepareStatement("INSERT INTO capture_sources(id,label,format,total_lines,policy_fingerprint) VALUES (?,?,'plain',0,?) ON CONFLICT(id) DO NOTHING")) {
+                        insert.setString(1, session.id());
+                        insert.setString(2, "Live " + session.startedAt().atZone(java.time.ZoneId.of(session.zoneId())).toLocalDate() + " " + session.id().substring(0, 12));
+                        insert.setString(3, session.policyFingerprint());
+                        int created = insert.executeUpdate();
+                        if (created == 1) {
+                            try (var live = connection.prepareStatement("INSERT INTO live_sessions(source_id,started_at,zone_id) VALUES (?,?,?)")) {
+                                live.setString(1, session.id()); live.setString(2, session.startedAt().toString()); live.setString(3, session.zoneId()); live.executeUpdate();
+                            }
                         }
                     }
-                }
-                requireLiveSession(connection, session);
-                connection.commit();
-            } catch (SQLException | RuntimeException failure) { connection.rollback(); throw failure; }
-        }
+                    requireLiveSession(connection, session);
+                    connection.commit();
+                } catch (SQLException | RuntimeException failure) { connection.rollback(); throw failure; }
+            }
+            return null;
+        });
     }
 
     private static void requireLiveSession(Connection connection, LiveSession session) throws SQLException {
@@ -564,78 +578,88 @@ public final class SqliteJournalStore implements SettingsRepository, BackupServi
         }
     }
 
-    @Override public boolean appendLiveEvent(LiveSession session, LiveEvent event) throws SQLException {
-        Objects.requireNonNull(session); Objects.requireNonNull(event);
-        if (!session.id().equals(event.sessionId())
-            || java.time.ZoneId.of(session.zoneId()).getRules().getOffset(event.receivedAt()).getTotalSeconds() != event.offsetSeconds())
-            throw new IllegalArgumentException("Conflicting live event provenance");
-        try (var connection = open()) {
-            SplitJournalFiles.beginWrite(connection);
-            try {
-                try (var lock = connection.prepareStatement("UPDATE live_sessions SET closed=closed WHERE source_id=?")) {
-                    lock.setString(1, session.id());
-                    if (lock.executeUpdate() != 1) throw new SQLException("Unknown live session");
-                }
-                requireLiveSession(connection, session);
-                try (var old = connection.prepareStatement("SELECT fingerprint FROM live_events WHERE source_id=? AND sequence=?")) {
-                    old.setString(1, session.id()); old.setLong(2, event.sequence());
-                    try (var row = old.executeQuery()) {
-                        if (row.next()) {
-                            if (!event.fingerprint().equals(row.getString(1))) throw new SQLException("Conflicting live replay receipt");
-                            connection.commit(); return false;
+    @Override public boolean appendLiveEvent(LiveSession session, LiveEvent event) throws SQLException, StorageBusyException {
+        return liveAttempt(() -> {
+            Objects.requireNonNull(session); Objects.requireNonNull(event);
+            if (!session.id().equals(event.sessionId())
+                || java.time.ZoneId.of(session.zoneId()).getRules().getOffset(event.receivedAt()).getTotalSeconds() != event.offsetSeconds())
+                throw new IllegalArgumentException("Conflicting live event provenance");
+            try (var connection = SplitJournalFiles.openLive(database,characters)) {
+                SplitJournalFiles.beginWrite(connection);
+                try {
+                    try (var lock = connection.prepareStatement("UPDATE live_sessions SET closed=closed WHERE source_id=?")) {
+                        lock.setString(1, session.id());
+                        if (lock.executeUpdate() != 1) throw new SQLException("Unknown live session");
+                    }
+                    requireLiveSession(connection, session);
+                    try (var old = connection.prepareStatement("SELECT fingerprint FROM live_events WHERE source_id=? AND sequence=?")) {
+                        old.setString(1, session.id()); old.setLong(2, event.sequence());
+                        try (var row = old.executeQuery()) {
+                            if (row.next()) {
+                                if (!event.fingerprint().equals(row.getString(1))) throw new SQLException("Conflicting live replay receipt");
+                                connection.commit(); return false;
+                            }
                         }
                     }
-                }
-                var canonical = normalizer.clean(event.text(), event.channel());
-                if (canonical.disposition() != DialogueCleanup.Disposition.DIALOGUE || !event.text().equals(canonical.text()))
-                    throw new IllegalArgumentException("Only canonical live dialogue may be persisted");
-                try (var advance = connection.prepareStatement("UPDATE capture_sources SET total_lines=?,processed_lines=?,imported_lines=imported_lines+1 WHERE id=? AND processed_lines=? AND complete=0")) {
-                    advance.setLong(1, event.sequence()); advance.setLong(2, event.sequence()); advance.setString(3, session.id()); advance.setLong(4, event.sequence() - 1);
-                    if (advance.executeUpdate() != 1) throw new SQLException("Live checkpoint is closed or out of sequence");
-                }
-                try (var insert = connection.prepareStatement("INSERT INTO transcript_lines(source_id,source_line,clock,text,channel,observed_speaker) VALUES (?,?,?,?,?,?)")) {
-                    insert.setString(1, session.id()); insert.setLong(2, event.sequence());
-                    insert.setString(3, event.receivedAt().atOffset(java.time.ZoneOffset.ofTotalSeconds(event.offsetSeconds())).toLocalTime().withNano(0).toString());
-                    insert.setString(4, event.text()); insert.setString(5, event.channel().name()); insert.setString(6, event.observedSpeaker()); insert.executeUpdate();
-                }
-                try (var receipt = connection.prepareStatement("INSERT INTO live_events VALUES (?,?,?,?,?,?)")) {
-                    receipt.setString(1, session.id()); receipt.setLong(2, event.sequence()); receipt.setString(3, event.receivedAt().toString());
-                    receipt.setInt(4, event.offsetSeconds()); receipt.setString(5, event.kind().name()); receipt.setString(6, event.fingerprint()); receipt.executeUpdate();
-                }
-                CharacterIndex.indexNew(connection,List.of(new TranscriptLine(event.sessionId(),event.sequence(),null,event.text(),event.channel(),event.observedSpeaker())));
-                connection.commit(); return true;
-            } catch (SQLException | RuntimeException failure) { connection.rollback(); throw failure; }
-        }
+                    var canonical = normalizer.clean(event.text(), event.channel());
+                    if (canonical.disposition() != DialogueCleanup.Disposition.DIALOGUE || !event.text().equals(canonical.text()))
+                        throw new IllegalArgumentException("Only canonical live dialogue may be persisted");
+                    try (var advance = connection.prepareStatement("UPDATE capture_sources SET total_lines=?,processed_lines=?,imported_lines=imported_lines+1 WHERE id=? AND processed_lines=? AND complete=0")) {
+                        advance.setLong(1, event.sequence()); advance.setLong(2, event.sequence()); advance.setString(3, session.id()); advance.setLong(4, event.sequence() - 1);
+                        if (advance.executeUpdate() != 1) throw new SQLException("Live checkpoint is closed or out of sequence");
+                    }
+                    try (var insert = connection.prepareStatement("INSERT INTO transcript_lines(source_id,source_line,clock,text,channel,observed_speaker) VALUES (?,?,?,?,?,?)")) {
+                        insert.setString(1, session.id()); insert.setLong(2, event.sequence());
+                        insert.setString(3, event.receivedAt().atOffset(java.time.ZoneOffset.ofTotalSeconds(event.offsetSeconds())).toLocalTime().withNano(0).toString());
+                        insert.setString(4, event.text()); insert.setString(5, event.channel().name()); insert.setString(6, event.observedSpeaker()); insert.executeUpdate();
+                    }
+                    try (var receipt = connection.prepareStatement("INSERT INTO live_events VALUES (?,?,?,?,?,?)")) {
+                        receipt.setString(1, session.id()); receipt.setLong(2, event.sequence()); receipt.setString(3, event.receivedAt().toString());
+                        receipt.setInt(4, event.offsetSeconds()); receipt.setString(5, event.kind().name()); receipt.setString(6, event.fingerprint()); receipt.executeUpdate();
+                    }
+                    CharacterIndex.indexNew(connection,List.of(new TranscriptLine(event.sessionId(),event.sequence(),null,event.text(),event.channel(),event.observedSpeaker())));
+                    connection.commit(); return true;
+                } catch (SQLException | RuntimeException failure) { connection.rollback(); throw failure; }
+            }
+        });
     }
 
-    @Override public void closeLiveSession(String sessionId) throws SQLException {
-        requireSourceId(sessionId);
-        try (var connection = open()) {
-            SplitJournalFiles.beginWrite(connection);
-            try {
-                try (var update = connection.prepareStatement("UPDATE live_sessions SET closed=1 WHERE source_id=?")) {
-                    update.setString(1, sessionId);
-                    if (update.executeUpdate() != 1) throw new SQLException("Unknown live session");
-                }
-                try (var update = connection.prepareStatement("UPDATE capture_sources SET complete=1 WHERE id=?")) { update.setString(1, sessionId); update.executeUpdate(); }
-                connection.commit();
-            } catch (SQLException | RuntimeException failure) { connection.rollback(); throw failure; }
-        }
+    @Override public void closeLiveSession(String sessionId) throws SQLException, StorageBusyException {
+        liveAttempt(() -> {
+            requireSourceId(sessionId);
+            try (var connection = SplitJournalFiles.openLive(database,characters)) {
+                SplitJournalFiles.beginWrite(connection);
+                try {
+                    try (var update = connection.prepareStatement("UPDATE live_sessions SET closed=1 WHERE source_id=?")) {
+                        update.setString(1, sessionId);
+                        if (update.executeUpdate() != 1) throw new SQLException("Unknown live session");
+                    }
+                    try (var update = connection.prepareStatement("UPDATE capture_sources SET complete=1 WHERE id=?")) { update.setString(1, sessionId); update.executeUpdate(); }
+                    connection.commit();
+                } catch (SQLException | RuntimeException failure) { connection.rollback(); throw failure; }
+            }
+            return null;
+        });
     }
 
-    @Override public boolean livePaused() throws SQLException {
-        try (var connection = open(); var query = connection.createStatement(); var row = query.executeQuery("SELECT value FROM journal_settings WHERE key='live_paused'")) {
-            if (!row.next()) return false;
-            String value = row.getString(1);
-            if (!"true".equals(value) && !"false".equals(value)) throw new SQLException("Invalid live pause setting");
-            return Boolean.parseBoolean(value);
-        }
+    @Override public boolean livePaused() throws SQLException, StorageBusyException {
+        return liveAttempt(() -> {
+            try (var connection = SplitJournalFiles.openLive(database,characters); var query = connection.createStatement(); var row = query.executeQuery("SELECT value FROM journal_settings WHERE key='live_paused'")) {
+                if (!row.next()) return false;
+                String value = row.getString(1);
+                if (!"true".equals(value) && !"false".equals(value)) throw new SQLException("Invalid live pause setting");
+                return Boolean.parseBoolean(value);
+            }
+        });
     }
 
-    @Override public void saveLivePaused(boolean paused) throws SQLException {
-        try (var connection = open(); var update = connection.prepareStatement("INSERT INTO journal_settings(key,value) VALUES ('live_paused',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")) {
-            update.setString(1, Boolean.toString(paused)); update.executeUpdate();
-        }
+    @Override public void saveLivePaused(boolean paused) throws SQLException, StorageBusyException {
+        liveAttempt(() -> {
+            try (var connection = SplitJournalFiles.openLive(database,characters); var update = connection.prepareStatement("INSERT INTO journal_settings(key,value) VALUES ('live_paused',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")) {
+                update.setString(1, Boolean.toString(paused)); update.executeUpdate();
+            }
+            return null;
+        });
     }
 
     private static void validateLiveData(Connection connection) throws SQLException {

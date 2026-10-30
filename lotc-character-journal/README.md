@@ -11,7 +11,7 @@ to open the journal; its key is rebindable in Controls. Home search shows name/a
 match feedback; press Enter to open the filtered Characters list. Queries survive resize. Layout settings and backup
 creation remain available. Characters now supports explicit names, aliases and notes; persona memories require manual message assignment.
 
-The `0.1.0-alpha.14` development build expands **Log import** for finished UTF-8 `.log`
+The `0.1.0-alpha.15` development build expands **Log import** for finished UTF-8 `.log`
 and `.log.gz` files, background validation, progress/cancellation, restart-safe
 checkpoints, repeat-import deduplication, and a transcript browser with literal
 text search. **Import all / dashboard** adds a read-only folder preview,
@@ -132,6 +132,15 @@ saves also avoid unnecessary archive-wide reindexing; actual name/alias edits st
 backfill earlier dialogue. No database migration is
 required beyond alpha.13. See actual verification in STATUS.md and
 [the alpha.14 checklist](docs/USER_TEST_ALPHA14.md).
+
+Alpha.15 retries temporary database writer reservations during live recording,
+without repeating a message's forced journal record or marking it Saved before
+SQL acknowledgement. Live operations use short waits and a bounded retry window;
+permanent errors and queue overflow remain explicit. Connection-start success is
+checked before draining live messages, and rejected session controls fail closed.
+See [the contention contract](docs/LIVE_STORAGE_CONTENTION.md), actual results in
+STATUS.md and [the alpha.15 checklist](docs/USER_TEST_ALPHA15.md). Schemas/parser
+policy stay unchanged from alpha.14.
 
 ## Start this project in Codex on your computer
 

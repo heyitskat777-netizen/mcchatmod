@@ -334,3 +334,21 @@ existing write reservation and skips index rebuilding only for unchanged inputs.
 Notes/account values still persist; case-only renames, alias add/remove and new
 identities retain backfill and atomic rollback. Trigger-guard tests preserve exact
 evidence, reviewed tags, favorites, cursors and persona assignments.
+
+## Live database contention — October 30, 2026
+
+Alpha.14's five-second SQLite reservation timeout permanently stopped capture,
+although its already-forced journal event remained replayable. Alpha.15 retries
+only the same idempotent live repository operation: typed BUSY/LOCKED, live-only
+250ms waits, interruptible 50ms backoff, at most 180s for scheduling retries. Keep
+ordinary 5000ms waits, paired FULL sync/rollback journals, queue 256 and close 10s
+budget. Never retry parsing/force/sequence updates as one unit or acknowledge
+SAVED before SQL. Permanent failures remain immediate.
+
+Rejecting lifecycle controls on a full queue fails closed and requires restart;
+never let a later connection silently inherit an old session. Fabric checks the
+actual start future. Worker cleanup owns files/profile lock, clears/restores its
+shutdown interrupt only during finalization, and settles pending futures exactly
+once. Successful fresh-actor indexing and uninterruptible I/O are outside the
+contention-wait bounds; do not present this as universal latency/crash immunity.
+See LIVE_STORAGE_CONTENTION.md and measured STATUS.md evidence.

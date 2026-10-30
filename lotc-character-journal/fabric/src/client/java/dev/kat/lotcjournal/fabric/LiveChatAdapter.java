@@ -15,17 +15,23 @@ final class LiveChatAdapter {
     private final CompletableFuture<Void> ready;
     private final ArrayBlockingQueue<Incoming> waiting=new ArrayBlockingQueue<>(256);
     private boolean connected,started;
+    private CompletableFuture<Void> starting;
     private long overflow;
     LiveChatAdapter(LiveCaptureService capture,CompletableFuture<Void> ready){this.capture=capture;this.ready=ready;}
     void register(){
-        ClientPlayConnectionEvents.JOIN.register((handler,sender,client)->{connected=true;started=false;waiting.clear();});
-        ClientPlayConnectionEvents.DISCONNECT.register((handler,client)->{connected=false;started=false;waiting.clear();capture.endSession();});
+        ClientPlayConnectionEvents.JOIN.register((handler,sender,client)->{connected=true;started=false;starting=null;waiting.clear();});
+        ClientPlayConnectionEvents.DISCONNECT.register((handler,client)->{connected=false;started=false;starting=null;waiting.clear();capture.endSession();});
         ClientReceiveMessageEvents.CHAT.register((message,signed,sender,params,time)->accept(message.getString(),time,LiveEvent.Kind.CHAT));
         ClientReceiveMessageEvents.GAME.register((message,overlay)->{if(!overlay)accept(message.getString(),Instant.now(),LiveEvent.Kind.GAME);});
         ClientTickEvents.END_CLIENT_TICK.register(client->{
             if(!connected || !ready.isDone() || ready.isCompletedExceptionally())return;
-            // Queue order on this one client thread puts start before every receive.
-            if(!started){capture.start();started=true;}
+            // A rejected/failed start cannot license messages for an older session.
+            if(!started){
+                if(starting==null)starting=capture.start();
+                if(!starting.isDone())return;
+                if(starting.isCompletedExceptionally()||starting.isCancelled()){waiting.clear();return;}
+                started=true;
+            }
             Incoming value;while((value=waiting.poll())!=null)capture.receive(value.text(),value.received(),value.kind());
         });
     }

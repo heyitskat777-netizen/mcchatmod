@@ -46,8 +46,11 @@ final class SplitJournalFiles {
     }
 
     static Connection archive(Path archive) throws SQLException {
+        return archive(archive,5000);
+    }
+    private static Connection archive(Path archive,int busyTimeoutMillis) throws SQLException {
         Connection c = DriverManager.getConnection("jdbc:sqlite:" + archive);
-        try (var s = c.createStatement()) { s.execute("PRAGMA foreign_keys=ON"); s.execute("PRAGMA busy_timeout=5000"); }
+        try (var s = c.createStatement()) { s.execute("PRAGMA busy_timeout="+busyTimeoutMillis); s.execute("PRAGMA foreign_keys=ON"); }
         catch (SQLException failure) { c.close(); throw failure; }
         return c;
     }
@@ -57,12 +60,18 @@ final class SplitJournalFiles {
     static Connection open(Path archive, Path characters) throws SQLException {
         return open(archive,characters,false);
     }
+    static Connection openLive(Path archive,Path characters) throws SQLException {
+        return open(archive,characters,false,250);
+    }
     static Connection openCompatible(Path archive,Path characters) throws SQLException {return open(archive,characters,true);}
     private static Connection open(Path archive,Path characters,boolean allowPrevious) throws SQLException {
+        return open(archive,characters,allowPrevious,5000);
+    }
+    private static Connection open(Path archive,Path characters,boolean allowPrevious,int busyTimeoutMillis) throws SQLException {
         paths(archive, characters);
         if (!Files.isRegularFile(archive, LinkOption.NOFOLLOW_LINKS) || !Files.isRegularFile(characters, LinkOption.NOFOLLOW_LINKS))
             throw new SQLException("Both native storage files are required");
-        Connection c = archive(archive);
+        Connection c = archive(archive,busyTimeoutMillis);
         try {
             attach(c, characters); validatePair(c,allowPrevious); configure(c); return c;
         } catch (SQLException | RuntimeException failure) { c.close(); throw failure; }

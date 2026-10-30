@@ -1,0 +1,61 @@
+{
+  "runId": "alpha15-final",
+  "outcomes": [
+    {
+      "name": "graphics-preflight",
+      "status": "PASSED",
+      "duration": 24.509304310020525,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 158614,
+      "errors": []
+    },
+    {
+      "name": "development-write",
+      "status": "PASSED",
+      "duration": 36.01397133397404,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 158830,
+      "errors": []
+    },
+    {
+      "name": "development-read",
+      "status": "PASSED",
+      "duration": 34.63290949200746,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 159076,
+      "errors": []
+    },
+    {
+      "name": "packaged-write",
+      "status": "PASSED",
+      "duration": 42.54621781501919,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 159329,
+      "errors": []
+    },
+    {
+      "name": "packaged-read",
+      "status": "PASSED",
+      "duration": 36.79964323103195,
+      "returncode": 0,
+      "timedOut": false,
+      "processId": 159709,
+      "errors": []
+    }
+  ],
+  "passed": true,
+  "scope": "graphics + all write/read",
+  "runtime_version": "0.1.0-alpha.15",
+  "command": "python3 scripts/client_smoke.py --offline --eula-accepted --prepared --mode all --timeout 300 --run-id alpha15-final",
+  "assertionStages": {
+    "graphics-preflight": 2,
+    "development-write": 28,
+    "development-read": 29,
+    "packaged-write": 28,
+    "packaged-read": 29
+  }
+}

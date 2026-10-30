@@ -5,6 +5,7 @@ import dev.kat.lotcjournal.domain.DialogueCleanup;
 import dev.kat.lotcjournal.domain.LiveEvent;
 import dev.kat.lotcjournal.domain.LiveRepository;
 import dev.kat.lotcjournal.domain.LiveSession;
+import dev.kat.lotcjournal.domain.StorageBusyException;
 import dev.kat.lotcjournal.parsing.DialogueTextNormalizer;
 import dev.kat.lotcjournal.parsing.LogLineParser;
 import java.io.ByteArrayOutputStream;
@@ -21,6 +22,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -57,13 +59,15 @@ public final class LiveCaptureService implements AutoCloseable {
     private final long maxSegmentBytes;
     private final ZoneId zone;
     private final ThreadPoolExecutor worker;
-    private final Set<CompletableFuture<?>> outstanding = ConcurrentHashMap.newKeySet();
+    private final long busyRetryNanos;
+    private final ConcurrentHashMap<CompletableFuture<?>,Boolean> outstanding = new ConcurrentHashMap<>();
     private final AtomicLong accepted = new AtomicLong(), pending = new AtomicLong(), saved = new AtomicLong();
     private volatile State state = State.IDLE;
     private volatile String errorCode;
     private volatile boolean paused, closing;
-    private Thread ioThread;
-    private boolean initialized, joined, failed;
+    private volatile Thread ioThread;
+    private boolean initialized, joined;
+    private volatile boolean failed;
     private LiveSession session;
     private long sequence;
     private int segment;
@@ -77,18 +81,30 @@ public final class LiveCaptureService implements AutoCloseable {
     }
 
     LiveCaptureService(Path root, LiveRepository repository, Set<String> reviewedNames, int queueCapacity, long maxSegmentBytes, ZoneId zone) {
+        this(root,repository,reviewedNames,queueCapacity,maxSegmentBytes,zone,Duration.ofSeconds(180));
+    }
+
+    LiveCaptureService(Path root, LiveRepository repository, Set<String> reviewedNames, int queueCapacity, long maxSegmentBytes, ZoneId zone, Duration busyRetryBudget) {
         this.root = Objects.requireNonNull(root).toAbsolutePath().normalize(); this.repository = Objects.requireNonNull(repository);
         var names = Set.copyOf(reviewedNames);
         if (names.size() > 200 || names.stream().anyMatch(name -> name.length() > 128) || queueCapacity < 1 || maxSegmentBytes < 512 || maxSegmentBytes > 64L * 1024 * 1024)
             throw new IllegalArgumentException("Invalid capture limits");
         this.zone = Objects.requireNonNull(zone); this.maxSegmentBytes = maxSegmentBytes;
+        Objects.requireNonNull(busyRetryBudget);
+        if(busyRetryBudget.isNegative()||busyRetryBudget.isZero()||busyRetryBudget.compareTo(Duration.ofSeconds(180))>0)
+            throw new IllegalArgumentException("Invalid live storage retry budget");
+        busyRetryNanos=busyRetryBudget.toNanos();
         parser = new LogLineParser(names); policy = LogImportService.policyFingerprint(names);
         worker = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(queueCapacity), action -> {
             var thread = new Thread(action, "lotc-journal-live"); thread.setDaemon(true); ioThread = thread; return thread;
         }, new ThreadPoolExecutor.AbortPolicy()) {
             @Override protected void terminated() {
+                // Executor shutdown may interrupt an idle worker. FileChannel
+                // cleanup must not inherit that flag and lose its closing marker.
+                // closing=true still prevents any prolonged database retry here.
+                boolean interrupted=Thread.interrupted();
                 try { finishSession(); } catch (Exception failure) { fail("CLOSE_FAILED"); }
-                finally { releaseFiles(); state = State.CLOSED; }
+                finally { releaseFiles(); state = State.CLOSED; if(interrupted)Thread.currentThread().interrupt(); }
             }
         };
     }
@@ -103,19 +119,20 @@ public final class LiveCaptureService implements AutoCloseable {
             initialize(); joined = true;
             if (failed) throw new IOException("Capture requires restart after a storage failure");
             if (!paused && session == null) beginSession();
-            state = paused ? State.PAUSED : State.CAPTURING; return null;
+            if(!healthyState(paused ? State.PAUSED : State.CAPTURING))throw new IOException("Capture failed while starting");
+            return null;
         }, false);
     }
 
     public CompletableFuture<Void> endSession() {
-        return submit(() -> { joined = false; finishSession(); if (!failed) state = paused ? State.PAUSED : State.IDLE; return null; }, false);
+        return submit(() -> { joined = false; finishSession(); healthyState(paused ? State.PAUSED : State.IDLE); return null; }, false);
     }
 
     public CompletableFuture<Void> pause(boolean value) {
         return submit(() -> {
-            initialize(); repository.saveLivePaused(value); paused = value;
+            initialize(); liveStorage(()->{repository.saveLivePaused(value);return null;}); paused = value;
             if (value) finishSession(); else if (joined && !failed && session == null) beginSession();
-            if (!failed) state = value ? State.PAUSED : joined ? State.CAPTURING : State.IDLE;
+            healthyState(value ? State.PAUSED : joined ? State.CAPTURING : State.IDLE);
             return null;
         }, false);
     }
@@ -146,7 +163,7 @@ public final class LiveCaptureService implements AutoCloseable {
             rotate(receivedAt, record.length);
             write(output, record); output.force(true); // SAVED is never acknowledged on enqueue or flush alone.
             sequence = event.sequence();
-            repository.appendLiveEvent(session, event);
+            liveStorage(()->repository.appendLiveEvent(session,event));
             saved.incrementAndGet();
             try { appendReadable(readablePath, event); }
             catch (IOException projectionFailure) { fail("READABLE_VIEW_FAILED"); } // Authority and SQL are already durable.
@@ -200,14 +217,14 @@ public final class LiveCaptureService implements AutoCloseable {
             applyJournal(journal);
             rebuildReadable(path, journal.events());
         }
-        paused = repository.livePaused(); initialized = true;
-        state = paused ? State.PAUSED : State.IDLE;
+        paused = liveStorage(repository::livePaused); initialized = true;
+        healthyState(paused ? State.PAUSED : State.IDLE);
     }
 
     private void beginSession() throws Exception {
         String id = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(("lotc-live-v1:" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8)));
         session = new LiveSession(id, Instant.now(), zone.getId(), policy); sequence = 0; segment = 0; day = null;
-        repository.beginLiveSession(session);
+        liveStorage(()->{repository.beginLiveSession(session);return null;});
     }
 
     private void rotate(Instant receivedAt, int recordBytes) throws IOException {
@@ -237,7 +254,7 @@ public final class LiveCaptureService implements AutoCloseable {
         try {
             if (!failed) {
                 if (output != null) { write(output, LiveJournalCodec.end(session.id(), sequence)); output.force(true); }
-                repository.closeLiveSession(session.id());
+                liveStorage(()->{repository.closeLiveSession(session.id());return null;});
             }
         } finally {
             if (output != null) { output.close(); output = null; }
@@ -310,9 +327,9 @@ public final class LiveCaptureService implements AutoCloseable {
     }
 
     private void applyJournal(Journal journal) throws Exception {
-        repository.beginLiveSession(journal.session());
-        for (var event : journal.events()) repository.appendLiveEvent(journal.session(), event);
-        if (journal.ended()) repository.closeLiveSession(journal.session().id());
+        liveStorage(()->{repository.beginLiveSession(journal.session());return null;});
+        for (var event : journal.events()) liveStorage(()->repository.appendLiveEvent(journal.session(),event));
+        if (journal.ended()) liveStorage(()->{repository.closeLiveSession(journal.session().id());return null;});
     }
 
     private static Path readablePath(Path journal) {
@@ -344,26 +361,66 @@ public final class LiveCaptureService implements AutoCloseable {
         var buffer = ByteBuffer.wrap(bytes); while (buffer.hasRemaining()) channel.write(buffer);
     }
     private void fail(String code) { errorCode = code; state = State.ERROR; }
+    private synchronized void terminalFailure(String code) {
+        if(!failed){failed=true;fail(code);}
+    }
+    private synchronized boolean healthyState(State next) {
+        if(failed)return false;
+        state=next;return true;
+    }
+
+    private static final class BusyTimeoutException extends IOException {
+        BusyTimeoutException(StorageBusyException cause) { super("Live storage remained busy until its retry deadline",cause); }
+    }
+
+    /** Retry only idempotent database operations; journal/force/sequence changes stay outside this loop. */
+    private <T>T liveStorage(Work<T> operation) throws Exception {
+        long started=System.nanoTime();
+        StorageBusyException lastBusy=null;
+        while(true){
+            if(Thread.currentThread().isInterrupted())throw new InterruptedException("Live storage retry interrupted");
+            if(lastBusy!=null){
+                if(closing||failed)throw lastBusy;
+                if(System.nanoTime()-started>=busyRetryNanos)throw new BusyTimeoutException(lastBusy);
+            }
+            try{return operation.run();}
+            catch(StorageBusyException busy){
+                lastBusy=busy;
+                // terminated() also closes a session. It must never enter a long
+                // retry after the executor has removed its last interruptible worker.
+                if(closing||failed)throw busy;
+                long remaining=busyRetryNanos-(System.nanoTime()-started);
+                if(remaining<=0)throw new BusyTimeoutException(busy);
+                TimeUnit.NANOSECONDS.sleep(Math.min(remaining,TimeUnit.MILLISECONDS.toNanos(50)));
+            }
+        }
+    }
 
     private static final class InvalidImportException extends IOException {
         InvalidImportException(Throwable cause) { super("Invalid closed journal input", cause); }
     }
     @FunctionalInterface private interface Work<T> { T run() throws Exception; }
+    private void settle(CompletableFuture<?> future) {
+        if(Boolean.TRUE.equals(outstanding.remove(future)))pending.decrementAndGet();
+    }
     private <T> CompletableFuture<T> submit(Work<T> action, boolean receiving) {
         var future = new CompletableFuture<T>();
         if (closing) return CompletableFuture.failedFuture(new RejectedExecutionException("Capture is closed"));
         if (receiving) pending.incrementAndGet();
-        outstanding.add(future);
+        outstanding.put(future,receiving);
+        future.whenComplete((result,error)->settle(future));
         try {
             worker.execute(() -> {
                 T result = null; Throwable failure = null;
                 try { result = action.run(); }
-                catch (Throwable error) { if (!(error instanceof InvalidImportException)) { failed = true; fail("CAPTURE_STORAGE_FAILED"); } failure = error; }
-                finally { if (receiving) pending.decrementAndGet(); outstanding.remove(future); }
+                catch (Throwable error) { if (!(error instanceof InvalidImportException)) terminalFailure(error instanceof BusyTimeoutException?"CAPTURE_DATABASE_BUSY_TIMEOUT":"CAPTURE_STORAGE_FAILED"); failure = error; }
+                settle(future);
                 if (failure == null) future.complete(result); else future.completeExceptionally(failure);
             });
         } catch (RejectedExecutionException full) {
-            if (receiving) pending.decrementAndGet(); outstanding.remove(future); fail("CAPTURE_QUEUE_FULL"); future.completeExceptionally(full);
+            if(receiving)fail("CAPTURE_QUEUE_FULL");else terminalFailure("CAPTURE_CONTROL_QUEUE_FULL");
+            settle(future);
+            future.completeExceptionally(full);
         }
         return future;
     }
@@ -375,16 +432,23 @@ public final class LiveCaptureService implements AutoCloseable {
     }
 
     @Override public void close() {
-        if (closing) return; closing = true; worker.shutdown();
+        if (closing) return;
+        long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(10);
+        closing = true; worker.shutdown();
         if (Thread.currentThread() == ioThread) return;
         try {
-            if (!worker.awaitTermination(10, TimeUnit.SECONDS)) {
+            if (!worker.awaitTermination(Math.max(0,deadline-System.nanoTime()), TimeUnit.NANOSECONDS)) {
                 fail("CLOSE_TIMEOUT"); worker.shutdownNow();
-                for (var future : outstanding) future.completeExceptionally(new RejectedExecutionException("Capture shutdown timed out"));
+                for (var future : outstanding.keySet()) { settle(future); future.completeExceptionally(new RejectedExecutionException("Capture shutdown timed out")); }
+            } else {
+                Thread actual=ioThread;
+                long remaining=deadline-System.nanoTime();
+                if(actual!=null&&actual.isAlive()&&remaining>0)TimeUnit.NANOSECONDS.timedJoin(actual,remaining);
+                if(actual!=null&&actual.isAlive())fail("CLOSE_TIMEOUT");
             }
         } catch (InterruptedException interrupted) {
             worker.shutdownNow(); Thread.currentThread().interrupt();
-            for (var future : outstanding) future.completeExceptionally(interrupted);
+            for (var future : outstanding.keySet()) { settle(future); future.completeExceptionally(interrupted); }
         }
     }
 }

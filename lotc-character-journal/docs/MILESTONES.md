@@ -325,6 +325,13 @@ ceilings; fresh-name import cost, live-writer contention and real-modpack latenc
 remain separate. See [ARCHIVE_SCALE_TESTS.md](ARCHIVE_SCALE_TESTS.md) and actual
 results in STATUS.md. This does not mark real-scene acceptance complete.
 
+Alpha.15 continues Phase 4 validation with real SQLite writer contention during
+live recording: bounded same-operation retry, exact forced-event identity,
+permanent-error separation, lifecycle/queue boundaries and shutdown/recovery.
+Fresh-name discovery throughput and real modpack acceptance remain separate.
+See [LIVE_STORAGE_CONTENTION.md](LIVE_STORAGE_CONTENTION.md) for the contract and
+STATUS.md for executed checks.
+
 ## Phase 5 — Optional AI and encounter summaries
 
 **Deliverables**

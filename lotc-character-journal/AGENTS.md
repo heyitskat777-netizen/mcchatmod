@@ -98,6 +98,11 @@ Target Minecraft 1.21.11, Fabric, Java 21. Do not silently upgrade Minecraft.
 - Live capture starts automatically when connected, with persisted pause/resume.
   New persona knowledge stays unassigned until explicitly reviewed; persona
   selection never silently attributes the shared archive.
+- Temporary live-store BUSY/LOCKED retries repeat only idempotent repository calls
+  after transaction closure, never journal writes/sequence changes. Keep deadlines,
+  pending/Saved distinction, permanent failure handling and queue limits explicit.
+  Lifecycle rejection must fail closed across connections; shutdown cleanup cannot
+  enter a long retry or release profile files while the worker can still write.
 - Live capture must filter before disk, use durable event identity/replay and bounded
   off-thread queues. Daily files are not immutable historical content-hash sources.
 - Scene/extraction suggestions are separate evidence-backed interpretations. Ask

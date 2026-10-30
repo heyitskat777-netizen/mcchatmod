@@ -1,4 +1,105 @@
-# Current work — October 28, 2026: archive scale verification
+# Current work — October 30, 2026: live database contention
+
+Continue Phase 4 validation on `feature/live-write-contention`, based on `f5e84af`;
+Fabric/Minecraft 1.21.11/Java 21, alpha.15. Native build, verification and read-only
+review agents are available. Build owns version/environment investigation,
+verification owns ingestion/storage tests, reviewer reports only; coordinator
+owns domain/storage/ingestion/Fabric fixes, docs, integration and publication.
+
+The baseline retained a real archive write reservation: eligible receive failed
+after 5,031ms with SQLiteException, capture ERROR/Saved 0, one already-forced JSONL
+event. Release+restart replay restored exactly one observation. This is an
+application contention failure; the API proxy 403 remains an independent environment
+publication limitation. Baseline log: `/workspace/runtime/verification/live-contention/baseline.log`.
+
+[Retry/lifecycle contract](LIVE_STORAGE_CONTENTION.md): live-only 250ms SQLite waits,
+typed BUSY/LOCKED classification after rollback/close, same-operation/id 180s
+interruptible bounded retries, no repeated file force/sequence changes. Normal
+5s timeout, FULL sync, paired rollback journals, queue 256 and close 10s budget stay
+unchanged. Permanent/provenance failures do not retry. A full control queue now
+fails closed; Fabric waits for start success before draining readiness messages.
+Pending requests settle exactly once, including discarded shutdown tasks.
+Successful discovery/index execution and file I/O remain distinct from busy-wait
+bounds; no universal shutdown guarantee is claimed for those paths.
+
+Initial `./gradlew -PcoreOnly :ingestion:test :storage:test --offline --no-daemon
+--console=plain` failed1 existing ingestion test: shutdown sometimes omitted the
+END marker, causing standalone closed-journal import to reject the recording.
+Storage tests passed. Shutdown interruption was leaking into FileChannel cleanup
+and the retry helper; terminated cleanup now clears/restores its inherited flag
+only around finalization, with closing still forbidding long retries. A focused
+unchanged `:ingestion:test --tests '*LiveCaptureServiceTest'` rerun PASS 6s.
+No assertion or limit was changed. Retained logs: core-initial.log and
+core-cleanup-repair.log under the same verification directory.
+
+First 10 new contention tests pass: 7 ingestion +3 storage. The real paired reservation
+remains held until typed BUSY has actually been observed after ≥5s, then checks
+Pending 1/Saved 0, exactly one forced event and no SQL receipt before unlock. After
+unlock two genuinely repeated emotes commit at sequence 1/2, and two restarts retain
+exactly those two observations/receipts. Other cases cover 250ms typed waits, late
+character-member rollback, all lifecycle/replay calls with exact reused arguments,
+permanent failures without retry, deadline failure/recovery, queue-control
+fail-closed behavior and ten-second shutdownNow discarded-future accounting.
+
+Coordinator targeted ingestion/storage command above: **PASS 25s**. Final integrated
+`./gradlew --offline check :fabric:build :fabric:prepareClientSmoke --no-daemon
+--console=plain`: **PASS 16s**,34 tasks(16 executed/18 up-to-date), **364 core tests**,
+zero failures/errors/skips (domain27/application22/parsing116/ingestion65/storage134).
+Architecture and packaged dependencies pass.
+`python3 -m unittest discover -s scripts -p 'test_*.py' -v`: **15 PASS**, 1.116s.
+The first actual alpha.15 suite (`alpha15-contention`) passed all five phases:
+graphics23.3s, development write36.3s/read34.6s, packaged write43.7s/read36.5s.
+Before publication, coordinator found a terminal-state race: a successful late
+begin could overwrite ERROR with CAPTURING after a full control queue rejection.
+Healthy transitions now share a short monitor with terminal failure, and start
+fails when its transition is denied. One additional latch regression proves this
+case, bringing new contention cases to 11. Final integrated command above **PASS 28s**,
+34 tasks(10 executed/24 up-to-date), **365 core tests**, zero failures/errors/skips
+(domain27/application22/parsing116/ingestion66/storage134). The new latch case
+confirms database begin succeeded yet capture remains terminal ERROR and admits
+no queued/new-world dialogue. The final actual-client rerun below passed against this final guard. Earlier
+passes were not substituted for it.
+ The previous large known-character scale suite is not rerun locally
+because its historical query/index paths are unchanged; CI's path-filtered scale
+workflow will independently execute it after push.
+[Machine-readable evidence](verification/live-contention-results.json).
+
+Final actual suite: `python3 scripts/client_smoke.py --offline --eula-accepted
+--prepared --mode all --timeout 300 --run-id alpha15-final`, explicit Java21,
+DISPLAY=:99/softwareGL and isolated synthetic profiles. Existing user EULA
+acceptance was reused; no live LoTC server was contacted. **All phases PASS**:
+
+| Phase | Seconds | Result |
+| --- | --- | --- |
+| Graphics preflight | 24.5 | PASSED |
+| Development write | 36.0 | PASSED |
+| Development read/restart | 34.6 | PASSED |
+| Packaged-JAR write | 42.5 | PASSED |
+| Packaged-JAR read/restart | 36.8 | PASSED |
+
+Writer 28/reader 29 explicit assertion stages pass, with complete/fresh reports,
+launch-origin checks and acknowledged shutdown. Nested domain JAR contains the new
+busy contract; packaged runs load the remapped mod and six bundled runtime JARs.
+Screenshots/logs/JUnit/launch/shutdown witnesses are under
+`fabric/build/client-smoke/evidence/alpha15-final/`;
+[client summary](verification/alpha15-client-summary.json). These are automated
+client checks, separate from real modpack/user testing.
+
+Local installable JAR: `fabric/build/libs/lotc-character-journal-0.1.0-alpha.15.jar`,
+14,806,062 bytes, SHA256
+`9a550d314f9c02a04072b727a264f918333433ca6647840c85a26aaac3e58a89`.
+The local distribution ZIP's integrity and exact embedded JAR hash are verified.
+One initial regression failure was repaired; later tests were strengthened, not
+weakened. Native review found no remaining blocker. Successful fresh-discovery
+execution, uninterruptible I/O and real modpack acceptance remain outside the
+contention guarantee. Commit/push/PR/CI publication results follow when observed.
+
+[USER_TEST_ALPHA15.md](USER_TEST_ALPHA15.md) records the remaining user checks.
+Main stays unchanged; earlier verified work is retained below.
+
+---
+
+# Previous verified work — October 28, 2026: archive scale verification
 
 Continue the earliest unfinished Phase 4 validation on
 `feature/archive-scale-verification`, based on alpha.13 documentation commit
@@ -64,7 +165,7 @@ Fabric compilation, packaged dependencies and architecture checks pass.
 
 Actual isolated Minecraft suite: `python3 scripts/client_smoke.py --offline
 --eula-accepted --prepared --mode all --timeout 300 --run-id alpha14-final`
-(using Java21, DISPLAY=:99, software GL, isolated synthetic profiles and the user's
+(using Java 21, DISPLAY=:99, software GL, isolated synthetic profiles and the user's
 existing EULA acceptance): **all five phases PASS**.
 
 | Phase | Seconds | Result |
