@@ -130,6 +130,14 @@ returned HTTP 403 Forbidden through this environment's API access. No PR is clai
 open; [prepared description](PR_ARCHIVE_SCALE.md),
 [review/create comparison](https://github.com/heyitskat777-netizen/mcchatmod/compare/feature%2Fscene-review-refinements...feature%2Farchive-scale-verification?expand=1).
 
+October 30 PR retry requested by Kat: `gh pr list` and the prepared `gh pr create`
+command above still fail with HTTP 403. A REST `gh api --method GET` request also
+fails; unauthenticated `curl https://api.github.com/` reports CONNECT tunnel 403
+(HTTP000), confirming the environment API tunnel blocks the request before GitHub.
+No new PR was created or existing PR modified. Runtime and verification evidence
+remain unchanged; no application checks were rerun for this documentation-only
+record. `git diff --check` verifies the edit.
+
 GitHub Actions: [build/client run 40820641449](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40820641449)
 and [scale run 40820641520](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/40820641520)
 both match verified runtime commit 462cffa. **Both workflows SUCCESS**: verify 1m35s,
