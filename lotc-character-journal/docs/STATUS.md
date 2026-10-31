@@ -92,7 +92,30 @@ The local distribution ZIP's integrity and exact embedded JAR hash are verified.
 One initial regression failure was repaired; later tests were strengthened, not
 weakened. Native review found no remaining blocker. Successful fresh-discovery
 execution, uninterruptible I/O and real modpack acceptance remain outside the
-contention guarantee. Commit/push/PR/CI publication results follow when observed.
+contention guarantee. Verified runtime commit **218a025899235eb351f54b3ba8c9364d097d33c2** is committed
+and pushed to `feature/live-write-contention`. Main is unchanged. PR creation
+was attempted with `gh pr create --base feature/archive-scale-verification --head
+feature/live-write-contention --title "Keep live capture running through temporary
+database contention" --body-file docs/PR_LIVE_CONTENTION.md`; the environment's
+GitHub API connection still returned HTTP 403. No PR is claimed open.
+[Prepared description](PR_LIVE_CONTENTION.md),
+[review/create comparison](https://github.com/heyitskat777-netizen/mcchatmod/compare/feature%2Farchive-scale-verification...feature%2Flive-write-contention?expand=1).
+
+Publication verified October 31: [build/client run 41147637433](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/41147637433)
+and [scale run 41147637414](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/41147637414)
+both match runtime 218a025 and **both workflows SUCCESS**. Completed normal run
+HTML confirms verify 1m43s, client-smoke 3m39s and storage-scale 3m25s (whole-job
+times); no unobserved per-phase CI timings are invented. Thus the unchanged
+known-character 100k workload also passed independently in CI.
+
+Download [alpha.15 journal-jars ZIP](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/41147637433/artifacts/13021138289);
+install `lotc-character-journal-0.1.0-alpha.15.jar`, not `-sources.jar`.
+[Core test reports](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/41147637433/artifacts/13021138281),
+[client screenshots/logs/reports](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/41147637433/artifacts/13022060397),
+[scale JSON/JUnit/HTML](https://github.com/heyitskat777-netizen/mcchatmod/actions/runs/41147637414/artifacts/13021791636).
+A documentation-only follow-up records these observed outcomes without changing
+the tested runtime. Phase 4 real-scene/modpack acceptance and fresh-discovery
+throughput remain open; Phase 5 AI/Phase 6 extraction have not been implemented.
 
 [USER_TEST_ALPHA15.md](USER_TEST_ALPHA15.md) records the remaining user checks.
 Main stays unchanged; earlier verified work is retained below.

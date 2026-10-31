@@ -101,7 +101,33 @@
     }
   ],
   "client": "alpha15-client-summary.json",
-  "publication": "pending",
+  "publication": {
+    "branch_pushed": true,
+    "pull_request": {
+      "result": "blocked",
+      "reason": "GitHub GraphQL API request returned HTTP403 Forbidden through the environment API tunnel",
+      "base": "feature/archive-scale-verification",
+      "head": "feature/live-write-contention",
+      "prepared_body": "docs/PR_LIVE_CONTENTION.md"
+    },
+    "build_ci": {
+      "run_id": 41147637433,
+      "result": "passed",
+      "verify_job_seconds": 103,
+      "client_job_seconds": 219,
+      "jar_artifact_id": 13021138289,
+      "test_reports_artifact_id": 13021138281,
+      "client_evidence_artifact_id": 13022060397,
+      "observed_via": "Completed public run HTML; verify and client-smoke concluded successfully"
+    },
+    "scale_ci": {
+      "run_id": 41147637414,
+      "result": "passed",
+      "job_seconds": 205,
+      "artifact_id": 13021791636,
+      "observed_via": "Completed public run HTML; storage-scale concluded successfully"
+    }
+  },
   "user_modpack_acceptance": "pending",
   "limits": [
     "No universal bound for successful fresh-actor reindex or uninterruptible file I/O",
@@ -181,5 +207,6 @@
     "bytes": 14806062,
     "sha256": "9a550d314f9c02a04072b727a264f918333433ca6647840c85a26aaac3e58a89",
     "new_busy_contract_in_nested_domain_jar": true
-  }
+  },
+  "verified_runtime_commit": "218a025899235eb351f54b3ba8c9364d097d33c2"
 }

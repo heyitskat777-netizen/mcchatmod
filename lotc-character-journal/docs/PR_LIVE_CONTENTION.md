@@ -34,3 +34,7 @@ records receive the replay guarantee. Test ordinary capture while editing aliase
 or refreshing scenes, subsequent exact repeated messages, connection separation,
 restart and pause/resume using docs/USER_TEST_ALPHA15.md. Real-modpack acceptance
 remains separate.
+
+CI for runtime 218a025 passed Build and check (run 41147637433; verify+client-smoke)
+and Synthetic archive scale (run 41147637414). STATUS.md contains installable
+alpha.15 and evidence artifact links. Real modpack acceptance remains pending.
